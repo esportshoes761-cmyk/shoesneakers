@@ -44,17 +44,6 @@ export default function Header() {
           </div>
           
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-4">
-            <Link href="/seller">
-              <Button 
-                variant={location === '/seller' ? 'default' : 'secondary'}
-                size="sm"
-                className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm"
-                data-testid="button-seller"
-              >
-                <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Vender</span>
-              </Button>
-            </Link>
             
             {/* Botón de carrito */}
             <Button 

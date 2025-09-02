@@ -388,45 +388,6 @@ export default function Home() {
           )}
         </section>
 
-        {/* Seller Section - Compacto para móvil */}
-        <section className="bg-muted rounded-lg sm:rounded-xl p-3 sm:p-6 mb-4 sm:mb-8">
-          <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-4" data-testid="text-seller-section-title">💼 ¿Quieres vender tus zapatos?</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
-            <div>
-              <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Sube tus productos fácilmente</h4>
-              <ul className="space-y-1 sm:space-y-2 text-muted-foreground text-xs sm:text-sm">
-                <li className="flex items-center space-x-2">
-                  <i className="fas fa-check text-green-500 text-xs"></i>
-                  <span>Subida de fotos fácil</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <i className="fas fa-check text-green-500 text-xs"></i>
-                  <span>Inventario automático</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <i className="fas fa-check text-green-500 text-xs"></i>
-                  <span>Promociones</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <i className="fas fa-check text-green-500 text-xs"></i>
-                  <span>Analytics</span>
-                </li>
-              </ul>
-            </div>
-            <div className="space-y-2 sm:space-y-4">
-              <button 
-                className="w-full bg-secondary text-secondary-foreground py-2 sm:py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity text-sm sm:text-base"
-                onClick={() => window.location.href = '/seller'}
-                data-testid="button-create-seller-account"
-              >
-                <i className="fas fa-plus mr-2"></i>Crear Cuenta Vendedor
-              </button>
-              <button className="w-full border border-border py-2 sm:py-3 rounded-lg font-semibold hover:bg-muted transition-colors text-sm sm:text-base" data-testid="button-more-info">
-                <i className="fas fa-info-circle mr-2"></i>Más Información
-              </button>
-            </div>
-          </div>
-        </section>
 
         {/* Categories Grid - Compacto para móvil */}
         <section className="mb-4 sm:mb-8">
@@ -509,15 +470,6 @@ export default function Home() {
               </ul>
             </div>
             
-            <div>
-              <h6 className="font-semibold mb-4">Vendedores</h6>
-              <ul className="space-y-2 text-muted-foreground">
-                <li><a href="/seller" className="hover:text-primary transition-colors">Vender en ZapaShop</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Guía del Vendedor</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Políticas</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Soporte</a></li>
-              </ul>
-            </div>
           </div>
           
           <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
