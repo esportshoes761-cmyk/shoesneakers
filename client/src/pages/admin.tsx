@@ -497,7 +497,13 @@ export default function AdminPanel() {
                           <FormItem>
                             <FormLabel>Precio Final *</FormLabel>
                             <FormControl>
-                              <Input type="number" step="0.01" {...field} data-testid="input-product-price" />
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                value={field.value || ""} 
+                                onChange={(e) => field.onChange(e.target.value)}
+                                data-testid="input-product-price" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -510,7 +516,13 @@ export default function AdminPanel() {
                           <FormItem>
                             <FormLabel>Precio Original (Si hay descuento)</FormLabel>
                             <FormControl>
-                              <Input type="number" step="0.01" {...field} value={field.value || ""} data-testid="input-product-original-price" />
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                value={field.value || ""} 
+                                onChange={(e) => field.onChange(e.target.value || null)}
+                                data-testid="input-product-original-price" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
