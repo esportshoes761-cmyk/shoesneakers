@@ -15,14 +15,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Brands routes
+  app.get("/api/brands", async (req, res) => {
+    try {
+      const brands = await storage.getBrands();
+      res.json(brands);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching brands" });
+    }
+  });
+
+  app.get("/api/brands/with-products", async (req, res) => {
+    try {
+      const brandsWithProducts = await storage.getBrandsWithProducts();
+      res.json(brandsWithProducts);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching brands with products" });
+    }
+  });
+
+  app.get("/api/brands/:id", async (req, res) => {
+    try {
+      const brand = await storage.getBrand(req.params.id);
+      if (!brand) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json(brand);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching brand" });
+    }
+  });
+
   // Products routes
   app.get("/api/products", async (req, res) => {
     try {
-      const { category, flashSale, featured } = req.query;
+      const { category, brand, flashSale, featured } = req.query;
       
       let products;
       if (category) {
         products = await storage.getProductsByCategory(category as string);
+      } else if (brand) {
+        products = await storage.getProductsByBrand(brand as string);
       } else if (flashSale === 'true') {
         products = await storage.getFlashSaleProducts();
       } else if (featured === 'true') {

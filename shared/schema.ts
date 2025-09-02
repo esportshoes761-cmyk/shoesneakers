@@ -17,6 +17,15 @@ export const categories = pgTable("categories", {
   description: text("description"),
 });
 
+export const brands = pgTable("brands", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  logo: text("logo").notNull(),
+  description: text("description"),
+  catalogUrl: text("catalog_url"),
+  isActive: boolean("is_active").default(true),
+});
+
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -25,6 +34,7 @@ export const products = pgTable("products", {
   originalPrice: decimal("original_price", { precision: 10, scale: 2 }),
   discountPercentage: integer("discount_percentage").default(0),
   categoryId: varchar("category_id").references(() => categories.id),
+  brandId: varchar("brand_id").references(() => brands.id),
   sellerId: varchar("seller_id").references(() => users.id),
   imageUrl: text("image_url").notNull(),
   stock: integer("stock").default(0),
@@ -51,6 +61,10 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
 
+export const insertBrandSchema = createInsertSchema(brands).omit({
+  id: true,
+});
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
@@ -67,6 +81,9 @@ export type User = typeof users.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
+export type InsertBrand = z.infer<typeof insertBrandSchema>;
+export type Brand = typeof brands.$inferSelect;
+
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
 
@@ -75,6 +92,12 @@ export type CartItem = typeof cartItems.$inferSelect;
 
 export type ProductWithCategory = Product & {
   category?: Category;
+  brand?: Brand;
+};
+
+export type BrandWithProducts = Brand & {
+  products: ProductWithCategory[];
+  productCount: number;
 };
 
 export type CartItemWithProduct = CartItem & {

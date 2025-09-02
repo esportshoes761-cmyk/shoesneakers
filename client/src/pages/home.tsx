@@ -5,8 +5,10 @@ import PromotionalBanners from "@/components/promotional-banners";
 import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
 import FloatingCart from "@/components/floating-cart";
-import { type ProductWithCategory, type Category } from "@shared/schema";
+import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ExternalLink, Package } from "lucide-react";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -15,17 +17,17 @@ export default function Home() {
     queryKey: ["/api/categories"],
   });
 
-  const { data: products = [], isLoading: productsLoading } = useQuery<ProductWithCategory[]>({
-    queryKey: selectedCategory ? ["/api/products", selectedCategory] : ["/api/products"],
+  const { data: brands = [], isLoading: brandsLoading } = useQuery<BrandWithProducts[]>({
+    queryKey: ["/api/brands/with-products"],
   });
 
   const { data: flashSaleProducts = [] } = useQuery<ProductWithCategory[]>({
-    queryKey: ["/api/products"],
+    queryKey: ["/api/products", "flash-sale"],
     queryFn: () => fetch("/api/products?flashSale=true").then(res => res.json()),
   });
 
   const { data: featuredProducts = [] } = useQuery<ProductWithCategory[]>({
-    queryKey: ["/api/products"],
+    queryKey: ["/api/products", "featured"],
     queryFn: () => fetch("/api/products?featured=true").then(res => res.json()),
   });
 
@@ -71,33 +73,69 @@ export default function Home() {
 
         <FlashSaleSection products={flashSaleProducts} />
 
-        {/* Best Sellers Section */}
+        {/* Brand Catalogs Section */}
         <section className="mb-8">
-          <h3 className="text-2xl font-bold mb-4" data-testid="text-bestsellers-title">🏆 Más Vendidos</h3>
+          <h3 className="text-2xl font-bold mb-4" data-testid="text-brand-catalogs-title">👟 Catálogos por Marca</h3>
           
-          {productsLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="bg-card border border-border rounded-lg p-4 animate-pulse">
-                  <div className="w-full h-36 bg-muted rounded-lg mb-3"></div>
-                  <div className="h-4 bg-muted rounded mb-2"></div>
-                  <div className="h-4 bg-muted rounded w-2/3 mb-2"></div>
-                  <div className="h-4 bg-muted rounded w-1/2 mb-3"></div>
-                  <div className="h-8 bg-muted rounded"></div>
+          {brandsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-card border border-border rounded-xl p-6 animate-pulse">
+                  <div className="w-20 h-20 bg-muted rounded-lg mb-4"></div>
+                  <div className="h-6 bg-muted rounded mb-2"></div>
+                  <div className="h-4 bg-muted rounded mb-4"></div>
+                  <div className="h-10 bg-muted rounded"></div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {brands.map((brand) => (
+                <div key={brand.id} className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-shadow" data-testid={`card-brand-${brand.id}`}>
+                  <div className="flex items-center mb-4">
+                    <img 
+                      src={brand.logo} 
+                      alt={brand.name}
+                      className="w-16 h-16 object-contain mr-4"
+                      data-testid={`img-brand-logo-${brand.id}`}
+                    />
+                    <div>
+                      <h4 className="text-xl font-bold" data-testid={`text-brand-name-${brand.id}`}>{brand.name}</h4>
+                      <p className="text-sm text-muted-foreground" data-testid={`text-brand-product-count-${brand.id}`}>
+                        {brand.productCount} productos disponibles
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-muted-foreground mb-4" data-testid={`text-brand-description-${brand.id}`}>
+                    {brand.description}
+                  </p>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      className="flex-1"
+                      onClick={() => window.open(brand.catalogUrl || '#', '_blank')}
+                      data-testid={`button-view-catalog-${brand.id}`}
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      Ver Catálogo
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => window.open(brand.catalogUrl || '#', '_blank')}
+                      data-testid={`button-external-catalog-${brand.id}`}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
 
-          {!productsLoading && products.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-products">
-              No hay productos disponibles en esta categoría.
+          {!brandsLoading && brands.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-brands">
+              No hay marcas disponibles en este momento.
             </div>
           )}
         </section>
@@ -155,6 +193,11 @@ export default function Home() {
                 "from-yellow-400 to-orange-500"
               ];
               
+              // Count products across all brands for this category
+              const categoryProductCount = brands.reduce((total, brand) => {
+                return total + brand.products.filter(p => p.categoryId === category.id).length;
+              }, 0);
+              
               return (
                 <div 
                   key={category.id}
@@ -165,7 +208,7 @@ export default function Home() {
                   <div className="text-3xl mb-2">{category.emoji}</div>
                   <h4 className="font-semibold">{category.name}</h4>
                   <p className="text-sm opacity-90">
-                    {products.filter(p => p.categoryId === category.id).length} productos
+                    {categoryProductCount} productos
                   </p>
                 </div>
               );
