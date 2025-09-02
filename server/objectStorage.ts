@@ -97,6 +97,7 @@ export class ObjectStorageService {
         "Content-Type": metadata.contentType || "application/octet-stream",
         "Content-Length": metadata.size,
         "Cache-Control": `public, max-age=${cacheTtlSec}`,
+        "Access-Control-Allow-Origin": "*", // Permitir CORS
       });
 
       // Transmitir el archivo a la respuesta

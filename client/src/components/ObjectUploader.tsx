@@ -108,8 +108,11 @@ export function ObjectUploader({
       }
 
       // 3. Obtener la ruta normalizada del objeto
-      const objectPath = uploadURL.replace('https://storage.googleapis.com', '');
-      const normalizedPath = `/objects${objectPath.split('/uploads/')[1]}`;
+      // Extraer el ID del archivo de la URL
+      const urlObj = new URL(uploadURL);
+      const pathParts = urlObj.pathname.split('/');
+      const fileId = pathParts[pathParts.length - 1]; // Último elemento es el ID del archivo
+      const normalizedPath = `/objects/uploads/${fileId}`;
 
       toast({
         title: "¡Éxito!",
