@@ -68,16 +68,18 @@ export default function LoginPage({ isAdmin = false, onSuccess }: LoginPageProps
         isAdmin,
       });
       
+      const responseData = await response.json();
+      
       toast({
         title: "¡Bienvenido!",
         description: `Sesión iniciada como ${isAdmin ? 'administrador' : 'usuario'}`,
       });
       
       // Guardar usuario en el estado de autenticación
-      setAuthUser(response.user);
+      setAuthUser(responseData.user);
       
       if (onSuccess) {
-        onSuccess(response);
+        onSuccess(responseData);
       } else {
         window.location.href = isAdmin ? '/admin' : '/';
       }

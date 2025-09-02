@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
+import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
 import { Star, Edit, Trash2 } from "lucide-react";
 
 interface ProductCardProps {
@@ -23,9 +24,17 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   };
 
   const discountPercentage = product.discountPercentage || 0;
-  const hasDiscount = discountPercentage > 0;
-  const originalPrice = product.originalPrice ? Number(product.originalPrice) : null;
-  const currentPrice = Number(product.price);
+  const hasDiscount = discountPercentage > 0 && product.originalPrice;
+  
+  // Calcular precios usando las utilidades de moneda
+  const priceData = hasDiscount && product.originalPrice 
+    ? formatDiscountedPrice(product.originalPrice, discountPercentage)
+    : { 
+        discounted: formatCurrency(product.price),
+        original: null,
+        savings: null,
+        discountPercentage: 0
+      };
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -52,7 +61,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     <div className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
       {/* Badges */}
       <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 flex flex-col gap-1">
-        {product.isFlashSale && (
+        {product.isFlashSale && discountPercentage > 0 && (
           <Badge variant="destructive" className="text-[10px] sm:text-xs font-bold px-1 py-0 sm:px-2 sm:py-1">
             -{discountPercentage}%
           </Badge>
@@ -89,12 +98,19 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       
       <div className="flex items-center space-x-1 mb-1 sm:mb-2">
         <span className="text-primary font-bold text-sm sm:text-base" data-testid={`text-price-${product.id}`}>
-          ${currentPrice}
+          {priceData.discounted}
         </span>
-        {hasDiscount && originalPrice && (
-          <span className="text-muted-foreground line-through text-[10px] sm:text-xs" data-testid={`text-original-price-${product.id}`}>
-            ${originalPrice}
-          </span>
+        {hasDiscount && priceData.original && (
+          <>
+            <span className="text-muted-foreground line-through text-[10px] sm:text-xs" data-testid={`text-original-price-${product.id}`}>
+              {priceData.original}
+            </span>
+            {priceData.savings && (
+              <span className="text-green-600 font-semibold text-[10px] sm:text-xs" data-testid={`text-savings-${product.id}`}>
+                ¡Ahorra {priceData.savings}!
+              </span>
+            )}
+          </>
         )}
       </div>
       

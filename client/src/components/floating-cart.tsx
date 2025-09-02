@@ -1,13 +1,14 @@
 import { useCartStore } from "@/lib/cart-store";
 import { Button } from "@/components/ui/button";
 import { ShoppingCart } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function FloatingCart() {
   const cartItemCount = useCartStore(state => state.getItemCount());
+  const [location, setLocation] = useLocation();
 
   const handleCartClick = () => {
-    // TODO: Open cart sidebar or navigate to cart page
-    console.log("Opening cart...");
+    setLocation("/checkout");
   };
 
   if (cartItemCount === 0) return null;

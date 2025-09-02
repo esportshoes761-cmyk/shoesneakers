@@ -481,13 +481,13 @@ export default function AdminPanel() {
                     />
 
                     {/* Precios y Stock */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                       <FormField
                         control={productForm.control}
                         name="price"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Precio *</FormLabel>
+                            <FormLabel>Precio Final *</FormLabel>
                             <FormControl>
                               <Input type="number" step="0.01" {...field} data-testid="input-product-price" />
                             </FormControl>
@@ -500,9 +500,30 @@ export default function AdminPanel() {
                         name="originalPrice"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Precio Original</FormLabel>
+                            <FormLabel>Precio Original (Si hay descuento)</FormLabel>
                             <FormControl>
                               <Input type="number" step="0.01" {...field} value={field.value || ""} data-testid="input-product-original-price" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={productForm.control}
+                        name="discountPercentage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Descuento (%)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                min="0" 
+                                max="100" 
+                                {...field} 
+                                value={field.value || ""} 
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                data-testid="input-product-discount-percentage" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -903,7 +924,7 @@ export default function AdminPanel() {
                           </div>
                           <FormControl>
                             <Switch
-                              checked={field.value}
+                              checked={field.value ?? true}
                               onCheckedChange={field.onChange}
                               data-testid="switch-brand-active"
                             />
