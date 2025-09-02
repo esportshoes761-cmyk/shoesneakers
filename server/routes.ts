@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertCartItemSchema } from "@shared/schema";
+import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -120,6 +120,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Product deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Error deleting product" });
+    }
+  });
+
+  // Promotions routes
+  app.get("/api/promotions", async (req, res) => {
+    try {
+      const promotions = await storage.getPromotions();
+      res.json(promotions);
+    } catch (error) {
+      console.error("Error fetching promotions:", error);
+      res.status(500).json({ error: "Failed to fetch promotions" });
+    }
+  });
+
+  app.get("/api/promotions/active", async (req, res) => {
+    try {
+      const promotions = await storage.getActivePromotions();
+      res.json(promotions);
+    } catch (error) {
+      console.error("Error fetching active promotions:", error);
+      res.status(500).json({ error: "Failed to fetch active promotions" });
+    }
+  });
+
+  app.get("/api/promotions/:id", async (req, res) => {
+    try {
+      const promotion = await storage.getPromotion(req.params.id);
+      if (!promotion) {
+        return res.status(404).json({ error: "Promotion not found" });
+      }
+      res.json(promotion);
+    } catch (error) {
+      console.error("Error fetching promotion:", error);
+      res.status(500).json({ error: "Failed to fetch promotion" });
+    }
+  });
+
+  app.post("/api/promotions", async (req, res) => {
+    try {
+      const validatedData = insertPromotionSchema.parse(req.body);
+      const promotion = await storage.createPromotion(validatedData);
+      res.json(promotion);
+    } catch (error) {
+      console.error("Error creating promotion:", error);
+      res.status(500).json({ error: "Failed to create promotion" });
+    }
+  });
+
+  app.patch("/api/promotions/:id", async (req, res) => {
+    try {
+      const validatedData = insertPromotionSchema.partial().parse(req.body);
+      const promotion = await storage.updatePromotion(req.params.id, validatedData);
+      if (!promotion) {
+        return res.status(404).json({ error: "Promotion not found" });
+      }
+      res.json(promotion);
+    } catch (error) {
+      console.error("Error updating promotion:", error);
+      res.status(500).json({ error: "Failed to update promotion" });
+    }
+  });
+
+  app.delete("/api/promotions/:id", async (req, res) => {
+    try {
+      const success = await storage.deletePromotion(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Promotion not found" });
+      }
+      res.json({ message: "Promotion deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting promotion:", error);
+      res.status(500).json({ error: "Failed to delete promotion" });
+    }
+  });
+
+  // Events routes
+  app.get("/api/events", async (req, res) => {
+    try {
+      const events = await storage.getEvents();
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ error: "Failed to fetch events" });
+    }
+  });
+
+  app.get("/api/events/active", async (req, res) => {
+    try {
+      const events = await storage.getActiveEvents();
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching active events:", error);
+      res.status(500).json({ error: "Failed to fetch active events" });
+    }
+  });
+
+  app.get("/api/events/:id", async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error("Error fetching event:", error);
+      res.status(500).json({ error: "Failed to fetch event" });
+    }
+  });
+
+  app.post("/api/events", async (req, res) => {
+    try {
+      const validatedData = insertEventSchema.parse(req.body);
+      const event = await storage.createEvent(validatedData);
+      res.json(event);
+    } catch (error) {
+      console.error("Error creating event:", error);
+      res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  app.patch("/api/events/:id", async (req, res) => {
+    try {
+      const validatedData = insertEventSchema.partial().parse(req.body);
+      const event = await storage.updateEvent(req.params.id, validatedData);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      res.status(500).json({ error: "Failed to update event" });
+    }
+  });
+
+  app.delete("/api/events/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteEvent(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.json({ message: "Event deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      res.status(500).json({ error: "Failed to delete event" });
     }
   });
 

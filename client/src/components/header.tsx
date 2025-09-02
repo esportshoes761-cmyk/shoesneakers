@@ -3,10 +3,11 @@ import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/lib/cart-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, ShoppingCart, Plus, User } from "lucide-react";
+import { Search, ShoppingCart, Plus, User, Settings } from "lucide-react";
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false); // Sistema básico de administrador
   const [location] = useLocation();
   const cartItemCount = useCartStore(state => state.getItemCount());
 
@@ -51,6 +52,20 @@ export default function Header() {
               </Button>
             </Link>
             
+            {/* Botón de administrador - se muestra solo para administradores */}
+            {isAdmin && (
+              <Link href="/admin">
+                <Button 
+                  variant={location === '/admin' ? 'default' : 'outline'}
+                  className="rounded-full"
+                  data-testid="button-admin"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Admin
+                </Button>
+              </Link>
+            )}
+            
             <Button 
               variant="ghost" 
               size="icon" 
@@ -65,10 +80,36 @@ export default function Header() {
               )}
             </Button>
             
-            <Button variant="default" className="rounded-full" data-testid="button-login">
-              <User className="w-4 h-4 mr-2" />
-              Login
-            </Button>
+            {!isAdmin ? (
+              <Button 
+                variant="default" 
+                className="rounded-full" 
+                onClick={() => {
+                  // Sistema simple de credenciales: hacer clic activa modo admin
+                  const password = prompt("Ingresa la contraseña de administrador:");
+                  if (password === "admin123") {
+                    setIsAdmin(true);
+                    alert("¡Bienvenido administrador!");
+                  } else if (password !== null) {
+                    alert("Contraseña incorrecta");
+                  }
+                }}
+                data-testid="button-login"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Login Admin
+              </Button>
+            ) : (
+              <Button 
+                variant="outline" 
+                className="rounded-full" 
+                onClick={() => setIsAdmin(false)}
+                data-testid="button-logout"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Cerrar Sesión
+              </Button>
+            )}
           </div>
         </div>
       </div>

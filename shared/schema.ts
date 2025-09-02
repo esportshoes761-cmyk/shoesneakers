@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isSeller: boolean("is_seller").default(false),
+  isAdmin: boolean("is_admin").default(false),
 });
 
 export const categories = pgTable("categories", {
@@ -26,6 +27,35 @@ export const brands = pgTable("brands", {
   isActive: boolean("is_active").default(true),
 });
 
+export const promotions = pgTable("promotions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  discountPercentage: integer("discount_percentage"),
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
+  code: text("code").unique(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  isActive: boolean("is_active").default(true),
+  minPurchase: decimal("min_purchase", { precision: 10, scale: 2 }),
+  maxUses: integer("max_uses"),
+  currentUses: integer("current_uses").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const events = pgTable("events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  isActive: boolean("is_active").default(true),
+  eventType: text("event_type").notNull(), // 'flash_sale', 'promotion', 'new_arrival', 'seasonal'
+  priority: integer("priority").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -37,6 +67,10 @@ export const products = pgTable("products", {
   brandId: varchar("brand_id").references(() => brands.id),
   sellerId: varchar("seller_id").references(() => users.id),
   imageUrl: text("image_url").notNull(),
+  images: text("images").array().default(sql`'{}'::text[]`), // Hasta 9 imágenes
+  reference: text("reference"), // Referencia del producto
+  sizes: text("sizes").array().default(sql`'{}'::text[]`), // Tallas disponibles
+  colors: text("colors").array().default(sql`'{}'::text[]`), // Colores disponibles
   stock: integer("stock").default(0),
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   reviewCount: integer("review_count").default(0),
@@ -65,9 +99,23 @@ export const insertBrandSchema = createInsertSchema(brands).omit({
   id: true,
 });
 
+export const insertPromotionSchema = createInsertSchema(promotions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEventSchema = createInsertSchema(events).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
+}).extend({
+  images: z.array(z.string()).max(9, "Máximo 9 imágenes permitidas").optional(),
+  sizes: z.array(z.string()).optional(),
+  colors: z.array(z.string()).optional(),
 });
 
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({
@@ -83,6 +131,12 @@ export type Category = typeof categories.$inferSelect;
 
 export type InsertBrand = z.infer<typeof insertBrandSchema>;
 export type Brand = typeof brands.$inferSelect;
+
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
+export type Promotion = typeof promotions.$inferSelect;
+
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type Event = typeof events.$inferSelect;
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;

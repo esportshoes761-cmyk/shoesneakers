@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts } from "@shared/schema";
+import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -28,6 +28,22 @@ export interface IStorage {
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
 
+  // Promotion methods
+  getPromotions(): Promise<Promotion[]>;
+  getActivePromotions(): Promise<Promotion[]>;
+  getPromotion(id: string): Promise<Promotion | undefined>;
+  createPromotion(promotion: InsertPromotion): Promise<Promotion>;
+  updatePromotion(id: string, promotion: Partial<InsertPromotion>): Promise<Promotion | undefined>;
+  deletePromotion(id: string): Promise<boolean>;
+
+  // Event methods
+  getEvents(): Promise<Event[]>;
+  getActiveEvents(): Promise<Event[]>;
+  getEvent(id: string): Promise<Event | undefined>;
+  createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: string): Promise<boolean>;
+
   // Cart methods
   getCartItems(userId: string): Promise<CartItemWithProduct[]>;
   addToCart(cartItem: InsertCartItem): Promise<CartItem>;
@@ -41,6 +57,8 @@ export class MemStorage implements IStorage {
   private categories: Map<string, Category>;
   private brands: Map<string, Brand>;
   private products: Map<string, Product>;
+  private promotions: Map<string, Promotion>;
+  private events: Map<string, Event>;
   private cartItems: Map<string, CartItem>;
 
   constructor() {
@@ -48,6 +66,8 @@ export class MemStorage implements IStorage {
     this.categories = new Map();
     this.brands = new Map();
     this.products = new Map();
+    this.promotions = new Map();
+    this.events = new Map();
     this.cartItems = new Map();
     this.initializeData();
   }
@@ -142,7 +162,8 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
-      isSeller: insertUser.isSeller ?? false
+      isSeller: insertUser.isSeller ?? false,
+      isAdmin: insertUser.isAdmin ?? false
     };
     this.users.set(id, user);
     return user;
@@ -203,6 +224,104 @@ export class MemStorage implements IStorage {
     };
     this.brands.set(id, brand);
     return brand;
+  }
+
+  // Promotion methods
+  async getPromotions(): Promise<Promotion[]> {
+    return Array.from(this.promotions.values());
+  }
+
+  async getActivePromotions(): Promise<Promotion[]> {
+    const now = new Date();
+    return Array.from(this.promotions.values()).filter(promotion => 
+      promotion.isActive && 
+      new Date(promotion.startDate!) <= now && 
+      new Date(promotion.endDate!) >= now
+    );
+  }
+
+  async getPromotion(id: string): Promise<Promotion | undefined> {
+    return this.promotions.get(id);
+  }
+
+  async createPromotion(insertPromotion: InsertPromotion): Promise<Promotion> {
+    const id = randomUUID();
+    const promotion: Promotion = { 
+      ...insertPromotion, 
+      id,
+      createdAt: new Date(),
+      description: insertPromotion.description ?? null,
+      discountPercentage: insertPromotion.discountPercentage ?? null,
+      discountAmount: insertPromotion.discountAmount ?? null,
+      code: insertPromotion.code ?? null,
+      isActive: insertPromotion.isActive ?? true,
+      minPurchase: insertPromotion.minPurchase ?? null,
+      maxUses: insertPromotion.maxUses ?? null,
+      currentUses: insertPromotion.currentUses ?? 0
+    };
+    this.promotions.set(id, promotion);
+    return promotion;
+  }
+
+  async updatePromotion(id: string, updateData: Partial<InsertPromotion>): Promise<Promotion | undefined> {
+    const promotion = this.promotions.get(id);
+    if (!promotion) return undefined;
+
+    const updatedPromotion = { ...promotion, ...updateData };
+    this.promotions.set(id, updatedPromotion);
+    return updatedPromotion;
+  }
+
+  async deletePromotion(id: string): Promise<boolean> {
+    return this.promotions.delete(id);
+  }
+
+  // Event methods
+  async getEvents(): Promise<Event[]> {
+    return Array.from(this.events.values()).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  }
+
+  async getActiveEvents(): Promise<Event[]> {
+    const now = new Date();
+    return Array.from(this.events.values())
+      .filter(event => 
+        event.isActive && 
+        new Date(event.startDate!) <= now && 
+        new Date(event.endDate!) >= now
+      )
+      .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  }
+
+  async getEvent(id: string): Promise<Event | undefined> {
+    return this.events.get(id);
+  }
+
+  async createEvent(insertEvent: InsertEvent): Promise<Event> {
+    const id = randomUUID();
+    const event: Event = { 
+      ...insertEvent, 
+      id,
+      createdAt: new Date(),
+      description: insertEvent.description ?? null,
+      imageUrl: insertEvent.imageUrl ?? null,
+      isActive: insertEvent.isActive ?? true,
+      priority: insertEvent.priority ?? 0
+    };
+    this.events.set(id, event);
+    return event;
+  }
+
+  async updateEvent(id: string, updateData: Partial<InsertEvent>): Promise<Event | undefined> {
+    const event = this.events.get(id);
+    if (!event) return undefined;
+
+    const updatedEvent = { ...event, ...updateData };
+    this.events.set(id, updatedEvent);
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: string): Promise<boolean> {
+    return this.events.delete(id);
   }
 
   // Product methods
