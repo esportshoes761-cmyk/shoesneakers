@@ -95,17 +95,29 @@ export function ObjectUploader({
       const { uploadURL } = await uploadResponse.json();
 
       // 2. Subir archivo directamente al almacenamiento
+      console.log("🚀 Intentando subir archivo a:", uploadURL);
+      console.log("🚀 Tipo de archivo:", selectedFile.type);
+      console.log("🚀 Tamaño del archivo:", selectedFile.size);
+      
       const uploadFileResponse = await fetch(uploadURL, {
         method: 'PUT',
         body: selectedFile,
         headers: {
-          'Content-Type': selectedFile.type,
+          'Content-Type': selectedFile.type || 'application/octet-stream',
         },
       });
 
       if (!uploadFileResponse.ok) {
-        throw new Error('Error al subir archivo');
+        const errorText = await uploadFileResponse.text();
+        console.error("❌ Error en la respuesta de subida:", {
+          status: uploadFileResponse.status,
+          statusText: uploadFileResponse.statusText,
+          errorText: errorText
+        });
+        throw new Error(`Error al subir archivo: ${uploadFileResponse.status} - ${errorText}`);
       }
+      
+      console.log("✅ Archivo subido exitosamente!");
 
       // 3. Obtener la ruta normalizada del objeto
       // Extraer el ID del archivo de la URL
@@ -128,10 +140,10 @@ export function ObjectUploader({
       setSelectedFile(null);
       setPreview(null);
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('❌ Error completo al subir archivo:', error);
       toast({
         title: "Error",
-        description: "Error al subir la imagen",
+        description: error instanceof Error ? error.message : "Error al subir la imagen",
         variant: "destructive",
       });
     } finally {
