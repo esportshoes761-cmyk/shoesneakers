@@ -650,7 +650,17 @@ export default function AdminPanel() {
                                 console.log("🔥 IMAGEN PRINCIPAL RECIBIDA:", imageUrl);
                                 console.log("🔥 Actualizando campo con field.onChange");
                                 field.onChange(imageUrl);
+                                
+                                // Forzar actualización del formulario
+                                productForm.setValue("imageUrl", imageUrl, { 
+                                  shouldValidate: true, 
+                                  shouldDirty: true,
+                                  shouldTouch: true 
+                                });
+                                
                                 console.log("🔥 Valor actual del campo:", productForm.getValues("imageUrl"));
+                                console.log("🔥 Todos los valores del form:", productForm.getValues());
+                                
                                 toast({
                                   title: "¡Imagen principal cargada!",
                                   description: `URL: ${imageUrl}`,
@@ -662,8 +672,18 @@ export default function AdminPanel() {
                             </ObjectUploader>
                           </FormControl>
                           {field.value && (
-                            <div className="mt-2">
-                              <p className="text-sm text-muted-foreground">Imagen subida: {field.value}</p>
+                            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                              <p className="text-sm text-green-700 font-medium">✅ Imagen subida:</p>
+                              <p className="text-xs text-green-600 break-all">{field.value}</p>
+                              <img 
+                                src={field.value} 
+                                alt="Preview" 
+                                className="mt-2 w-20 h-20 object-cover rounded border"
+                                onError={(e) => {
+                                  console.error("Error loading preview image:", field.value);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             </div>
                           )}
                           <FormMessage />
