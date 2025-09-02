@@ -12,7 +12,7 @@ import { formatCurrency } from "@/lib/currency";
 export default function FloatingCart() {
   const [isExpanded, setIsExpanded] = useState(false);
   const cartItemCount = useCartStore(state => state.getItemCount());
-  const { items, getTotalPrice, updateQuantity, removeItem } = useCartStore();
+  const { items, getTotalPrice, updateQuantity, removeItem, updateSize } = useCartStore();
   const [location, setLocation] = useLocation();
 
   // Obtener productos para mostrar en el resumen
@@ -23,7 +23,7 @@ export default function FloatingCart() {
 
   const cartItems = items.map(item => {
     const product = (products as any[]).find((p: any) => p.id === item.productId);
-    return product ? { ...product, quantity: item.quantity, cartItemId: item.id } : null;
+    return product ? { ...product, quantity: item.quantity, cartItemId: item.id, selectedSize: item.size } : null;
   }).filter(Boolean);
 
   const totalPrice = getTotalPrice(products as any[]);
@@ -71,6 +71,9 @@ export default function FloatingCart() {
                     <h4 className="font-medium text-xs leading-tight">{item.name}</h4>
                     <p className="text-xs text-muted-foreground">
                       {formatCurrency(item.price)} c/u
+                    </p>
+                    <p className="text-xs font-medium text-primary">
+                      Talla: {item.selectedSize}
                     </p>
                   </div>
                   <Badge variant="outline" className="text-xs">

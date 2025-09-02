@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { ArrowLeft, ShoppingBag, MessageCircle, Plus, Minus, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCartStore } from "@/lib/cart-store";
 import { formatCurrency } from "@/lib/currency";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +31,7 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const { items, getTotalPrice, getTotalSavings, clearCart, updateQuantity, removeItem } = useCartStore();
+  const { items, getTotalPrice, getTotalSavings, clearCart, updateQuantity, removeItem, updateSize } = useCartStore();
 
   // Obtener productos del carrito
   const { data: products = [] } = useQuery({
@@ -40,7 +41,7 @@ export default function CheckoutPage() {
 
   const cartItems = items.map(item => {
     const product = (products as any[]).find((p: any) => p.id === item.productId);
-    return product ? { ...product, quantity: item.quantity } : null;
+    return product ? { ...product, quantity: item.quantity, cartItemId: item.id, selectedSize: item.size } : null;
   }).filter(Boolean);
 
   const totalPrice = getTotalPrice(products as any[]);
@@ -63,7 +64,7 @@ export default function CheckoutPage() {
     try {
       // Preparar mensaje para WhatsApp
       const itemsList = cartItems.map(item => 
-        `• ${item.name} x${item.quantity} - ${formatCurrency(Number(item.price) * item.quantity)}`
+        `• ${item.name} (Talla ${item.selectedSize}) x${item.quantity} - ${formatCurrency(Number(item.price) * item.quantity)}`
       ).join('\n');
 
       const whatsappMessage = encodeURIComponent(
@@ -259,7 +260,7 @@ export default function CheckoutPage() {
                 if (!cartItem) return null;
                 
                 return (
-                  <div key={item.id} className="space-y-2" data-testid={`order-item-${item.id}`}>
+                  <div key={item.cartItemId} className="space-y-3" data-testid={`order-item-${item.id}`}>
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <h4 className="font-medium text-sm">{item.name}</h4>
@@ -270,6 +271,26 @@ export default function CheckoutPage() {
                       <Badge variant="outline">
                         {formatCurrency(Number(item.price) * item.quantity)}
                       </Badge>
+                    </div>
+
+                    {/* Selector de talla */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Talla:</label>
+                      <Select 
+                        value={item.selectedSize} 
+                        onValueChange={(value) => updateSize(cartItem.id, value)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {item.sizes && item.sizes.map((size: string) => (
+                            <SelectItem key={size} value={size} className="text-xs">
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     {/* Controles de cantidad */}

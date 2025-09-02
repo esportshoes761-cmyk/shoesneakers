@@ -1,13 +1,14 @@
 import { type ProductWithCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
 import { Star, Edit, Trash2 } from "lucide-react";
 import { SavingsBadge } from "@/components/savings-badge";
 import { useSavingsStore } from "@/lib/savings-store";
-import { useEffect } from "react";
+import { useState } from "react";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -15,6 +16,8 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const addItem = useCartStore(state => state.addItem);
   const { toast } = useToast();
   const { addSaving } = useSavingsStore();
@@ -40,8 +43,10 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return count;
   };
 
-  const handleAddToCart = () => {
-    addItem(product.id);
+  const handleAddToCart = (size: string) => {
+    addItem(product.id, size);
+    setIsDialogOpen(false);
+    setSelectedSize("");
     
     // Calculate savings if there's a discount
     const discountPercentage = product.discountPercentage || 0;
@@ -56,19 +61,25 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         addSaving(savingsAmount);
         toast({
           title: "¡Producto agregado y dinero ahorrado! 🎉",
-          description: `${product.name} se agregó a tu carrito. ¡Ahorraste ${formatCurrency(savingsAmount)}!`,
+          description: `${product.name} (Talla ${size}) se agregó a tu carrito. ¡Ahorraste ${formatCurrency(savingsAmount)}!`,
         });
       } else {
         toast({
           title: "¡Producto agregado!",
-          description: `${product.name} se agregó a tu carrito`,
+          description: `${product.name} (Talla ${size}) se agregó a tu carrito`,
         });
       }
     } else {
       toast({
         title: "¡Producto agregado!",
-        description: `${product.name} se agregó a tu carrito`,
+        description: `${product.name} (Talla ${size}) se agregó a tu carrito`,
       });
+    }
+  };
+
+  const handleSizeConfirm = () => {
+    if (selectedSize) {
+      handleAddToCart(selectedSize);
     }
   };
 
@@ -197,15 +208,69 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
-      <Button 
-        size="sm"
-        className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
-        onClick={handleAddToCart}
-        disabled={(product.stock || 0) === 0}
-        data-testid={`button-add-to-cart-${product.id}`}
-      >
-        {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar'}
-      </Button>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
+          <Button 
+            size="sm"
+            className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
+            disabled={(product.stock || 0) === 0}
+            data-testid={`button-add-to-cart-${product.id}`}
+          >
+            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar'}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecciona tu talla</DialogTitle>
+            <DialogDescription>
+              Elige la talla para {product.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-3">
+              <h4 className="font-medium">Tallas disponibles:</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {product.sizes && product.sizes.length > 0 ? (
+                  product.sizes.map((size) => (
+                    <Button
+                      key={size}
+                      variant={selectedSize === size ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedSize(size)}
+                      className="h-10"
+                      data-testid={`button-size-${size}-${product.id}`}
+                    >
+                      {size}
+                    </Button>
+                  ))
+                ) : (
+                  <p className="col-span-3 text-sm text-muted-foreground">
+                    No hay tallas específicas para este producto
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsDialogOpen(false)}
+                className="flex-1"
+                data-testid={`button-cancel-size-${product.id}`}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSizeConfirm}
+                disabled={!selectedSize}
+                className="flex-1"
+                data-testid={`button-confirm-size-${product.id}`}
+              >
+                Agregar al Carrito
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
