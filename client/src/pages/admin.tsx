@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
+import { ObjectUploader } from "@/components/ObjectUploader";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -44,7 +45,7 @@ const eventFormSchema = insertEventSchema.extend({
 
 const brandFormSchema = insertBrandSchema.extend({
   name: z.string().min(1, "El nombre de la marca es requerido"),
-  logo: z.string().url("Debe ser una URL válida"),
+  logo: z.string().min(1, "El logo es requerido"),
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -609,10 +610,20 @@ export default function AdminPanel() {
                       name="imageUrl"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>URL de Imagen Principal *</FormLabel>
+                          <FormLabel>Imagen Principal *</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} data-testid="input-product-image" />
+                            <ObjectUploader
+                              onComplete={(imageUrl) => field.onChange(imageUrl)}
+                              data-testid="uploader-product-image"
+                            >
+                              Subir imagen principal
+                            </ObjectUploader>
                           </FormControl>
+                          {field.value && (
+                            <div className="mt-2">
+                              <p className="text-sm text-muted-foreground">Imagen subida: {field.value}</p>
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -624,21 +635,29 @@ export default function AdminPanel() {
                       <div className="space-y-2 mt-2">
                         {productImages.map((image, index) => (
                           <div key={index} className="flex gap-2 items-center">
-                            <Input
-                              value={image}
-                              onChange={(e) => updateProductImage(index, e.target.value)}
-                              placeholder={`URL de imagen ${index + 1}`}
-                              data-testid={`input-product-extra-image-${index}`}
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeProductImage(index)}
-                              data-testid={`button-remove-image-${index}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            <div className="flex-1">
+                              {image ? (
+                                <div className="flex items-center justify-between p-2 border rounded">
+                                  <span className="text-sm">{image}</span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeProductImage(index)}
+                                    data-testid={`button-remove-image-${index}`}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <ObjectUploader
+                                  onComplete={(imageUrl) => updateProductImage(index, imageUrl)}
+                                  data-testid={`uploader-product-extra-image-${index}`}
+                                >
+                                  Subir imagen {index + 1}
+                                </ObjectUploader>
+                              )}
+                            </div>
                           </div>
                         ))}
                         {productImages.length < 9 && (
@@ -649,7 +668,7 @@ export default function AdminPanel() {
                             data-testid="button-add-image"
                           >
                             <ImagePlus className="h-4 w-4 mr-2" />
-                            Agregar Imagen
+                            Agregar Espacio para Imagen
                           </Button>
                         )}
                       </div>
@@ -881,10 +900,20 @@ export default function AdminPanel() {
                       name="logo"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>URL del Logo</FormLabel>
+                          <FormLabel>Logo de la Marca</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="https://ejemplo.com/logo.png" data-testid="input-brand-logo" />
+                            <ObjectUploader
+                              onComplete={(imageUrl) => field.onChange(imageUrl)}
+                              data-testid="uploader-brand-logo"
+                            >
+                              Subir logo de la marca
+                            </ObjectUploader>
                           </FormControl>
+                          {field.value && (
+                            <div className="mt-2">
+                              <p className="text-sm text-muted-foreground">Logo subido: {field.value}</p>
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1379,10 +1408,20 @@ export default function AdminPanel() {
                       name="imageUrl"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>URL de Imagen</FormLabel>
+                          <FormLabel>Imagen del Evento</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} data-testid="input-event-image" />
+                            <ObjectUploader
+                              onComplete={(imageUrl) => field.onChange(imageUrl)}
+                              data-testid="uploader-event-image"
+                            >
+                              Subir imagen del evento
+                            </ObjectUploader>
                           </FormControl>
+                          {field.value && (
+                            <div className="mt-2">
+                              <p className="text-sm text-muted-foreground">Imagen subida: {field.value}</p>
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
