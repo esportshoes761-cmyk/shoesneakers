@@ -200,7 +200,9 @@ export default function AdminPanel() {
         sizes: productSizes,
         colors: productColors,
       };
-      console.log("Enviando datos del producto:", productData); // Debug
+      console.log("Datos completos del producto a enviar:", productData);
+      console.log("ImageURL principal:", data.imageUrl);
+      console.log("Imágenes adicionales:", productImages);
       return apiRequest("POST", "/api/products", productData);
     },
     onSuccess: () => {
@@ -644,7 +646,14 @@ export default function AdminPanel() {
                           <FormLabel>Imagen Principal *</FormLabel>
                           <FormControl>
                             <ObjectUploader
-                              onComplete={(imageUrl) => field.onChange(imageUrl)}
+                              onComplete={(imageUrl) => {
+                                console.log("Imagen principal subida:", imageUrl); // Debug
+                                field.onChange(imageUrl);
+                                toast({
+                                  title: "¡Imagen principal cargada!",
+                                  description: "La imagen se guardará cuando publiques el producto",
+                                });
+                              }}
                               data-testid="uploader-product-image"
                             >
                               Subir imagen principal
@@ -672,8 +681,13 @@ export default function AdminPanel() {
                           <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
                             <ObjectUploader
                               onComplete={(imageUrl) => {
+                                console.log("Imagen adicional subida:", imageUrl); // Debug
                                 const newImages = [...productImages, imageUrl];
                                 setProductImages(newImages);
+                                toast({
+                                  title: "¡Imagen adicional cargada!",
+                                  description: "La imagen se guardará cuando publiques el producto",
+                                });
                               }}
                               data-testid="uploader-product-extra-image-0"
                             >

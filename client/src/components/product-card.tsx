@@ -136,12 +136,16 @@ export default function ProductCard({ product, showManageButton = false }: Produ
 
       <div className="relative">
         <img 
-          src={getMainImage(product) || '/placeholder-product.jpg'} 
+          src={getMainImage(product) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>'} 
           alt={product.name}
           className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            target.src = '/placeholder-product.jpg';
+            console.error(`❌ Error cargando imagen: ${target.src} para producto: ${product.name}`);
+            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
+          }}
+          onLoad={() => {
+            console.log(`✅ Imagen cargada correctamente para producto: ${product.name}`);
           }}
           data-testid={`img-product-${product.id}`}
         />
@@ -171,7 +175,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                 savingsAmount={Number(product.originalPrice) - Number(product.price)}
                 discountPercentage={discountPercentage}
                 className="ml-1"
-                showAnimation={hasDiscount}
+                showAnimation={true}
               />
             )}
           </>
