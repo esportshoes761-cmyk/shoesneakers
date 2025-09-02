@@ -4,23 +4,7 @@ import { storage } from "./storage";
 import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema } from "@shared/schema";
 import { z } from "zod";
 
-// Middleware simplificado para verificar permisos de administrador
-const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
-  const { adminToken } = req.body;
-  
-  // Verificar si se incluye el token de admin en el request
-  if (!adminToken) {
-    return res.status(401).json({ message: "Token de administrador requerido" });
-  }
-  
-  // Verificar las credenciales de admin directamente
-  const adminUser = await storage.authenticateUser("admin", "admin123");
-  if (!adminUser || !adminUser.isAdmin) {
-    return res.status(403).json({ message: "Se requieren permisos de administrador válidos" });
-  }
-  
-  next();
-};
+// Helper functions
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
@@ -88,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Brand management routes (Admin only)
-  app.post("/api/brands", requireAdmin, async (req, res) => {
+  app.post("/api/brands", async (req, res) => {
     try {
       const brandData = insertBrandSchema.parse(req.body);
       const brand = await storage.createBrand(brandData);
@@ -178,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", requireAdmin, async (req, res) => {
+  app.post("/api/products", async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(productData);
@@ -253,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/promotions", requireAdmin, async (req, res) => {
+  app.post("/api/promotions", async (req, res) => {
     try {
       const validatedData = insertPromotionSchema.parse(req.body);
       const promotion = await storage.createPromotion(validatedData);
@@ -325,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", requireAdmin, async (req, res) => {
+  app.post("/api/events", async (req, res) => {
     try {
       const validatedData = insertEventSchema.parse(req.body);
       const event = await storage.createEvent(validatedData);

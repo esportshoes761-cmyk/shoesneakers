@@ -352,9 +352,16 @@ export default function AdminPanel() {
     );
   }
 
-  // Si no está autenticado como admin, no renderizar nada (se redirige)
+  // Si no está autenticado como admin, redirigir al login de admin
   if (!isAuthenticated || !user?.isAdmin) {
-    return null;
+    window.location.href = '/admin-login';
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p>Redirigiendo al login de administrador...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
