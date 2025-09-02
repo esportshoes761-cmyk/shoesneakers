@@ -49,16 +49,16 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   };
 
   return (
-    <div className="product-card bg-card border border-border rounded-lg p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
+    <div className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
       {/* Badges */}
-      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+      <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 flex flex-col gap-1">
         {product.isFlashSale && (
-          <Badge variant="destructive" className="text-xs font-bold">
+          <Badge variant="destructive" className="text-[10px] sm:text-xs font-bold px-1 py-0 sm:px-2 sm:py-1">
             -{discountPercentage}%
           </Badge>
         )}
         {product.isFeatured && !product.isFlashSale && (
-          <Badge className="bg-accent text-accent-foreground text-xs font-bold">
+          <Badge className="bg-accent text-accent-foreground text-[10px] sm:text-xs font-bold px-1 py-0 sm:px-2 sm:py-1">
             #1
           </Badge>
         )}
@@ -66,12 +66,12 @@ export default function ProductCard({ product, showManageButton = false }: Produ
 
       {/* Manage buttons for seller */}
       {showManageButton && (
-        <div className="absolute top-2 right-2 z-10 flex gap-1">
-          <Button size="sm" variant="outline" className="w-8 h-8 p-0" data-testid={`button-edit-${product.id}`}>
-            <Edit className="w-3 h-3" />
+        <div className="absolute top-1 right-1 sm:top-2 sm:right-2 z-10 flex gap-1">
+          <Button size="sm" variant="outline" className="w-6 h-6 sm:w-8 sm:h-8 p-0" data-testid={`button-edit-${product.id}`}>
+            <Edit className="w-2 h-2 sm:w-3 sm:h-3" />
           </Button>
-          <Button size="sm" variant="outline" className="w-8 h-8 p-0" data-testid={`button-delete-${product.id}`}>
-            <Trash2 className="w-3 h-3" />
+          <Button size="sm" variant="outline" className="w-6 h-6 sm:w-8 sm:h-8 p-0" data-testid={`button-delete-${product.id}`}>
+            <Trash2 className="w-2 h-2 sm:w-3 sm:h-3" />
           </Button>
         </div>
       )}
@@ -79,47 +79,48 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       <img 
         src={product.imageUrl} 
         alt={product.name}
-        className="w-full h-36 object-cover rounded-lg mb-3"
+        className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
         data-testid={`img-product-${product.id}`}
       />
       
-      <h4 className="font-semibold text-sm mb-2" data-testid={`text-product-name-${product.id}`}>
+      <h4 className="font-semibold text-xs sm:text-sm mb-1 sm:mb-2 line-clamp-2" data-testid={`text-product-name-${product.id}`}>
         {product.name}
       </h4>
       
-      <div className="flex items-center space-x-1 mb-2">
-        <span className="text-primary font-bold" data-testid={`text-price-${product.id}`}>
+      <div className="flex items-center space-x-1 mb-1 sm:mb-2">
+        <span className="text-primary font-bold text-sm sm:text-base" data-testid={`text-price-${product.id}`}>
           ${currentPrice}
         </span>
         {hasDiscount && originalPrice && (
-          <span className="text-muted-foreground line-through text-xs" data-testid={`text-original-price-${product.id}`}>
+          <span className="text-muted-foreground line-through text-[10px] sm:text-xs" data-testid={`text-original-price-${product.id}`}>
             ${originalPrice}
           </span>
         )}
       </div>
       
-      <div className="flex items-center space-x-1 mb-3">
+      <div className="flex items-center space-x-1 mb-2 sm:mb-3">
         <div className="flex">
           {renderStars(Number(product.rating || 0))}
         </div>
-        <span className="text-xs text-muted-foreground" data-testid={`text-review-count-${product.id}`}>
+        <span className="text-[10px] sm:text-xs text-muted-foreground" data-testid={`text-review-count-${product.id}`}>
           ({product.reviewCount || 0})
         </span>
       </div>
 
       {product.stock !== undefined && (
-        <div className="text-xs text-muted-foreground mb-2" data-testid={`text-stock-${product.id}`}>
+        <div className="text-[10px] sm:text-xs text-muted-foreground mb-1 sm:mb-2" data-testid={`text-stock-${product.id}`}>
           Stock: {product.stock}
         </div>
       )}
       
       <Button 
-        className="w-full py-2 text-sm font-semibold rounded-lg"
+        size="sm"
+        className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
         onClick={handleAddToCart}
         disabled={(product.stock || 0) === 0}
         data-testid={`button-add-to-cart-${product.id}`}
       >
-        {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar al Carrito'}
+        {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar'}
       </Button>
     </div>
   );

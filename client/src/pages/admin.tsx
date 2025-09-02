@@ -235,40 +235,41 @@ export default function AdminPanel() {
   });
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Panel de Administración - ZapaShop</h1>
-        <p className="text-muted-foreground">Gestiona productos, promociones y eventos de la tienda</p>
+    <div className="container mx-auto py-4 sm:py-8 px-2 sm:px-4">
+      <div className="mb-4 sm:mb-8">
+        <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Panel de Administración - ZapaShop</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">Gestiona productos, promociones y eventos de la tienda</p>
       </div>
 
-      <Tabs defaultValue="products" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="products" data-testid="tab-products">
-            <Package className="h-4 w-4 mr-2" />
-            Productos
+      <Tabs defaultValue="products" className="space-y-2 sm:space-y-4">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
+            <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Productos</span>
           </TabsTrigger>
-          <TabsTrigger value="promotions" data-testid="tab-promotions">
-            <Gift className="h-4 w-4 mr-2" />
-            Promociones
+          <TabsTrigger value="promotions" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-promotions">
+            <Gift className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Promociones</span>
           </TabsTrigger>
-          <TabsTrigger value="events" data-testid="tab-events">
-            <CalendarIcon className="h-4 w-4 mr-2" />
-            Eventos
+          <TabsTrigger value="events" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-events">
+            <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Eventos</span>
           </TabsTrigger>
         </TabsList>
 
         {/* Panel de Productos */}
-        <TabsContent value="products" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold">Gestión de Productos</h2>
+        <TabsContent value="products" className="space-y-2 sm:space-y-4">
+          <div className="flex justify-between items-center mb-2 sm:mb-4">
+            <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Productos</h2>
             <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-product">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar Producto
+                <Button size="sm" className="h-8 sm:h-10 text-xs sm:text-sm" data-testid="button-add-product">
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Agregar Producto</span>
+                  <span className="sm:hidden">Nuevo</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
                 <DialogHeader>
                   <DialogTitle>Agregar Nuevo Producto</DialogTitle>
                   <DialogDescription>
@@ -278,7 +279,7 @@ export default function AdminPanel() {
                 <Form {...productForm}>
                   <form onSubmit={productForm.handleSubmit((data) => createProductMutation.mutate(data))} className="space-y-6">
                     {/* Información Básica */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                       <FormField
                         control={productForm.control}
                         name="name"
@@ -322,7 +323,7 @@ export default function AdminPanel() {
                     />
 
                     {/* Precios y Stock */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                       <FormField
                         control={productForm.control}
                         name="price"
@@ -365,7 +366,7 @@ export default function AdminPanel() {
                     </div>
 
                     {/* Categoría y Marca */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                       <FormField
                         control={productForm.control}
                         name="categoryId"

@@ -19,20 +19,20 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-lg border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-4">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+        <div className="flex items-center justify-between h-12 sm:h-16">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <Link href="/" data-testid="link-home">
-              <h1 className="text-2xl font-bold text-primary cursor-pointer">👟 ZapaShop</h1>
+              <h1 className="text-lg sm:text-2xl font-bold text-primary cursor-pointer">👟 ZapaShop</h1>
             </Link>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <form onSubmit={handleSearch} className="relative">
                 <Input 
                   type="text" 
                   placeholder="Buscar zapatos..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-96 pl-10 pr-4 py-2 rounded-full"
+                  className="w-64 lg:w-96 pl-8 pr-4 py-1 rounded-full text-sm"
                   data-testid="input-search"
                 />
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -40,15 +40,16 @@ export default function Header() {
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-4">
             <Link href="/seller">
               <Button 
                 variant={location === '/seller' ? 'default' : 'secondary'}
-                className="rounded-full"
+                size="sm"
+                className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm"
                 data-testid="button-seller"
               >
-                <Plus className="w-4 h-4 mr-2" />
-                Vender
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Vender</span>
               </Button>
             </Link>
             
@@ -57,24 +58,25 @@ export default function Header() {
               <Link href="/admin">
                 <Button 
                   variant={location === '/admin' ? 'default' : 'outline'}
-                  className="rounded-full"
+                  size="sm"
+                  className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm"
                   data-testid="button-admin"
                 >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Admin
+                  <Settings className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Admin</span>
                 </Button>
               </Link>
             )}
             
             <Button 
               variant="ghost" 
-              size="icon" 
-              className="relative"
+              size="sm" 
+              className="relative h-8 w-8 sm:h-10 sm:w-10"
               data-testid="button-cart"
             >
-              <ShoppingCart className="h-5 w-5" />
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
               {cartItemCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold" data-testid="text-cart-count">
+                <span className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 bg-destructive text-destructive-foreground text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-bold text-[10px] sm:text-xs" data-testid="text-cart-count">
                   {cartItemCount}
                 </span>
               )}
@@ -83,7 +85,8 @@ export default function Header() {
             {!isAdmin ? (
               <Button 
                 variant="default" 
-                className="rounded-full" 
+                size="sm"
+                className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm" 
                 onClick={() => {
                   // Sistema simple de credenciales: hacer clic activa modo admin
                   const password = prompt("Ingresa la contraseña de administrador:");
@@ -96,18 +99,19 @@ export default function Header() {
                 }}
                 data-testid="button-login"
               >
-                <User className="w-4 h-4 mr-2" />
-                Login Admin
+                <User className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Login</span>
               </Button>
             ) : (
               <Button 
                 variant="outline" 
-                className="rounded-full" 
+                size="sm"
+                className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm" 
                 onClick={() => setIsAdmin(false)}
                 data-testid="button-logout"
               >
-                <User className="w-4 h-4 mr-2" />
-                Cerrar Sesión
+                <User className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Salir</span>
               </Button>
             )}
           </div>

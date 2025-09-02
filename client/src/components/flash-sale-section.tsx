@@ -42,24 +42,24 @@ export default function FlashSaleSection({ products }: FlashSaleSectionProps) {
   const formatTime = (time: number) => String(time).padStart(2, '0');
 
   return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-2xl font-bold text-primary" data-testid="text-flash-sale-title">
-          🔥 Flash Sale - Termina pronto!
+    <section className="mb-4 sm:mb-8">
+      <div className="flex items-center justify-between mb-2 sm:mb-4">
+        <h3 className="text-lg sm:text-2xl font-bold text-primary" data-testid="text-flash-sale-title">
+          🔥 Flash Sale
         </h3>
-        <div className="bg-destructive text-destructive-foreground px-4 py-2 rounded-full font-bold" data-testid="text-countdown">
+        <div className="bg-destructive text-destructive-foreground px-2 sm:px-4 py-1 sm:py-2 rounded-full font-bold text-xs sm:text-base" data-testid="text-countdown">
           ⏰ {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:{formatTime(timeLeft.seconds)}
         </div>
       </div>
       
       {products.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
       ) : (
-        <div className="text-center py-8 text-muted-foreground" data-testid="text-no-flash-sale">
+        <div className="text-center py-4 sm:py-8 text-muted-foreground text-sm" data-testid="text-no-flash-sale">
           No hay productos en oferta flash en este momento.
         </div>
       )}
