@@ -97,6 +97,10 @@ export default function AdminPanel() {
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
+  
+  // Estados para edición
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Consultas de datos
   const { data: products = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
@@ -211,6 +215,47 @@ export default function AdminPanel() {
     productForm.setValue("colors", newColors);
   };
 
+  // Función para manejar edición de producto
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setIsEditMode(true);
+    
+    // Poblar el formulario con los datos del producto
+    productForm.reset({
+      name: product.name,
+      description: product.description,
+      price: product.price.toString(),
+      originalPrice: product.originalPrice?.toString() || undefined,
+      imageUrl: product.imageUrl || undefined,
+      reference: product.reference || "",
+      stock: product.stock || 0,
+      categoryId: product.categoryId,
+      brandId: product.brandId,
+      isFlashSale: product.isFlashSale || false,
+      isFeatured: product.isFeatured || false,
+      images: product.images || [],
+      sizes: product.sizes || [],
+      colors: product.colors || [],
+    });
+    
+    // Poblar estados auxiliares
+    setProductImages(product.images || []);
+    setProductSizes(product.sizes || []);
+    setProductColors(product.colors || []);
+    
+    setProductDialogOpen(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProduct(null);
+    setIsEditMode(false);
+    productForm.reset();
+    setProductImages([]);
+    setProductSizes([]);
+    setProductColors([]);
+    setProductDialogOpen(false);
+  };
+
   // Mutaciones
   const createProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
@@ -238,6 +283,41 @@ export default function AdminPanel() {
     onError: (error: any) => {
       const errorMessage = error?.message || "Error al crear el producto";
       console.error("Error creando producto:", error); // Debug
+      toast({ 
+        title: "Error", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: (data: ProductFormData) => {
+      if (!editingProduct) throw new Error("No hay producto para editar");
+      
+      const productData = {
+        ...data,
+        images: productImages.filter(img => img.trim() !== ""),
+        sizes: productSizes,
+        colors: productColors,
+      };
+      console.log("Actualizando producto:", editingProduct.id, productData);
+      return apiRequest("PUT", `/api/products/${editingProduct.id}`, productData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      setProductDialogOpen(false);
+      setEditingProduct(null);
+      setIsEditMode(false);
+      productForm.reset();
+      setProductImages([]);
+      setProductSizes([]);
+      setProductColors([]);
+      toast({ title: "¡Éxito!", description: "Producto actualizado correctamente" });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Error al actualizar el producto";
+      console.error("Error actualizando producto:", error);
       toast({ 
         title: "Error", 
         description: errorMessage, 
@@ -464,14 +544,21 @@ export default function AdminPanel() {
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
                 <DialogHeader>
-                  <DialogTitle>Agregar Nuevo Producto</DialogTitle>
+                  <DialogTitle>{isEditMode ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
                   <DialogDescription>
-                    Completa todos los detalles del producto incluyendo imágenes, tallas y colores
+                    {isEditMode 
+                      ? "Modifica los detalles del producto que desees actualizar"
+                      : "Completa todos los detalles del producto incluyendo imágenes, tallas y colores"
+                    }
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...productForm}>
                   <form onSubmit={productForm.handleSubmit((data) => {
-                    createProductMutation.mutate(data);
+                    if (isEditMode) {
+                      updateProductMutation.mutate(data);
+                    } else {
+                      createProductMutation.mutate(data);
+                    }
                   })} className="space-y-6">
                     {/* Información Básica */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
@@ -934,11 +1021,18 @@ export default function AdminPanel() {
                     </div>
 
                     <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={() => setProductDialogOpen(false)}>
+                      <Button type="button" variant="outline" onClick={isEditMode ? handleCancelEdit : () => setProductDialogOpen(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={createProductMutation.isPending} data-testid="button-submit-product">
-                        {createProductMutation.isPending ? "Creando..." : "Crear Producto"}
+                      <Button 
+                        type="submit" 
+                        disabled={isEditMode ? updateProductMutation.isPending : createProductMutation.isPending} 
+                        data-testid="button-submit-product"
+                      >
+                        {isEditMode 
+                          ? (updateProductMutation.isPending ? "Actualizando..." : "Actualizar Producto")
+                          : (createProductMutation.isPending ? "Creando..." : "Crear Producto")
+                        }
                       </Button>
                     </div>
                   </form>
@@ -953,14 +1047,24 @@ export default function AdminPanel() {
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg">{product.name}</CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteProductMutation.mutate(product.id)}
-                      data-testid={`button-delete-product-${product.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                        data-testid={`button-edit-product-${product.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteProductMutation.mutate(product.id)}
+                        data-testid={`button-delete-product-${product.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <CardDescription>{product.description}</CardDescription>
                 </CardHeader>
