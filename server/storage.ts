@@ -475,6 +475,7 @@ export class MemStorage implements IStorage {
       sellerId: insertProduct.sellerId ?? null,
       reference: insertProduct.reference ?? null,
       images: insertProduct.images ?? null,
+      imageUrl: insertProduct.imageUrl ?? null,
       sizes: insertProduct.sizes ?? null,
       colors: insertProduct.colors ?? null,
       stock: insertProduct.stock ?? 0,
