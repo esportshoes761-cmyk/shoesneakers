@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { ArrowLeft, ShoppingBag, MessageCircle } from "lucide-react";
+import { ArrowLeft, ShoppingBag, MessageCircle, Plus, Minus, Trash2 } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { formatCurrency } from "@/lib/currency";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +30,7 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const { items, getTotalPrice, getTotalSavings, clearCart } = useCartStore();
+  const { items, getTotalPrice, getTotalSavings, clearCart, updateQuantity, removeItem } = useCartStore();
 
   // Obtener productos del carrito
   const { data: products = [] } = useQuery({
@@ -254,19 +254,64 @@ export default function CheckoutPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {cartItems.map((item) => (
-                <div key={item.id} className="flex justify-between items-center" data-testid={`order-item-${item.id}`}>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-sm">{item.name}</h4>
-                    <p className="text-xs text-muted-foreground">
-                      {formatCurrency(item.price)} x {item.quantity}
-                    </p>
+              {cartItems.map((item) => {
+                const cartItem = items.find(i => i.productId === item.id);
+                if (!cartItem) return null;
+                
+                return (
+                  <div key={item.id} className="space-y-2" data-testid={`order-item-${item.id}`}>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-sm">{item.name}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(item.price)} c/u
+                        </p>
+                      </div>
+                      <Badge variant="outline">
+                        {formatCurrency(Number(item.price) * item.quantity)}
+                      </Badge>
+                    </div>
+                    
+                    {/* Controles de cantidad */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0"
+                          onClick={() => updateQuantity(cartItem.id, cartItem.quantity - 1)}
+                          data-testid={`button-decrease-${item.id}`}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-8 text-center font-medium" data-testid={`quantity-${item.id}`}>
+                          {item.quantity}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0"
+                          onClick={() => updateQuantity(cartItem.id, cartItem.quantity + 1)}
+                          data-testid={`button-increase-${item.id}`}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        onClick={() => removeItem(cartItem.id)}
+                        title="Eliminar producto"
+                        data-testid={`button-remove-${item.id}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <Badge variant="outline">
-                    {formatCurrency(Number(item.price) * item.quantity)}
-                  </Badge>
-                </div>
-              ))}
+                );
+              })}
               
               <Separator />
               
