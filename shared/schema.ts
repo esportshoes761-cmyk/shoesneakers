@@ -6,9 +6,18 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
   isSeller: boolean("is_seller").default(false),
   isAdmin: boolean("is_admin").default(false),
+  credits: decimal("credits", { precision: 10, scale: 2 }).default("0"),
+  totalPurchases: decimal("total_purchases", { precision: 10, scale: 2 }).default("0"),
+  loyaltyLevel: text("loyalty_level").default("bronze"), // bronze, silver, gold, platinum
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const categories = pgTable("categories", {
@@ -87,8 +96,40 @@ export const cartItems = pgTable("cart_items", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tabla para transacciones de créditos
+export const creditTransactions = pgTable("credit_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  type: text("type").notNull(), // 'earned', 'spent', 'bonus'
+  description: text("description").notNull(),
+  orderId: varchar("order_id"), // Referencia a orden si aplica
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Tabla para sesiones de usuario
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({
@@ -125,6 +166,12 @@ export const insertCartItemSchema = createInsertSchema(cartItems).omit({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export type InsertCreditTransaction = z.infer<typeof insertCreditTransactionSchema>;
+export type CreditTransaction = typeof creditTransactions.$inferSelect;
+
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
 
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

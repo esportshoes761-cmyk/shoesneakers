@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,13 +14,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, insertPromotionSchema, insertEventSchema } from "@shared/schema";
+import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBrandSchema } from "@shared/schema";
 import type { Product, Promotion, Event, Category, Brand } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
+import { useAuth, logout } from "@/hooks/useAuth";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -40,16 +42,33 @@ const eventFormSchema = insertEventSchema.extend({
   endDate: z.date({ required_error: "La fecha de fin es requerida" }),
 });
 
+const brandFormSchema = insertBrandSchema.extend({
+  name: z.string().min(1, "El nombre de la marca es requerido"),
+  logo: z.string().url("Debe ser una URL válida"),
+});
+
 type ProductFormData = z.infer<typeof productFormSchema>;
 type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
+type BrandFormData = z.infer<typeof brandFormSchema>;
 
 export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user, isLoading, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+  
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [brandDialogOpen, setBrandDialogOpen] = useState(false);
+
+  // Check de autenticación
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !user?.isAdmin)) {
+      setLocation("/admin-login");
+    }
+  }, [isLoading, isAuthenticated, user, setLocation]);
 
   // Estados para manejar múltiples campos
   const [productImages, setProductImages] = useState<string[]>([]);
@@ -106,6 +125,17 @@ export default function AdminPanel() {
       imageUrl: "",
       eventType: "",
       priority: 0,
+      isActive: true,
+    },
+  });
+
+  const brandForm = useForm<BrandFormData>({
+    resolver: zodResolver(brandFormSchema),
+    defaultValues: {
+      name: "",
+      logo: "",
+      description: "",
+      catalogUrl: "",
       isActive: true,
     },
   });
@@ -234,18 +264,133 @@ export default function AdminPanel() {
     },
   });
 
+  const createBrandMutation = useMutation({
+    mutationFn: (data: BrandFormData) => apiRequest("/api/brands", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      setBrandDialogOpen(false);
+      brandForm.reset();
+      toast({ title: "Éxito", description: "Marca creada exitosamente" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo crear la marca", variant: "destructive" });
+    },
+  });
+
+  // Función para sugerir categoría y marca basado en el nombre del producto
+  const getSuggestions = (productName: string) => {
+    const name = productName.toLowerCase();
+    
+    // Sugerencias de categoría basadas en palabras clave
+    let suggestedCategory = "";
+    if (name.includes("tacon") || name.includes("heel") || name.includes("stiletto")) {
+      suggestedCategory = categories.find(c => c.name === "Tacones")?.id || "";
+    } else if (name.includes("deport") || name.includes("running") || name.includes("sport") || name.includes("gym")) {
+      suggestedCategory = categories.find(c => c.name === "Deportivos")?.id || "";
+    } else if (name.includes("bota") || name.includes("boot") || name.includes("ankle")) {
+      suggestedCategory = categories.find(c => c.name === "Botas")?.id || "";
+    } else if (name.includes("sandal") || name.includes("flip") || name.includes("playa")) {
+      suggestedCategory = categories.find(c => c.name === "Sandalias")?.id || "";
+    } else if (name.includes("formal") || name.includes("dress") || name.includes("oxford")) {
+      suggestedCategory = categories.find(c => c.name === "Formales")?.id || "";
+    } else {
+      suggestedCategory = categories.find(c => c.name === "Casuales")?.id || "";
+    }
+    
+    // Sugerencias de marca basadas en palabras clave
+    let suggestedBrand = "";
+    if (name.includes("nike") || name.includes("air") || name.includes("jordan")) {
+      suggestedBrand = brands.find(b => b.name === "Nike")?.id || "";
+    } else if (name.includes("adidas") || name.includes("ultra") || name.includes("gazelle")) {
+      suggestedBrand = brands.find(b => b.name === "Adidas")?.id || "";
+    } else if (name.includes("puma") || name.includes("suede") || name.includes("speed")) {
+      suggestedBrand = brands.find(b => b.name === "Puma")?.id || "";
+    } else if (name.includes("converse") || name.includes("chuck") || name.includes("all star")) {
+      suggestedBrand = brands.find(b => b.name === "Converse")?.id || "";
+    } else if (name.includes("vans") || name.includes("authentic") || name.includes("old skool")) {
+      suggestedBrand = brands.find(b => b.name === "Vans")?.id || "";
+    } else if (name.includes("reebok") || name.includes("classic")) {
+      suggestedBrand = brands.find(b => b.name === "Reebok")?.id || "";
+    }
+    
+    return { suggestedCategory, suggestedBrand };
+  };
+
+  // Función para aplicar sugerencias automáticamente
+  const applySuggestions = () => {
+    const productName = productForm.getValues("name");
+    if (productName && productName.length > 2) {
+      const { suggestedCategory, suggestedBrand } = getSuggestions(productName);
+      
+      if (suggestedCategory && !productForm.getValues("categoryId")) {
+        productForm.setValue("categoryId", suggestedCategory);
+        toast({
+          title: "💡 Sugerencia aplicada",
+          description: "Categoría sugerida automáticamente",
+        });
+      }
+      
+      if (suggestedBrand && !productForm.getValues("brandId")) {
+        productForm.setValue("brandId", suggestedBrand);
+        toast({
+          title: "💡 Sugerencia aplicada", 
+          description: "Marca sugerida automáticamente",
+        });
+      }
+    }
+  };
+
+  // Mostrar loading si está cargando
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Verificando acceso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no está autenticado como admin, no renderizar nada (se redirige)
+  if (!isAuthenticated || !user?.isAdmin) {
+    return null;
+  }
+
   return (
     <div className="container mx-auto py-4 sm:py-8 px-2 sm:px-4">
       <div className="mb-4 sm:mb-8">
-        <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Panel de Administración - ZapaShop</h1>
-        <p className="text-muted-foreground text-sm sm:text-base">Gestiona productos, promociones y eventos de la tienda</p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Panel de Administración - ZapaShop</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">Gestiona productos, promociones y eventos de la tienda</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {user.firstName} {user.lastName}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logout()}
+              data-testid="button-admin-logout"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Salir
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="products" className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
+        <TabsList className="grid w-full grid-cols-4 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Productos</span>
+          </TabsTrigger>
+          <TabsTrigger value="brands" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brands">
+            <Briefcase className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Marcas</span>
           </TabsTrigger>
           <TabsTrigger value="promotions" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-promotions">
             <Gift className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -286,9 +431,22 @@ export default function AdminPanel() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nombre del Producto *</FormLabel>
-                            <FormControl>
-                              <Input {...field} data-testid="input-product-name" />
-                            </FormControl>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <Input {...field} data-testid="input-product-name" />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={applySuggestions}
+                                disabled={!field.value || field.value.length < 3}
+                                data-testid="button-apply-suggestions"
+                              >
+                                <Lightbulb className="h-4 w-4 mr-1" />
+                                <span className="hidden sm:inline">Sugerir</span>
+                              </Button>
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -649,6 +807,169 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* Panel de Marcas */}
+        <TabsContent value="brands" className="space-y-2 sm:space-y-4">
+          <div className="flex justify-between items-center mb-2 sm:mb-4">
+            <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Marcas</h2>
+            <Dialog open={brandDialogOpen} onOpenChange={setBrandDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 sm:h-10 text-xs sm:text-sm" data-testid="button-add-brand">
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Agregar Marca</span>
+                  <span className="sm:hidden">Nueva</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl mx-2 sm:mx-auto">
+                <DialogHeader>
+                  <DialogTitle>Agregar Nueva Marca</DialogTitle>
+                  <DialogDescription>
+                    Crea una nueva marca para organizar los productos
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...brandForm}>
+                  <form onSubmit={brandForm.handleSubmit((data) => createBrandMutation.mutate(data))} className="space-y-4">
+                    <FormField
+                      control={brandForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre de la Marca</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Ej: Nike, Adidas, Puma" data-testid="input-brand-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={brandForm.control}
+                      name="logo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>URL del Logo</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="https://ejemplo.com/logo.png" data-testid="input-brand-logo" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={brandForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Descripción (opcional)</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} value={field.value || ""} placeholder="Describe la marca y sus características" data-testid="textarea-brand-description" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={brandForm.control}
+                      name="catalogUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>URL del Catálogo (opcional)</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ""} placeholder="https://ejemplo.com/catalog" data-testid="input-brand-catalog" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={brandForm.control}
+                      name="isActive"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                          <div className="space-y-0.5">
+                            <FormLabel>Marca Activa</FormLabel>
+                            <div className="text-sm text-muted-foreground">
+                              La marca aparecerá en la tienda
+                            </div>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="switch-brand-active"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button 
+                        type="submit" 
+                        disabled={createBrandMutation.isPending}
+                        data-testid="button-submit-brand"
+                      >
+                        {createBrandMutation.isPending ? "Creando..." : "Crear Marca"}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setBrandDialogOpen(false)}
+                        data-testid="button-cancel-brand"
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Lista de marcas existentes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
+            {brands.map((brand) => (
+              <Card key={brand.id} className="relative">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={brand.logo} 
+                      alt={brand.name}
+                      className="w-8 h-8 sm:w-12 sm:h-12 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <div>
+                      <CardTitle className="text-sm sm:text-lg">{brand.name}</CardTitle>
+                      <div className="flex gap-1 mt-1">
+                        <Badge variant={brand.isActive ? "default" : "secondary"} className="text-xs">
+                          {brand.isActive ? "Activa" : "Inactiva"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {brand.description && (
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-2">{brand.description}</p>
+                  )}
+                  {brand.catalogUrl && (
+                    <p className="text-xs text-blue-600 truncate">
+                      <a href={brand.catalogUrl} target="_blank" rel="noopener noreferrer">
+                        Ver catálogo →
+                      </a>
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             ))}

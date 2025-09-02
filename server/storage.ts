@@ -5,7 +5,10 @@ export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserCredits(userId: string, amount: string): Promise<User | undefined>;
+  authenticateUser(username: string, password: string): Promise<User | undefined>;
 
   // Category methods
   getCategories(): Promise<Category[]>;
@@ -144,6 +147,44 @@ export class MemStorage implements IStorage {
         isActive: brand.isActive
       });
     });
+
+    // Initialize default admin user
+    const adminId = randomUUID();
+    this.users.set(adminId, {
+      id: adminId,
+      username: "admin",
+      email: "admin@zapashop.com",
+      password: "admin123",
+      firstName: "Administrador",
+      lastName: "ZapaShop",
+      phone: null,
+      isSeller: false,
+      isAdmin: true,
+      credits: "0",
+      totalPurchases: "0",
+      loyaltyLevel: "platinum",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    // Initialize a test user
+    const testUserId = randomUUID();
+    this.users.set(testUserId, {
+      id: testUserId,
+      username: "usuario",
+      email: "usuario@test.com",
+      password: "123456",
+      firstName: "María",
+      lastName: "García",
+      phone: "+34 123 456 789",
+      isSeller: false,
+      isAdmin: false,
+      credits: "50.00",
+      totalPurchases: "150.00",
+      loyaltyLevel: "silver",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   }
 
   // User methods
@@ -157,15 +198,51 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = { 
       ...insertUser, 
       id,
       isSeller: insertUser.isSeller ?? false,
-      isAdmin: insertUser.isAdmin ?? false
+      isAdmin: insertUser.isAdmin ?? false,
+      firstName: insertUser.firstName ?? null,
+      lastName: insertUser.lastName ?? null,
+      phone: insertUser.phone ?? null,
+      credits: insertUser.credits ?? "0",
+      totalPurchases: insertUser.totalPurchases ?? "0",
+      loyaltyLevel: insertUser.loyaltyLevel ?? "bronze",
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
     this.users.set(id, user);
+    return user;
+  }
+
+  async updateUserCredits(userId: string, amount: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+
+    const currentCredits = parseFloat(user.credits || "0");
+    const newCredits = currentCredits + parseFloat(amount);
+    
+    user.credits = newCredits.toString();
+    user.updatedAt = new Date();
+    
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User | undefined> {
+    const user = await this.getUserByUsername(username);
+    if (!user || user.password !== password) {
+      return undefined;
+    }
     return user;
   }
 
@@ -396,6 +473,10 @@ export class MemStorage implements IStorage {
       categoryId: insertProduct.categoryId ?? null,
       brandId: insertProduct.brandId ?? null,
       sellerId: insertProduct.sellerId ?? null,
+      reference: insertProduct.reference ?? null,
+      images: insertProduct.images ?? null,
+      sizes: insertProduct.sizes ?? null,
+      colors: insertProduct.colors ?? null,
       stock: insertProduct.stock ?? 0,
       rating: insertProduct.rating ?? "0",
       reviewCount: insertProduct.reviewCount ?? 0,

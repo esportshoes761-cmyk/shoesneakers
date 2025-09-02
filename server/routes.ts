@@ -1,10 +1,86 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema } from "@shared/schema";
+import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      
+      // Check if username or email already exists
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "El usuario ya existe" });
+      }
+      
+      const existingEmail = await storage.getUserByEmail(userData.email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "El email ya está registrado" });
+      }
+      
+      const user = await storage.createUser(userData);
+      res.status(201).json({ message: "Usuario creado exitosamente", userId: user.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Datos inválidos", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error al crear usuario" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password, isAdmin } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Usuario y contraseña son requeridos" });
+      }
+      
+      const user = await storage.authenticateUser(username, password);
+      if (!user) {
+        return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+      }
+      
+      // Verificar permisos de admin si es requerido
+      if (isAdmin && !user.isAdmin) {
+        return res.status(403).json({ message: "Acceso denegado: Se requieren permisos de administrador" });
+      }
+      
+      res.json({ 
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isAdmin: user.isAdmin,
+          isSeller: user.isSeller,
+          credits: user.credits,
+          loyaltyLevel: user.loyaltyLevel
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error en el servidor" });
+    }
+  });
+
+  // Brand management routes (Admin only)
+  app.post("/api/brands", async (req, res) => {
+    try {
+      const brandData = insertBrandSchema.parse(req.body);
+      const brand = await storage.createBrand(brandData);
+      res.status(201).json(brand);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid brand data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error creating brand" });
+    }
+  });
+
   // Categories routes
   app.get("/api/categories", async (req, res) => {
     try {
