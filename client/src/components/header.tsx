@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, ShoppingCart } from "lucide-react";
+import { Search, ShoppingCart, Settings } from "lucide-react";
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,6 +42,19 @@ export default function Header() {
           </div>
           
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-4">
+            
+            {/* Botón de acceso administrador */}
+            <Link href="/admin-login">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="h-8 w-8 sm:h-10 sm:w-10" 
+                title="Acceso Administrador"
+                data-testid="button-admin-access"
+              >
+                <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+              </Button>
+            </Link>
             
             {/* Botón de carrito */}
             <Button 
