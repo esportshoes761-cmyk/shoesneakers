@@ -192,7 +192,7 @@ export default function AdminPanel() {
 
   // Mutaciones
   const createProductMutation = useMutation({
-    mutationFn: (data: ProductFormData) => apiRequest("/api/products", "POST", data),
+    mutationFn: (data: ProductFormData) => apiRequest("POST", "/api/products", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setProductDialogOpen(false);
@@ -203,7 +203,6 @@ export default function AdminPanel() {
       toast({ title: "Éxito", description: "Producto creado exitosamente" });
     },
     onError: (error: any) => {
-      console.error("Error detallado:", error);
       const errorMessage = error?.message || "Error al crear el producto";
       toast({ 
         title: "Error", 
@@ -214,7 +213,7 @@ export default function AdminPanel() {
   });
 
   const createPromotionMutation = useMutation({
-    mutationFn: (data: PromotionFormData) => apiRequest("/api/promotions", "POST", data),
+    mutationFn: (data: PromotionFormData) => apiRequest("POST", "/api/promotions", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
       setPromotionDialogOpen(false);
@@ -227,7 +226,7 @@ export default function AdminPanel() {
   });
 
   const createEventMutation = useMutation({
-    mutationFn: (data: EventFormData) => apiRequest("/api/events", "POST", data),
+    mutationFn: (data: EventFormData) => apiRequest("POST", "/api/events", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       setEventDialogOpen(false);
@@ -273,7 +272,7 @@ export default function AdminPanel() {
   });
 
   const createBrandMutation = useMutation({
-    mutationFn: (data: BrandFormData) => apiRequest("/api/brands", "POST", data),
+    mutationFn: (data: BrandFormData) => apiRequest("POST", "/api/brands", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
       setBrandDialogOpen(false);
@@ -438,8 +437,6 @@ export default function AdminPanel() {
                 </DialogHeader>
                 <Form {...productForm}>
                   <form onSubmit={productForm.handleSubmit((data) => {
-                    console.log("Datos del formulario:", data);
-                    console.log("Errores del formulario:", productForm.formState.errors);
                     createProductMutation.mutate(data);
                   })} className="space-y-6">
                     {/* Información Básica */}
