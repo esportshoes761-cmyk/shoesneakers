@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent } from "@shared/schema";
+import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -53,6 +53,13 @@ export interface IStorage {
   updateCartItem(id: string, quantity: number): Promise<CartItem | undefined>;
   removeFromCart(id: string): Promise<boolean>;
   clearCart(userId: string): Promise<boolean>;
+
+  // Customer Savings methods
+  getCustomerSavings(customerId: string): Promise<CustomerSavings | undefined>;
+  createCustomerSavings(customerSavings: InsertCustomerSavings): Promise<CustomerSavings>;
+  updateCustomerSavings(customerId: string, updateData: Partial<InsertCustomerSavings>): Promise<CustomerSavings | undefined>;
+  addSavings(customerId: string, amount: string): Promise<CustomerSavings | undefined>;
+  applySavingsDiscount(customerId: string, discountAmount: string): Promise<CustomerSavings | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -63,6 +70,7 @@ export class MemStorage implements IStorage {
   private promotions: Map<string, Promotion>;
   private events: Map<string, Event>;
   private cartItems: Map<string, CartItem>;
+  private customerSavings: Map<string, CustomerSavings>;
 
   constructor() {
     this.users = new Map();
@@ -72,6 +80,7 @@ export class MemStorage implements IStorage {
     this.promotions = new Map();
     this.events = new Map();
     this.cartItems = new Map();
+    this.customerSavings = new Map();
     this.initializeData();
   }
 
@@ -562,6 +571,79 @@ export class MemStorage implements IStorage {
     });
     
     return true;
+  }
+
+  // Customer Savings methods
+  async getCustomerSavings(customerId: string): Promise<CustomerSavings | undefined> {
+    return this.customerSavings.get(customerId);
+  }
+
+  async createCustomerSavings(insertCustomerSavings: InsertCustomerSavings): Promise<CustomerSavings> {
+    const id = randomUUID();
+    const customerSaving: CustomerSavings = { 
+      ...insertCustomerSavings, 
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      totalSaved: insertCustomerSavings.totalSaved ?? "0",
+      achievementsUnlocked: insertCustomerSavings.achievementsUnlocked ?? [],
+      lastPurchaseAmount: insertCustomerSavings.lastPurchaseAmount ?? "0",
+      totalPurchases: insertCustomerSavings.totalPurchases ?? 0
+    };
+    this.customerSavings.set(insertCustomerSavings.customerId, customerSaving);
+    return customerSaving;
+  }
+
+  async updateCustomerSavings(customerId: string, updateData: Partial<InsertCustomerSavings>): Promise<CustomerSavings | undefined> {
+    const customerSaving = this.customerSavings.get(customerId);
+    if (!customerSaving) return undefined;
+
+    const updatedCustomerSavings = { 
+      ...customerSaving, 
+      ...updateData,
+      updatedAt: new Date()
+    };
+    this.customerSavings.set(customerId, updatedCustomerSavings);
+    return updatedCustomerSavings;
+  }
+
+  async addSavings(customerId: string, amount: string): Promise<CustomerSavings | undefined> {
+    let customerSaving = this.customerSavings.get(customerId);
+    
+    if (!customerSaving) {
+      // Create new customer savings record
+      customerSaving = await this.createCustomerSavings({
+        customerId,
+        totalSaved: amount,
+        achievementsUnlocked: [],
+        lastPurchaseAmount: "0",
+        totalPurchases: 0
+      });
+    } else {
+      // Update existing savings
+      const currentSavings = parseFloat(customerSaving.totalSaved || "0");
+      const addAmount = parseFloat(amount);
+      const newTotal = currentSavings + addAmount;
+      
+      customerSaving = await this.updateCustomerSavings(customerId, {
+        totalSaved: newTotal.toString()
+      });
+    }
+    
+    return customerSaving;
+  }
+
+  async applySavingsDiscount(customerId: string, discountAmount: string): Promise<CustomerSavings | undefined> {
+    const customerSaving = this.customerSavings.get(customerId);
+    if (!customerSaving) return undefined;
+
+    const currentSavings = parseFloat(customerSaving.totalSaved || "0");
+    const discount = parseFloat(discountAmount);
+    const newTotal = Math.max(0, currentSavings - discount);
+    
+    return await this.updateCustomerSavings(customerId, {
+      totalSaved: newTotal.toString()
+    });
   }
 }
 

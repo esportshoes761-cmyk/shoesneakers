@@ -116,6 +116,18 @@ export const userSessions = pgTable("user_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tabla para ahorros por cliente (sin necesidad de login)
+export const customerSavings = pgTable("customer_savings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().unique(), // UUID único por cliente
+  totalSaved: decimal("total_saved", { precision: 10, scale: 2 }).default("0"),
+  achievementsUnlocked: text("achievements_unlocked").array().default(sql`'{}'::text[]`),
+  lastPurchaseAmount: decimal("last_purchase_amount", { precision: 10, scale: 2 }).default("0"),
+  totalPurchases: integer("total_purchases").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -130,6 +142,14 @@ export const insertCreditTransactionSchema = createInsertSchema(creditTransactio
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertCustomerSavingsSchema = createInsertSchema(customerSavings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  achievementsUnlocked: z.array(z.string()).optional(),
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({
@@ -172,6 +192,9 @@ export type CreditTransaction = typeof creditTransactions.$inferSelect;
 
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 export type UserSession = typeof userSessions.$inferSelect;
+
+export type InsertCustomerSavings = z.infer<typeof insertCustomerSavingsSchema>;
+export type CustomerSavings = typeof customerSavings.$inferSelect;
 
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

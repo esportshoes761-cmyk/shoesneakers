@@ -14,6 +14,7 @@ import { ArrowLeft, ShoppingBag, MessageCircle, Plus, Minus, Trash2, Gift, Piggy
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCartStore } from "@/lib/cart-store";
 import { useSavingsStore } from "@/lib/savings-store";
+import { getCustomerId } from "@/lib/customer-id";
 import { formatCurrency } from "@/lib/currency";
 import { useQuery } from "@tanstack/react-query";
 
@@ -33,7 +34,7 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   
   const { items, getTotalPrice, getTotalSavings, clearCart, updateQuantity, removeItem, updateSize } = useCartStore();
-  const { totalSaved, appliedDiscount, applyDiscount, clearAppliedDiscount, getMaxUsableDiscount } = useSavingsStore();
+  const { totalSaved, appliedDiscount, applyDiscount, clearAppliedDiscount, getMaxUsableDiscount, getAchievements } = useSavingsStore();
 
   // Obtener productos del carrito
   const { data: products = [] } = useQuery({
@@ -82,6 +83,26 @@ export default function CheckoutPage() {
         `${appliedDiscount > 0 ? `💰 *Subtotal:* ${formatCurrency(subtotalPrice)}\n🎁 *Descuento por ahorros:* -${formatCurrency(appliedDiscount)}\n💰 *TOTAL: ${formatCurrency(totalPrice)}*\n\n` : `💰 *TOTAL: ${formatCurrency(totalPrice)}*\n\n`}` +
         `Por favor confirmen disponibilidad y tiempo de entrega. ¡Gracias!`
       );
+
+      // Actualizar información del cliente en el servidor
+      try {
+        const customerId = getCustomerId();
+        
+        // Actualizar datos del cliente con la información de la compra
+        await fetch(`/api/customer-savings/${customerId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            totalSaved: (totalSaved - appliedDiscount).toString(), // Restar el descuento aplicado
+            sessionSaved: (appliedDiscount > 0 ? appliedDiscount : 0).toString(), // Registrar el descuento usado esta sesión
+            achievementsUnlocked: getAchievements().filter(a => a.unlocked).map(a => a.id)
+          })
+        });
+      } catch (error) {
+        console.warn("Error updating customer data:", error);
+      }
 
       // Limpiar carrito y descuento aplicado
       clearCart();

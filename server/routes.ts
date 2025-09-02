@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema } from "@shared/schema";
+import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema } from "@shared/schema";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 
@@ -530,6 +530,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.sendStatus(404);
       }
       return res.sendStatus(500);
+    }
+  });
+
+  // Customer Savings routes
+  app.get("/api/customer-savings/:customerId", async (req, res) => {
+    try {
+      const customerId = req.params.customerId;
+      const customerSavings = await storage.getCustomerSavings(customerId);
+      
+      if (!customerSavings) {
+        // Return default empty savings for new customers
+        return res.json({
+          customerId,
+          totalSaved: "0",
+          achievementsUnlocked: [],
+          lastPurchaseAmount: "0",
+          totalPurchases: 0
+        });
+      }
+      
+      res.json(customerSavings);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching customer savings" });
+    }
+  });
+
+  app.post("/api/customer-savings/:customerId/add-savings", async (req, res) => {
+    try {
+      const customerId = req.params.customerId;
+      const { amount } = req.body;
+      
+      if (!amount || isNaN(parseFloat(amount))) {
+        return res.status(400).json({ message: "Valid amount is required" });
+      }
+      
+      const customerSavings = await storage.addSavings(customerId, amount.toString());
+      res.json(customerSavings);
+    } catch (error) {
+      res.status(500).json({ message: "Error adding savings" });
+    }
+  });
+
+  app.post("/api/customer-savings/:customerId/apply-discount", async (req, res) => {
+    try {
+      const customerId = req.params.customerId;
+      const { discountAmount } = req.body;
+      
+      if (!discountAmount || isNaN(parseFloat(discountAmount))) {
+        return res.status(400).json({ message: "Valid discount amount is required" });
+      }
+      
+      const customerSavings = await storage.applySavingsDiscount(customerId, discountAmount.toString());
+      
+      if (!customerSavings) {
+        return res.status(404).json({ message: "Customer savings not found" });
+      }
+      
+      res.json(customerSavings);
+    } catch (error) {
+      res.status(500).json({ message: "Error applying discount" });
+    }
+  });
+
+  app.put("/api/customer-savings/:customerId", async (req, res) => {
+    try {
+      const customerId = req.params.customerId;
+      const updateData = req.body;
+      
+      const customerSavings = await storage.updateCustomerSavings(customerId, updateData);
+      
+      if (!customerSavings) {
+        return res.status(404).json({ message: "Customer savings not found" });
+      }
+      
+      res.json(customerSavings);
+    } catch (error) {
+      res.status(500).json({ message: "Error updating customer savings" });
     }
   });
 

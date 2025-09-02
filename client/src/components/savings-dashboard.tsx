@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,10 @@ export function SavingsDashboard({ className = "" }: SavingsDashboardProps) {
     lastSavingAmount, 
     hideSavingAnimation, 
     getAchievements,
-    getMaxUsableDiscount
+    getMaxUsableDiscount,
+    loadFromServer,
+    isLoaded,
+    isSyncing
   } = useSavingsStore();
   
   const [isOpen, setIsOpen] = useState(false);
@@ -30,6 +33,13 @@ export function SavingsDashboard({ className = "" }: SavingsDashboardProps) {
   const unlockedAchievements = achievements.filter(a => a.unlocked);
   const nextAchievement = achievements.find(a => !a.unlocked);
   const maxUsableDiscount = getMaxUsableDiscount();
+
+  // Cargar datos del servidor al montar el componente
+  useEffect(() => {
+    if (!isLoaded) {
+      loadFromServer();
+    }
+  }, [isLoaded, loadFromServer]);
 
   if (totalSaved === 0 && sessionSaved === 0 && !showSavingAnimation) {
     return null;

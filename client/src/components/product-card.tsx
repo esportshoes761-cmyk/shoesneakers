@@ -43,7 +43,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return count;
   };
 
-  const handleAddToCart = (size: string) => {
+  const handleAddToCart = async (size: string) => {
     addItem(product.id, size);
     setIsDialogOpen(false);
     setSelectedSize("");
@@ -58,7 +58,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       const savingsAmount = originalPrice - currentPrice;
       
       if (savingsAmount > 0) {
-        addSaving(savingsAmount);
+        await addSaving(savingsAmount);
         toast({
           title: "¡Producto agregado y dinero ahorrado! 🎉",
           description: `${product.name} (Talla ${size}) se agregó a tu carrito. ¡Ahorraste ${formatCurrency(savingsAmount)}!`,
@@ -77,9 +77,9 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     }
   };
 
-  const handleSizeConfirm = () => {
+  const handleSizeConfirm = async () => {
     if (selectedSize) {
-      handleAddToCart(selectedSize);
+      await handleAddToCart(selectedSize);
     }
   };
 

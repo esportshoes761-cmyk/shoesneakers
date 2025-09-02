@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getCustomerId } from './customer-id';
 
 export interface SavingsAchievement {
   id: string;
@@ -18,9 +19,11 @@ export interface SavingsState {
   lastSavingAmount: number;
   showSavingAnimation: boolean;
   appliedDiscount: number; // Descuento aplicado en compra actual
+  isLoaded: boolean; // Para saber si los datos se cargaron del servidor
+  isSyncing: boolean; // Para indicar que se está sincronizando con el servidor
   
   // Actions
-  addSaving: (amount: number) => void;
+  addSaving: (amount: number) => Promise<void>;
   resetSession: () => void;
   unlockAchievement: (achievementId: string) => void;
   triggerSavingAnimation: (amount: number) => void;
@@ -29,6 +32,8 @@ export interface SavingsState {
   applyDiscount: (amount: number) => void;
   clearAppliedDiscount: () => void;
   getMaxUsableDiscount: () => number;
+  loadFromServer: () => Promise<void>;
+  syncToServer: () => Promise<void>;
 }
 
 const ACHIEVEMENTS: SavingsAchievement[] = [
@@ -83,8 +88,10 @@ export const useSavingsStore = create<SavingsState>()(
       lastSavingAmount: 0,
       showSavingAnimation: false,
       appliedDiscount: 0,
+      isLoaded: false,
+      isSyncing: false,
 
-      addSaving: (amount: number) => {
+      addSaving: async (amount: number) => {
         const state = get();
         const newTotal = state.totalSaved + amount;
         const newSession = state.sessionSaved + amount;
@@ -105,6 +112,20 @@ export const useSavingsStore = create<SavingsState>()(
             get().unlockAchievement(achievement.id);
           }
         });
+
+        // Sincronizar con el servidor de manera asíncrona
+        try {
+          const customerId = getCustomerId();
+          await fetch(`/api/customer-savings/${customerId}/add-savings`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ amount: amount.toString() })
+          });
+        } catch (error) {
+          console.warn("Failed to sync savings with server:", error);
+        }
       },
 
       resetSession: () => {
@@ -160,6 +181,65 @@ export const useSavingsStore = create<SavingsState>()(
         const state = get();
         // Máximo 50% del total ahorrado se puede usar como descuento
         return Math.floor(state.totalSaved * 0.5);
+      },
+
+      loadFromServer: async () => {
+        const state = get();
+        if (state.isSyncing) return; // Evitar múltiples llamadas simultáneas
+        
+        set({ isSyncing: true });
+        
+        try {
+          const customerId = getCustomerId();
+          const response = await fetch(`/api/customer-savings/${customerId}`);
+          
+          if (response.ok) {
+            const serverData = await response.json();
+            set({
+              totalSaved: parseFloat(serverData.totalSaved || "0"),
+              achievementsUnlocked: serverData.achievementsUnlocked || [],
+              isLoaded: true,
+              isSyncing: false
+            });
+          } else {
+            console.warn("Error loading savings from server");
+            set({ isLoaded: true, isSyncing: false });
+          }
+        } catch (error) {
+          console.warn("Failed to load savings from server:", error);
+          set({ isLoaded: true, isSyncing: false });
+        }
+      },
+
+      syncToServer: async () => {
+        const state = get();
+        if (state.isSyncing) return; // Evitar múltiples llamadas simultáneas
+        
+        set({ isSyncing: true });
+        
+        try {
+          const customerId = getCustomerId();
+          
+          // Sincronizar ahorros actuales con el servidor
+          const response = await fetch(`/api/customer-savings/${customerId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              totalSaved: state.totalSaved.toString(),
+              achievementsUnlocked: state.achievementsUnlocked
+            })
+          });
+          
+          if (!response.ok) {
+            console.warn("Error syncing savings to server");
+          }
+        } catch (error) {
+          console.warn("Failed to sync savings to server:", error);
+        } finally {
+          set({ isSyncing: false });
+        }
       }
     }),
     {
