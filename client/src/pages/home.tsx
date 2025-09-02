@@ -8,10 +8,12 @@ import FloatingCart from "@/components/floating-cart";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Package } from "lucide-react";
+import { ArrowLeft, Package } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -30,6 +32,158 @@ export default function Home() {
     queryKey: ["/api/products", "featured"],
     queryFn: () => fetch("/api/products?featured=true").then(res => res.json()),
   });
+
+  const { data: allProducts = [] } = useQuery<ProductWithCategory[]>({
+    queryKey: ["/api/products"],
+  });
+
+  // Filtrar productos por marca seleccionada
+  const brandProducts = selectedBrand ? allProducts.filter(product => product.brandId === selectedBrand.id) : [];
+
+  // Función para mostrar catálogo de marca
+  const showBrandCatalog = (brand: BrandWithProducts) => {
+    setSelectedBrand(brand);
+  };
+
+  // Función para volver al inicio
+  const backToHome = () => {
+    setSelectedBrand(null);
+  };
+
+  // Si se seleccionó una marca, mostrar su catálogo
+  if (selectedBrand) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        
+        <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-3 sm:py-6">
+          {/* Header del catálogo de marca */}
+          <div className="mb-4 sm:mb-6">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={backToHome}
+              className="mb-3 sm:mb-4"
+              data-testid="button-back-to-home"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Volver al inicio
+            </Button>
+            
+            <div className="flex items-center mb-4">
+              <img 
+                src={selectedBrand.logo} 
+                alt={selectedBrand.name}
+                className="w-12 h-12 sm:w-20 sm:h-20 object-contain mr-4"
+                data-testid={`img-catalog-brand-logo-${selectedBrand.id}`}
+              />
+              <div>
+                <h1 className="text-xl sm:text-3xl font-bold" data-testid={`text-catalog-brand-name-${selectedBrand.id}`}>
+                  Catálogo {selectedBrand.name}
+                </h1>
+                <p className="text-muted-foreground text-sm sm:text-base" data-testid={`text-catalog-product-count-${selectedBrand.id}`}>
+                  {brandProducts.length} productos disponibles
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Productos de la marca */}
+          {brandProducts.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+              {brandProducts.map((product) => (
+                <div key={product.id} className="bg-card border border-border rounded-lg sm:rounded-xl overflow-hidden hover:shadow-lg transition-shadow" data-testid={`card-brand-product-${product.id}`}>
+                  {/* Imagen del producto */}
+                  <div className="aspect-square bg-muted relative overflow-hidden">
+                    {product.images && product.images.length > 0 ? (
+                      <img 
+                        src={product.images[0]} 
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        data-testid={`img-brand-product-${product.id}`}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                        <Package className="w-8 h-8" />
+                      </div>
+                    )}
+                    
+                    {/* Badge de descuento */}
+                    {product.discountPercentage && product.discountPercentage > 0 && (
+                      <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                        -{product.discountPercentage}%
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Información del producto */}
+                  <div className="p-3 sm:p-4">
+                    <h3 className="font-semibold text-sm sm:text-base mb-1 line-clamp-2" data-testid={`text-brand-product-name-${product.id}`}>
+                      {product.name}
+                    </h3>
+                    
+                    {/* Precios */}
+                    <div className="mb-2">
+                      {product.discountPercentage && product.discountPercentage > 0 ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                          <span className="text-lg sm:text-xl font-bold text-green-600" data-testid={`text-brand-product-sale-price-${product.id}`}>
+                            {formatCurrency(product.price)}
+                          </span>
+                          <span className="text-sm text-muted-foreground line-through" data-testid={`text-brand-product-original-price-${product.id}`}>
+                            {formatCurrency(Math.round(product.price / (1 - (product.discountPercentage || 0) / 100)))}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-lg sm:text-xl font-bold" data-testid={`text-brand-product-price-${product.id}`}>
+                          {formatCurrency(product.price)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Tallas disponibles */}
+                    {product.sizes && product.sizes.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-xs text-muted-foreground mb-1">Tallas:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {product.sizes.slice(0, 4).map((size) => (
+                            <span 
+                              key={size} 
+                              className="px-2 py-1 bg-muted rounded text-xs"
+                              data-testid={`text-brand-product-size-${product.id}-${size}`}
+                            >
+                              {size}
+                            </span>
+                          ))}
+                          {product.sizes.length > 4 && (
+                            <span className="px-2 py-1 bg-muted rounded text-xs">
+                              +{product.sizes.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stock */}
+                    <div className="text-xs text-muted-foreground" data-testid={`text-brand-product-stock-${product.id}`}>
+                      {(product.stock || 0) > 0 ? `${product.stock} disponibles` : 'Sin stock'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-brand-products">
+              <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No hay productos disponibles</h3>
+              <p>Esta marca aún no tiene productos en el catálogo.</p>
+            </div>
+          )}
+        </main>
+        
+        <FloatingCart />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -115,21 +269,12 @@ export default function Home() {
                     <Button 
                       size="sm"
                       className="flex-1 h-8 sm:h-10 text-xs sm:text-sm"
-                      onClick={() => window.open(brand.catalogUrl || '#', '_blank')}
+                      onClick={() => showBrandCatalog(brand)}
                       data-testid={`button-view-catalog-${brand.id}`}
                     >
                       <Package className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
                       <span className="hidden sm:inline">Ver Catálogo</span>
                       <span className="sm:hidden">Ver</span>
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      className="h-8 sm:h-10 w-8 sm:w-auto sm:px-3"
-                      onClick={() => window.open(brand.catalogUrl || '#', '_blank')}
-                      data-testid={`button-external-catalog-${brand.id}`}
-                    >
-                      <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
                     </Button>
                   </div>
                 </div>
