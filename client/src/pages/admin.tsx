@@ -54,6 +54,27 @@ type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
 
+// Utilidades para formateo de precios colombianos
+const formatPrice = (value: string) => {
+  // Remover todo excepto números
+  const numericValue = value.replace(/\D/g, '');
+  // Formatear con separadores de miles
+  return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const parsePrice = (formattedValue: string) => {
+  // Convertir de formato con puntos a número
+  return formattedValue.replace(/\./g, '');
+};
+
+const calculateDiscount = (originalPrice: string, salePrice: string) => {
+  const original = parseFloat(parsePrice(originalPrice));
+  const sale = parseFloat(parsePrice(salePrice));
+  
+  if (original === 0 || sale >= original) return 0;
+  return Math.round(((original - sale) / original) * 100);
+};
+
 export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -518,13 +539,28 @@ export default function AdminPanel() {
                           <FormItem>
                             <FormLabel>Precio Final *</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                value={field.value || ""} 
-                                onChange={(e) => field.onChange(e.target.value)}
-                                data-testid="input-product-price" 
-                              />
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+                                <Input 
+                                  type="text" 
+                                  className="pl-8"
+                                  value={field.value ? formatPrice(field.value.toString()) : ""} 
+                                  onChange={(e) => {
+                                    const formatted = formatPrice(e.target.value);
+                                    const rawValue = parsePrice(formatted);
+                                    field.onChange(rawValue);
+                                    
+                                    // Auto-calcular descuento si hay precio original
+                                    const originalPrice = productForm.getValues("originalPrice");
+                                    if (originalPrice) {
+                                      const discount = calculateDiscount(originalPrice.toString(), rawValue);
+                                      productForm.setValue("discountPercentage", discount);
+                                    }
+                                  }}
+                                  placeholder="120.000"
+                                  data-testid="input-product-price" 
+                                />
+                              </div>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -537,13 +573,28 @@ export default function AdminPanel() {
                           <FormItem>
                             <FormLabel>Precio Original (Si hay descuento)</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                step="0.01" 
-                                value={field.value || ""} 
-                                onChange={(e) => field.onChange(e.target.value || null)}
-                                data-testid="input-product-original-price" 
-                              />
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+                                <Input 
+                                  type="text" 
+                                  className="pl-8"
+                                  value={field.value ? formatPrice(field.value.toString()) : ""} 
+                                  onChange={(e) => {
+                                    const formatted = formatPrice(e.target.value);
+                                    const rawValue = parsePrice(formatted);
+                                    field.onChange(rawValue || null);
+                                    
+                                    // Auto-calcular descuento
+                                    const salePrice = productForm.getValues("price");
+                                    if (salePrice && rawValue) {
+                                      const discount = calculateDiscount(rawValue, salePrice.toString());
+                                      productForm.setValue("discountPercentage", discount);
+                                    }
+                                  }}
+                                  placeholder="150.000"
+                                  data-testid="input-product-original-price" 
+                                />
+                              </div>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -554,17 +605,21 @@ export default function AdminPanel() {
                         name="discountPercentage"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Descuento (%)</FormLabel>
+                            <FormLabel>Descuento (%) <span className="text-xs text-muted-foreground">- Auto calculado</span></FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                min="0" 
-                                max="100" 
-                                {...field} 
-                                value={field.value || ""} 
-                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                data-testid="input-product-discount-percentage" 
-                              />
+                              <div className="relative">
+                                <Input 
+                                  type="number" 
+                                  min="0" 
+                                  max="100" 
+                                  className="pr-8 bg-muted/50"
+                                  value={field.value || ""} 
+                                  onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                  data-testid="input-product-discount-percentage"
+                                  readOnly
+                                />
+                                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">%</span>
+                              </div>
                             </FormControl>
                             <FormMessage />
                           </FormItem>

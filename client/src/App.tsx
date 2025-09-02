@@ -17,7 +17,6 @@ function Router() {
       <Route path="/seller" component={SellerDashboard} />
       <Route path="/admin" component={AdminPanel} />
       <Route path="/checkout" component={CheckoutPage} />
-      <Route path="/login" component={() => <LoginPage />} />
       <Route path="/admin-login" component={() => <LoginPage isAdmin={true} />} />
       <Route component={NotFound} />
     </Switch>

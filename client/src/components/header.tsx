@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, ShoppingCart, Plus, User, Settings, LogOut, Coins } from "lucide-react";
-import { useAuth, logout } from "@/hooks/useAuth";
+import { Search, ShoppingCart } from "lucide-react";
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const [location] = useLocation();
-  const { user, isAuthenticated } = useAuth();
   const cartItemCount = useCartStore(state => state.getItemCount());
 
   const handleSearch = (e: React.FormEvent) => {
@@ -60,65 +58,18 @@ export default function Header() {
               )}
             </Button>
             
-            {/* Sistema de autenticación */}
-            {!isAuthenticated ? (
-              <Link href="/login">
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm" 
-                  data-testid="button-login"
-                >
-                  <User className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Login</span>
-                </Button>
-              </Link>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm"
-                    data-testid="button-user-menu"
-                  >
-                    <User className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">{user?.firstName || user?.username}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-2">
-                    <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="secondary" className="text-xs">
-                        <Coins className="w-3 h-3 mr-1" />
-                        {user?.credits || '0'} créditos
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {user?.loyaltyLevel}
-                      </Badge>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  {user?.isAdmin && (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <Link href="/admin" className="w-full">
-                          <Settings className="w-4 h-4 mr-2" />
-                          Panel Admin
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={() => logout()} data-testid="button-logout">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Cerrar Sesión
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* Botón para ir al checkout directamente */}
+            <Link href="/checkout">
+              <Button 
+                variant="default" 
+                size="sm"
+                className="rounded-full h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm bg-green-600 hover:bg-green-700" 
+                data-testid="button-checkout"
+              >
+                <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Comprar</span>
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
