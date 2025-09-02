@@ -63,7 +63,7 @@ export default function LoginPage({ isAdmin = false, onSuccess }: LoginPageProps
   const handleLogin = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      const response = await apiRequest("/api/auth/login", "POST", {
+      const response = await apiRequest("POST", "/api/auth/login", {
         ...data,
         isAdmin,
       });
@@ -97,7 +97,7 @@ export default function LoginPage({ isAdmin = false, onSuccess }: LoginPageProps
   const handleRegister = async (data: RegisterFormData) => {
     setIsLoading(true);
     try {
-      await apiRequest("/api/auth/register", "POST", data);
+      await apiRequest("POST", "/api/auth/register", data);
       
       toast({
         title: "¡Cuenta creada!",
