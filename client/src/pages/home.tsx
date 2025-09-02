@@ -5,6 +5,7 @@ import PromotionalBanners from "@/components/promotional-banners";
 import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
 import FloatingCart from "@/components/floating-cart";
+import { SavingsDashboard } from "@/components/savings-dashboard";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -477,6 +478,8 @@ export default function Home() {
           </div>
         </div>
       </footer>
+      
+      <SavingsDashboard />
     </div>
   );
 }

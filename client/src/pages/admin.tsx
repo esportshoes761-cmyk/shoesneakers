@@ -202,8 +202,14 @@ export default function AdminPanel() {
       setProductColors([]);
       toast({ title: "Éxito", description: "Producto creado exitosamente" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Error al crear el producto", variant: "destructive" });
+    onError: (error: any) => {
+      console.error("Error detallado:", error);
+      const errorMessage = error?.message || "Error al crear el producto";
+      toast({ 
+        title: "Error", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     },
   });
 
@@ -431,7 +437,11 @@ export default function AdminPanel() {
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...productForm}>
-                  <form onSubmit={productForm.handleSubmit((data) => createProductMutation.mutate(data))} className="space-y-6">
+                  <form onSubmit={productForm.handleSubmit((data) => {
+                    console.log("Datos del formulario:", data);
+                    console.log("Errores del formulario:", productForm.formState.errors);
+                    createProductMutation.mutate(data);
+                  })} className="space-y-6">
                     {/* Información Básica */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                       <FormField

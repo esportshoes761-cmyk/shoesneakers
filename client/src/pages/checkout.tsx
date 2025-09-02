@@ -30,7 +30,7 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const { items, getTotalPrice, clearCart } = useCartStore();
+  const { items, getTotalPrice, getTotalSavings, clearCart } = useCartStore();
 
   // Obtener productos del carrito
   const { data: products = [] } = useQuery({
@@ -44,6 +44,7 @@ export default function CheckoutPage() {
   }).filter(Boolean);
 
   const totalPrice = getTotalPrice(products as any[]);
+  const totalSavings = getTotalSavings(products as any[]);
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -268,6 +269,17 @@ export default function CheckoutPage() {
               ))}
               
               <Separator />
+              
+              {totalSavings > 0 && (
+                <div className="flex justify-between items-center text-green-600 font-semibold">
+                  <span className="flex items-center gap-1">
+                    🎉 Total Ahorrado:
+                  </span>
+                  <span data-testid="order-savings">
+                    {formatCurrency(totalSavings)}
+                  </span>
+                </div>
+              )}
               
               <div className="flex justify-between items-center font-bold text-lg">
                 <span>Total:</span>

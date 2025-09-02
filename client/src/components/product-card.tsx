@@ -5,6 +5,9 @@ import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
 import { Star, Edit, Trash2 } from "lucide-react";
+import { SavingsBadge } from "@/components/savings-badge";
+import { useSavingsStore } from "@/lib/savings-store";
+import { useEffect } from "react";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -14,13 +17,38 @@ interface ProductCardProps {
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
   const addItem = useCartStore(state => state.addItem);
   const { toast } = useToast();
+  const { addSaving } = useSavingsStore();
 
   const handleAddToCart = () => {
     addItem(product.id);
-    toast({
-      title: "¡Producto agregado!",
-      description: `${product.name} se agregó a tu carrito`,
-    });
+    
+    // Calculate savings if there's a discount
+    const discountPercentage = product.discountPercentage || 0;
+    const hasDiscount = discountPercentage > 0 && product.originalPrice;
+    
+    if (hasDiscount && product.originalPrice) {
+      const originalPrice = Number(product.originalPrice);
+      const currentPrice = Number(product.price);
+      const savingsAmount = originalPrice - currentPrice;
+      
+      if (savingsAmount > 0) {
+        addSaving(savingsAmount);
+        toast({
+          title: "¡Producto agregado y dinero ahorrado! 🎉",
+          description: `${product.name} se agregó a tu carrito. ¡Ahorraste ${formatCurrency(savingsAmount)}!`,
+        });
+      } else {
+        toast({
+          title: "¡Producto agregado!",
+          description: `${product.name} se agregó a tu carrito`,
+        });
+      }
+    } else {
+      toast({
+        title: "¡Producto agregado!",
+        description: `${product.name} se agregó a tu carrito`,
+      });
+    }
   };
 
   const discountPercentage = product.discountPercentage || 0;
@@ -86,7 +114,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       )}
 
       <img 
-        src={product.imageUrl} 
+        src={product.imageUrl || '/placeholder-product.jpg'} 
         alt={product.name}
         className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
         data-testid={`img-product-${product.id}`}
@@ -106,9 +134,12 @@ export default function ProductCard({ product, showManageButton = false }: Produ
               {priceData.original}
             </span>
             {priceData.savings && (
-              <span className="text-green-600 font-semibold text-[10px] sm:text-xs" data-testid={`text-savings-${product.id}`}>
-                ¡Ahorra {priceData.savings}!
-              </span>
+              <SavingsBadge 
+                savingsAmount={Number(product.originalPrice) - Number(product.price)}
+                discountPercentage={discountPercentage}
+                className="ml-1"
+                showAnimation={hasDiscount}
+              />
             )}
           </>
         )}

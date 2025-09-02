@@ -75,7 +75,7 @@ export const products = pgTable("products", {
   categoryId: varchar("category_id").references(() => categories.id),
   brandId: varchar("brand_id").references(() => brands.id),
   sellerId: varchar("seller_id").references(() => users.id),
-  imageUrl: text("image_url").notNull(),
+  imageUrl: text("image_url"),
   images: text("images").array().default(sql`'{}'::text[]`), // Hasta 9 imágenes
   reference: text("reference"), // Referencia del producto
   sizes: text("sizes").array().default(sql`'{}'::text[]`), // Tallas disponibles
