@@ -3,12 +3,14 @@
 export function formatCurrency(amount: string | number): string {
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
   
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
+  // Formatear con separadores de miles usando punto
+  const formatted = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
+    useGrouping: true
   }).format(numericAmount);
+  
+  return `$${formatted}`;
 }
 
 export function formatPrice(amount: string | number): string {

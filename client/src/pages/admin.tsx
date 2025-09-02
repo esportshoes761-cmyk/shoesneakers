@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import { formatCurrency } from "@/lib/currency";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -831,7 +832,7 @@ export default function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    <p className="font-semibold">${product.price}</p>
+                    <p className="font-semibold">{formatCurrency(product.price)}</p>
                     {product.reference && (
                       <p className="text-sm text-muted-foreground">Ref: {product.reference}</p>
                     )}
