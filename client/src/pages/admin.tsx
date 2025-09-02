@@ -192,7 +192,17 @@ export default function AdminPanel() {
 
   // Mutaciones
   const createProductMutation = useMutation({
-    mutationFn: (data: ProductFormData) => apiRequest("POST", "/api/products", data),
+    mutationFn: (data: ProductFormData) => {
+      // Asegurar que las imágenes adicionales se incluyan en los datos
+      const productData = {
+        ...data,
+        images: productImages.filter(img => img.trim() !== ""),
+        sizes: productSizes,
+        colors: productColors,
+      };
+      console.log("Enviando datos del producto:", productData); // Debug
+      return apiRequest("POST", "/api/products", productData);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setProductDialogOpen(false);
@@ -200,10 +210,11 @@ export default function AdminPanel() {
       setProductImages([]);
       setProductSizes([]);
       setProductColors([]);
-      toast({ title: "Éxito", description: "Producto creado exitosamente" });
+      toast({ title: "¡Éxito!", description: "Producto publicado correctamente con todas sus imágenes" });
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Error al crear el producto";
+      console.error("Error creando producto:", error); // Debug
       toast({ 
         title: "Error", 
         description: errorMessage, 
@@ -651,45 +662,70 @@ export default function AdminPanel() {
 
                     {/* Imágenes Adicionales */}
                     <div>
-                      <FormLabel>Imágenes Adicionales (máximo 9)</FormLabel>
-                      <div className="space-y-2 mt-2">
+                      <FormLabel>Más Imágenes del Producto 📸</FormLabel>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Agrega hasta 9 imágenes para mostrar diferentes ángulos, colores o detalles
+                      </p>
+                      <div className="space-y-2">
+                        {/* Siempre mostrar al menos un uploader si no hay imágenes */}
+                        {productImages.length === 0 && (
+                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
+                            <ObjectUploader
+                              onComplete={(imageUrl) => {
+                                const newImages = [...productImages, imageUrl];
+                                setProductImages(newImages);
+                              }}
+                              data-testid="uploader-product-extra-image-0"
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                                <span>Agregar primera imagen adicional</span>
+                              </div>
+                            </ObjectUploader>
+                          </div>
+                        )}
+                        
+                        {/* Mostrar imágenes ya agregadas */}
                         {productImages.map((image, index) => (
-                          <div key={index} className="flex gap-2 items-center">
-                            <div className="flex-1">
-                              {image ? (
-                                <div className="flex items-center justify-between p-2 border rounded">
-                                  <span className="text-sm">{image}</span>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removeProductImage(index)}
-                                    data-testid={`button-remove-image-${index}`}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <ObjectUploader
-                                  onComplete={(imageUrl) => updateProductImage(index, imageUrl)}
-                                  data-testid={`uploader-product-extra-image-${index}`}
-                                >
-                                  Subir imagen {index + 1}
-                                </ObjectUploader>
-                              )}
+                          <div key={index} className="flex gap-2 items-center p-3 border rounded-lg bg-muted/20">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">Imagen {index + 1}</p>
+                              <p className="text-xs text-muted-foreground truncate">{image}</p>
                             </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeProductImage(index)}
+                              data-testid={`button-remove-image-${index}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
                         ))}
-                        {productImages.length < 9 && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={addProductImage}
-                            data-testid="button-add-image"
-                          >
-                            <ImagePlus className="h-4 w-4 mr-2" />
-                            Agregar Espacio para Imagen
-                          </Button>
+                        
+                        {/* Botón para agregar más imágenes */}
+                        {productImages.length > 0 && productImages.length < 9 && (
+                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-3 text-center">
+                            <ObjectUploader
+                              onComplete={(imageUrl) => {
+                                const newImages = [...productImages, imageUrl];
+                                setProductImages(newImages);
+                              }}
+                              data-testid={`uploader-product-extra-image-${productImages.length}`}
+                            >
+                              <div className="flex items-center justify-center gap-2">
+                                <ImagePlus className="h-4 w-4" />
+                                <span>Agregar otra imagen ({productImages.length}/9)</span>
+                              </div>
+                            </ObjectUploader>
+                          </div>
+                        )}
+                        
+                        {productImages.length >= 9 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            Has alcanzado el límite máximo de 9 imágenes adicionales
+                          </p>
                         )}
                       </div>
                     </div>
