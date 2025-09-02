@@ -101,7 +101,10 @@ export default function Home() {
   // Filtrar productos mostrados basado en categoría seleccionada
   const displayedProducts = useMemo(() => {
     if (!selectedCategory) return allProducts;
-    return allProducts.filter(product => product.category === selectedCategory);
+    return allProducts.filter(product => {
+      const productCategory = typeof product.category === 'string' ? product.category : product.category?.name || '';
+      return productCategory === selectedCategory;
+    });
   }, [allProducts, selectedCategory]);
 
   // Si se seleccionó una marca, mostrar su catálogo
@@ -181,15 +184,15 @@ export default function Home() {
                       {product.discountPercentage && product.discountPercentage > 0 ? (
                         <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
                           <span className="text-lg sm:text-xl font-bold text-green-600" data-testid={`text-brand-product-sale-price-${product.id}`}>
-                            {formatCurrency(product.price)}
+                            {formatCurrency(Number(product.price))}
                           </span>
                           <span className="text-sm text-muted-foreground line-through" data-testid={`text-brand-product-original-price-${product.id}`}>
-                            {formatCurrency(Math.round((product.price || 0) / (1 - ((product.discountPercentage || 0) / 100))))}
+                            {formatCurrency(Math.round((Number(product.price) || 0) / (1 - ((product.discountPercentage || 0) / 100))))}
                           </span>
                         </div>
                       ) : (
                         <span className="text-lg sm:text-xl font-bold" data-testid={`text-brand-product-price-${product.id}`}>
-                          {formatCurrency(product.price)}
+                          {formatCurrency(Number(product.price))}
                         </span>
                       )}
                     </div>
