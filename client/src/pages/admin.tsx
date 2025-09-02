@@ -647,11 +647,13 @@ export default function AdminPanel() {
                           <FormControl>
                             <ObjectUploader
                               onComplete={(imageUrl) => {
-                                console.log("Imagen principal subida:", imageUrl); // Debug
+                                console.log("🔥 IMAGEN PRINCIPAL RECIBIDA:", imageUrl);
+                                console.log("🔥 Actualizando campo con field.onChange");
                                 field.onChange(imageUrl);
+                                console.log("🔥 Valor actual del campo:", productForm.getValues("imageUrl"));
                                 toast({
                                   title: "¡Imagen principal cargada!",
-                                  description: "La imagen se guardará cuando publiques el producto",
+                                  description: `URL: ${imageUrl}`,
                                 });
                               }}
                               data-testid="uploader-product-image"

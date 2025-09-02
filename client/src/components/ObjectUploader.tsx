@@ -119,6 +119,7 @@ export function ObjectUploader({
         description: "Imagen subida correctamente",
       });
 
+      console.log("🚀 Llamando onComplete con ruta:", normalizedPath);
       if (onComplete) {
         onComplete(normalizedPath);
       }
