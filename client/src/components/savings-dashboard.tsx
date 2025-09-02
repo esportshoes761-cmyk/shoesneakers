@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Progress } from "@/components/ui/progress";
 import { useSavingsStore } from "@/lib/savings-store";
 import { formatCurrency } from "@/lib/currency";
-import { PiggyBank, Trophy, Sparkles, TrendingUp, X } from "lucide-react";
+import { PiggyBank, Trophy, Sparkles, TrendingUp, X, ShoppingCart, Gift } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface SavingsDashboardProps {
   className?: string;
@@ -19,13 +20,16 @@ export function SavingsDashboard({ className = "" }: SavingsDashboardProps) {
     showSavingAnimation, 
     lastSavingAmount, 
     hideSavingAnimation, 
-    getAchievements 
+    getAchievements,
+    getMaxUsableDiscount
   } = useSavingsStore();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const achievements = getAchievements();
   const unlockedAchievements = achievements.filter(a => a.unlocked);
   const nextAchievement = achievements.find(a => !a.unlocked);
+  const maxUsableDiscount = getMaxUsableDiscount();
 
   if (totalSaved === 0 && sessionSaved === 0 && !showSavingAnimation) {
     return null;
@@ -156,6 +160,45 @@ export function SavingsDashboard({ className = "" }: SavingsDashboardProps) {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Usar Ahorros */}
+              {maxUsableDiscount > 0 && (
+                <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-green-600" />
+                      ¡Usa tus Ahorros!
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="text-center">
+                        <div className="text-sm text-muted-foreground">
+                          Puedes usar hasta:
+                        </div>
+                        <div className="text-xl font-bold text-green-600">
+                          {formatCurrency(maxUsableDiscount)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Como descuento en tu próxima compra
+                        </div>
+                      </div>
+                      
+                      <Button 
+                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                        onClick={() => {
+                          setIsOpen(false);
+                          setLocation('/checkout');
+                        }}
+                        data-testid="button-use-savings"
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Usar en mi Compra
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

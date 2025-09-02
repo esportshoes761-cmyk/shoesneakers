@@ -17,6 +17,7 @@ export interface SavingsState {
   achievementsUnlocked: string[];
   lastSavingAmount: number;
   showSavingAnimation: boolean;
+  appliedDiscount: number; // Descuento aplicado en compra actual
   
   // Actions
   addSaving: (amount: number) => void;
@@ -25,6 +26,9 @@ export interface SavingsState {
   triggerSavingAnimation: (amount: number) => void;
   hideSavingAnimation: () => void;
   getAchievements: () => SavingsAchievement[];
+  applyDiscount: (amount: number) => void;
+  clearAppliedDiscount: () => void;
+  getMaxUsableDiscount: () => number;
 }
 
 const ACHIEVEMENTS: SavingsAchievement[] = [
@@ -78,6 +82,7 @@ export const useSavingsStore = create<SavingsState>()(
       achievementsUnlocked: [],
       lastSavingAmount: 0,
       showSavingAnimation: false,
+      appliedDiscount: 0,
 
       addSaving: (amount: number) => {
         const state = get();
@@ -133,13 +138,36 @@ export const useSavingsStore = create<SavingsState>()(
           unlocked: state.achievementsUnlocked.includes(achievement.id),
           unlockedAt: state.achievementsUnlocked.includes(achievement.id) ? new Date() : undefined
         }));
+      },
+
+      applyDiscount: (amount: number) => {
+        const state = get();
+        const maxDiscount = Math.min(amount, state.totalSaved);
+        
+        if (maxDiscount > 0) {
+          set({
+            appliedDiscount: maxDiscount,
+            totalSaved: state.totalSaved - maxDiscount
+          });
+        }
+      },
+
+      clearAppliedDiscount: () => {
+        set({ appliedDiscount: 0 });
+      },
+
+      getMaxUsableDiscount: () => {
+        const state = get();
+        // Máximo 50% del total ahorrado se puede usar como descuento
+        return Math.floor(state.totalSaved * 0.5);
       }
     }),
     {
       name: 'zapateria-savings-storage',
       partialize: (state) => ({
         totalSaved: state.totalSaved,
-        achievementsUnlocked: state.achievementsUnlocked
+        achievementsUnlocked: state.achievementsUnlocked,
+        appliedDiscount: state.appliedDiscount
       })
     }
   )
