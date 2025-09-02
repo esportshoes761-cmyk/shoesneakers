@@ -12,6 +12,7 @@ interface ObjectUploaderProps {
   buttonClassName?: string;
   children?: ReactNode;
   accept?: string;
+  allowDirectUrl?: boolean; // Nueva opción para permitir URLs directas
 }
 
 /**
@@ -31,10 +32,13 @@ export function ObjectUploader({
   buttonClassName,
   children,
   accept = "image/*",
+  allowDirectUrl = true, // Por defecto permitir URLs directas
 }: ObjectUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlValue, setUrlValue] = useState("");
   const { toast } = useToast();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,28 +140,92 @@ export function ObjectUploader({
     setPreview(null);
   };
 
+  const handleUrlSubmit = () => {
+    if (!urlValue.trim()) return;
+    
+    // Validar que sea una URL válida
+    try {
+      new URL(urlValue);
+      onComplete?.(urlValue);
+      setUrlValue("");
+      setShowUrlInput(false);
+      toast({
+        title: "¡Éxito!",
+        description: "URL de imagen agregada correctamente",
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Por favor ingresa una URL válida",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {!selectedFile ? (
-        <div>
+      {!selectedFile && !showUrlInput ? (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              type="file"
+              accept={accept}
+              onChange={handleFileSelect}
+              className="hidden"
+              id="file-upload"
+              data-testid="input-file-upload"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className={buttonClassName}
+              onClick={() => document.getElementById('file-upload')?.click()}
+              data-testid="button-select-file"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {children || "Subir archivo"}
+            </Button>
+            {allowDirectUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowUrlInput(true)}
+                data-testid="button-url-input"
+              >
+                URL directa
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : showUrlInput ? (
+        <div className="space-y-2">
           <Input
-            type="file"
-            accept={accept}
-            onChange={handleFileSelect}
-            className="hidden"
-            id="file-upload"
-            data-testid="input-file-upload"
+            type="url"
+            placeholder="https://ejemplo.com/imagen.jpg"
+            value={urlValue}
+            onChange={(e) => setUrlValue(e.target.value)}
+            data-testid="input-image-url"
           />
-          <Button
-            type="button"
-            variant="outline"
-            className={buttonClassName}
-            onClick={() => document.getElementById('file-upload')?.click()}
-            data-testid="button-select-file"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            {children || "Seleccionar imagen"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={handleUrlSubmit}
+              data-testid="button-submit-url"
+            >
+              Agregar URL
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowUrlInput(false);
+                setUrlValue("");
+              }}
+              data-testid="button-cancel-url"
+            >
+              Cancelar
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -185,9 +253,9 @@ export function ObjectUploader({
             <div className="flex items-center space-x-2 p-3 border rounded-lg">
               <FileImage className="h-8 w-8 text-muted-foreground" />
               <div className="flex-1">
-                <p className="text-sm font-medium" data-testid="text-filename">{selectedFile.name}</p>
+                <p className="text-sm font-medium" data-testid="text-filename">{selectedFile?.name}</p>
                 <p className="text-xs text-muted-foreground" data-testid="text-filesize">
-                  {Math.round(selectedFile.size / 1024)} KB
+                  {selectedFile ? Math.round(selectedFile.size / 1024) : 0} KB
                 </p>
               </div>
               <Button

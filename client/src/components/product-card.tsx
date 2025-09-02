@@ -19,6 +19,27 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const { toast } = useToast();
   const { addSaving } = useSavingsStore();
 
+  // Funciones auxiliares para manejo de imágenes
+  const getMainImage = (product: ProductWithCategory): string => {
+    // Prioridad: imageUrl primero, luego primera imagen del array
+    if (product.imageUrl && product.imageUrl.trim() !== '') {
+      return product.imageUrl;
+    }
+    if (product.images && product.images.length > 0 && product.images[0].trim() !== '') {
+      return product.images[0];
+    }
+    return '';
+  };
+
+  const getImageCount = (product: ProductWithCategory): number => {
+    let count = 0;
+    if (product.imageUrl && product.imageUrl.trim() !== '') count++;
+    if (product.images) {
+      count += product.images.filter(img => img && img.trim() !== '').length;
+    }
+    return count;
+  };
+
   const handleAddToCart = () => {
     addItem(product.id);
     
@@ -113,12 +134,24 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
 
-      <img 
-        src={product.imageUrl || '/placeholder-product.jpg'} 
-        alt={product.name}
-        className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
-        data-testid={`img-product-${product.id}`}
-      />
+      <div className="relative">
+        <img 
+          src={getMainImage(product) || '/placeholder-product.jpg'} 
+          alt={product.name}
+          className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = '/placeholder-product.jpg';
+          }}
+          data-testid={`img-product-${product.id}`}
+        />
+        {/* Indicador de múltiples imágenes */}
+        {getImageCount(product) > 1 && (
+          <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-1.5 py-0.5 rounded">
+            📷 {getImageCount(product)}
+          </div>
+        )}
+      </div>
       
       <h4 className="font-semibold text-xs sm:text-sm mb-1 sm:mb-2 line-clamp-2" data-testid={`text-product-name-${product.id}`}>
         {product.name}
