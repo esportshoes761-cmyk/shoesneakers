@@ -126,12 +126,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Products routes
+  // Products routes with advanced search and filtering
   app.get("/api/products", async (req, res) => {
     try {
-      const { category, brand, flashSale, featured } = req.query;
+      const { 
+        category, 
+        brand, 
+        flashSale, 
+        featured, 
+        query, 
+        priceMin, 
+        priceMax, 
+        brands, 
+        categories, 
+        sizes, 
+        colors, 
+        onSale, 
+        inStock 
+      } = req.query;
       
       let products;
+      
+      // Legacy filters for backward compatibility
       if (category) {
         products = await storage.getProductsByCategory(category as string);
       } else if (brand) {
@@ -142,6 +158,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         products = await storage.getFeaturedProducts();
       } else {
         products = await storage.getProducts();
+      }
+      
+      // Apply advanced search and filters
+      if (query && typeof query === 'string') {
+        const searchTerm = query.toLowerCase();
+        products = products.filter(p => 
+          p.name.toLowerCase().includes(searchTerm) ||
+          (p.description && p.description.toLowerCase().includes(searchTerm))
+        );
+      }
+      
+      // Price range filter
+      if (priceMin && !isNaN(Number(priceMin))) {
+        products = products.filter(p => Number(p.price) >= Number(priceMin));
+      }
+      
+      if (priceMax && !isNaN(Number(priceMax))) {
+        products = products.filter(p => Number(p.price) <= Number(priceMax));
+      }
+      
+      // Brand filter (multiple brands)
+      if (brands && typeof brands === 'string') {
+        const brandList = brands.split(',');
+        products = products.filter(p => brandList.includes(p.brandId || ''));
+      }
+      
+      // Category filter (multiple categories)
+      if (categories && typeof categories === 'string') {
+        const categoryList = categories.split(',');
+        products = products.filter(p => {
+          const productCategory = typeof p.category === 'string' ? p.category : p.category?.name || '';
+          return categoryList.includes(productCategory);
+        });
+      }
+      
+      // Size filter
+      if (sizes && typeof sizes === 'string') {
+        const sizeList = sizes.split(',');
+        products = products.filter(p => 
+          p.sizes && p.sizes.some(size => sizeList.includes(size))
+        );
+      }
+      
+      // Color filter
+      if (colors && typeof colors === 'string') {
+        const colorList = colors.split(',');
+        products = products.filter(p => 
+          p.colors && p.colors.some(color => colorList.includes(color))
+        );
+      }
+      
+      // On sale filter
+      if (onSale === "true") {
+        products = products.filter(p => p.discountPercentage && p.discountPercentage > 0);
+      }
+      
+      // In stock filter
+      if (inStock === "true") {
+        products = products.filter(p => (p.stock || 0) > 0);
       }
       
       res.json(products);

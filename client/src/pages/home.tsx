@@ -6,14 +6,26 @@ import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
 import FloatingCart from "@/components/floating-cart";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    query: "",
+    priceMin: 0,
+    priceMax: 1000000,
+    brands: [],
+    categories: [],
+    sizes: [],
+    colors: [],
+    onSale: false,
+    inStock: false,
+  });
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -33,8 +45,29 @@ export default function Home() {
     queryFn: () => fetch("/api/products?featured=true").then(res => res.json()),
   });
 
+  // Build query parameters from search filters
+  const searchParams = useMemo(() => {
+    const params = new URLSearchParams();
+    
+    if (searchFilters.query) params.set('query', searchFilters.query);
+    if (searchFilters.priceMin > 0) params.set('priceMin', searchFilters.priceMin.toString());
+    if (searchFilters.priceMax < 1000000) params.set('priceMax', searchFilters.priceMax.toString());
+    if (searchFilters.brands.length > 0) params.set('brands', searchFilters.brands.join(','));
+    if (searchFilters.categories.length > 0) params.set('categories', searchFilters.categories.join(','));
+    if (searchFilters.sizes.length > 0) params.set('sizes', searchFilters.sizes.join(','));
+    if (searchFilters.colors.length > 0) params.set('colors', searchFilters.colors.join(','));
+    if (searchFilters.onSale) params.set('onSale', 'true');
+    if (searchFilters.inStock) params.set('inStock', 'true');
+    
+    return params.toString();
+  }, [searchFilters]);
+
   const { data: allProducts = [] } = useQuery<ProductWithCategory[]>({
-    queryKey: ["/api/products"],
+    queryKey: ["/api/products", searchParams],
+    queryFn: () => {
+      const url = searchParams ? `/api/products?${searchParams}` : '/api/products';
+      return fetch(url).then(res => res.json());
+    },
   });
 
   // Filtrar productos por marca seleccionada
@@ -49,6 +82,27 @@ export default function Home() {
   const backToHome = () => {
     setSelectedBrand(null);
   };
+
+  // Función para limpiar filtros
+  const clearFilters = () => {
+    setSearchFilters({
+      query: "",
+      priceMin: 0,
+      priceMax: 1000000,
+      brands: [],
+      categories: [],
+      sizes: [],
+      colors: [],
+      onSale: false,
+      inStock: false,
+    });
+  };
+
+  // Filtrar productos mostrados basado en categoría seleccionada
+  const displayedProducts = useMemo(() => {
+    if (!selectedCategory) return allProducts;
+    return allProducts.filter(product => product.category === selectedCategory);
+  }, [allProducts, selectedCategory]);
 
   // Si se seleccionó una marca, mostrar su catálogo
   if (selectedBrand) {
@@ -130,7 +184,7 @@ export default function Home() {
                             {formatCurrency(product.price)}
                           </span>
                           <span className="text-sm text-muted-foreground line-through" data-testid={`text-brand-product-original-price-${product.id}`}>
-                            {formatCurrency(Math.round(product.price / (1 - (product.discountPercentage || 0) / 100)))}
+                            {formatCurrency(Math.round((product.price || 0) / (1 - ((product.discountPercentage || 0) / 100))))}
                           </span>
                         </div>
                       ) : (
@@ -200,6 +254,15 @@ export default function Home() {
 
       <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-3 sm:py-6">
         
+        {/* Advanced Search Component */}
+        <AdvancedSearch
+          filters={searchFilters}
+          onFiltersChange={setSearchFilters}
+          categories={categories}
+          brands={brands}
+          onClear={clearFilters}
+        />
+        
         <CategoryTabs 
           categories={categories}
           selectedCategory={selectedCategory}
@@ -226,6 +289,39 @@ export default function Home() {
         <PromotionalBanners />
 
         <FlashSaleSection products={flashSaleProducts} />
+
+        {/* Search Results Section */}
+        {searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
+         searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
+         searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000 ? (
+          <section className="mb-6 sm:mb-8">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-search-results-title">
+                🔍 Resultados de búsqueda
+              </h3>
+              <span className="text-sm text-muted-foreground" data-testid="text-search-results-count">
+                {displayedProducts.length} producto{displayedProducts.length !== 1 ? 's' : ''} encontrado{displayedProducts.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            {displayedProducts.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                {displayedProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground" data-testid="text-no-search-results">
+                <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">No se encontraron productos</h3>
+                <p className="mb-4">Intenta ajustar tus filtros de búsqueda</p>
+                <Button onClick={clearFilters} variant="outline" data-testid="button-clear-search-filters">
+                  Limpiar filtros
+                </Button>
+              </div>
+            )}
+          </section>
+        ) : null}
 
         {/* Brand Catalogs Section */}
         <section className="mb-6 sm:mb-8">
