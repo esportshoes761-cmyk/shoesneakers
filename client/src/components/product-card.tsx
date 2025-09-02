@@ -1,0 +1,126 @@
+import { type ProductWithCategory } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useCartStore } from "@/lib/cart-store";
+import { useToast } from "@/hooks/use-toast";
+import { Star, Edit, Trash2 } from "lucide-react";
+
+interface ProductCardProps {
+  product: ProductWithCategory;
+  showManageButton?: boolean;
+}
+
+export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
+  const addItem = useCartStore(state => state.addItem);
+  const { toast } = useToast();
+
+  const handleAddToCart = () => {
+    addItem(product.id);
+    toast({
+      title: "¡Producto agregado!",
+      description: `${product.name} se agregó a tu carrito`,
+    });
+  };
+
+  const discountPercentage = product.discountPercentage || 0;
+  const hasDiscount = discountPercentage > 0;
+  const originalPrice = product.originalPrice ? Number(product.originalPrice) : null;
+  const currentPrice = Number(product.price);
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(<Star key={i} className="w-3 h-3 fill-yellow-400 text-yellow-400" />);
+    }
+
+    if (hasHalfStar) {
+      stars.push(<Star key="half" className="w-3 h-3 fill-yellow-400/50 text-yellow-400" />);
+    }
+
+    const remainingStars = 5 - Math.ceil(rating);
+    for (let i = 0; i < remainingStars; i++) {
+      stars.push(<Star key={`empty-${i}`} className="w-3 h-3 text-gray-300" />);
+    }
+
+    return stars;
+  };
+
+  return (
+    <div className="product-card bg-card border border-border rounded-lg p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
+      {/* Badges */}
+      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+        {product.isFlashSale && (
+          <Badge variant="destructive" className="text-xs font-bold">
+            -{discountPercentage}%
+          </Badge>
+        )}
+        {product.isFeatured && !product.isFlashSale && (
+          <Badge className="bg-accent text-accent-foreground text-xs font-bold">
+            #1
+          </Badge>
+        )}
+      </div>
+
+      {/* Manage buttons for seller */}
+      {showManageButton && (
+        <div className="absolute top-2 right-2 z-10 flex gap-1">
+          <Button size="sm" variant="outline" className="w-8 h-8 p-0" data-testid={`button-edit-${product.id}`}>
+            <Edit className="w-3 h-3" />
+          </Button>
+          <Button size="sm" variant="outline" className="w-8 h-8 p-0" data-testid={`button-delete-${product.id}`}>
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
+
+      <img 
+        src={product.imageUrl} 
+        alt={product.name}
+        className="w-full h-36 object-cover rounded-lg mb-3"
+        data-testid={`img-product-${product.id}`}
+      />
+      
+      <h4 className="font-semibold text-sm mb-2" data-testid={`text-product-name-${product.id}`}>
+        {product.name}
+      </h4>
+      
+      <div className="flex items-center space-x-1 mb-2">
+        <span className="text-primary font-bold" data-testid={`text-price-${product.id}`}>
+          ${currentPrice}
+        </span>
+        {hasDiscount && originalPrice && (
+          <span className="text-muted-foreground line-through text-xs" data-testid={`text-original-price-${product.id}`}>
+            ${originalPrice}
+          </span>
+        )}
+      </div>
+      
+      <div className="flex items-center space-x-1 mb-3">
+        <div className="flex">
+          {renderStars(Number(product.rating || 0))}
+        </div>
+        <span className="text-xs text-muted-foreground" data-testid={`text-review-count-${product.id}`}>
+          ({product.reviewCount || 0})
+        </span>
+      </div>
+
+      {product.stock !== undefined && (
+        <div className="text-xs text-muted-foreground mb-2" data-testid={`text-stock-${product.id}`}>
+          Stock: {product.stock}
+        </div>
+      )}
+      
+      <Button 
+        className="w-full py-2 text-sm font-semibold rounded-lg"
+        onClick={handleAddToCart}
+        disabled={(product.stock || 0) === 0}
+        data-testid={`button-add-to-cart-${product.id}`}
+      >
+        {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar al Carrito'}
+      </Button>
+    </div>
+  );
+}
