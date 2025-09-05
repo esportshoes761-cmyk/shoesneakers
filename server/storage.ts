@@ -124,6 +124,34 @@ export class MemStorage implements IStorage {
         isActive: true
       },
       { 
+        name: "Jordan", 
+        logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png",
+        description: "Jumpman - Calzado de baloncesto premium",
+        catalogUrl: "https://jordan.com/catalog",
+        isActive: true
+      },
+      { 
+        name: "Asics", 
+        logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png",
+        description: "Sound Mind, Sound Body - Tecnología japonesa",
+        catalogUrl: "https://asics.com/catalog",
+        isActive: true
+      },
+      { 
+        name: "New Balance", 
+        logo: "https://logos-world.net/wp-content/uploads/2020/04/New-Balance-Logo.png",
+        description: "Endorsed by No One - Calidad y rendimiento",
+        catalogUrl: "https://newbalance.com/catalog",
+        isActive: true
+      },
+      { 
+        name: "Under Armour", 
+        logo: "https://logos-world.net/wp-content/uploads/2020/04/Under-Armour-Logo.png",
+        description: "I Will - Innovación deportiva y rendimiento",
+        catalogUrl: "https://underarmour.com/catalog",
+        isActive: true
+      },
+      { 
         name: "Reebok", 
         logo: "https://logos-world.net/wp-content/uploads/2020/04/Reebok-Logo.png",
         description: "Be More Human - Fitness y lifestyle",
@@ -131,17 +159,17 @@ export class MemStorage implements IStorage {
         isActive: true
       },
       { 
-        name: "Converse", 
-        logo: "https://logos-world.net/wp-content/uploads/2020/04/Converse-Logo.png",
-        description: "All Star - Estilo clásico y urbano",
-        catalogUrl: "https://converse.com/catalog",
+        name: "Skechers", 
+        logo: "https://logos-world.net/wp-content/uploads/2020/04/Skechers-Logo.png",
+        description: "Comfort Technology - Comodidad y estilo",
+        catalogUrl: "https://skechers.com/catalog",
         isActive: true
       },
       { 
-        name: "Vans", 
-        logo: "https://logos-world.net/wp-content/uploads/2020/04/Vans-Logo.png",
-        description: "Off The Wall - Cultura skate y street",
-        catalogUrl: "https://vans.com/catalog",
+        name: "On Cloud", 
+        logo: "https://logos-world.net/wp-content/uploads/2020/12/On-Running-Logo.png",
+        description: "Run on Clouds - Tecnología suiza innovadora",
+        catalogUrl: "https://on-running.com/catalog",
         isActive: true
       }
     ];
