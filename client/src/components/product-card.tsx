@@ -65,25 +65,20 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     const discountInfo = priceData.savings ? ` (¡Ahorras ${priceData.savings}!)` : '';
     const totalPrice = formatCurrency(Number(product.price.replace(/[^0-9]/g, '')) * orderForm.quantity);
     
-    // Obtener la imagen principal del producto
-    const productImage = getMainImage(product);
-    
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
       `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
       `📝 *DATOS DEL PEDIDO*\n` +
       `👟 *Producto:* ${product.name}\n` +
+      `🔖 *Referencia:* ${product.reference || 'Sin referencia'}\n` +
       `📏 *Talla:* ${orderForm.size}\n` +
-      `🔢 *Cantidad:* ${orderForm.quantity}\n` +
-      `💰 *Precio unitario:* ${finalPrice}${discountInfo}\n` +
-      `💵 *Total a pagar:* ${totalPrice}\n\n` +
-      `📸 *Imagen del producto:*\n${productImage}\n\n` +
+      `🔢 *Cantidad:* ${orderForm.quantity}\n\n` +
       `📍 *DATOS DE ENTREGA*\n` +
       `👤 *Nombre:* ${orderForm.fullName}\n` +
       `🏠 *Dirección:* ${orderForm.address}\n` +
       `🌆 *Ciudad:* ${orderForm.city}\n` +
       `⏰ *Horario de entrega:* ${orderForm.deliveryTime}\n\n` +
-      `¿Puedes confirmar la disponibilidad y el tiempo de entrega?`
+      `Por favor envía la fotografía del producto y cotización. ¡Gracias!`
     );
     
     // Abrir WhatsApp
@@ -207,15 +202,10 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       </h4>
       
       <div className="flex items-center space-x-1 mb-1 sm:mb-2">
-        <span className="text-primary font-bold text-sm sm:text-base" data-testid={`text-price-${product.id}`}>
-          {priceData.discounted}
-        </span>
-        {hasDiscount && priceData.original && (
-          <>
-            <span className="text-muted-foreground line-through text-[10px] sm:text-xs" data-testid={`text-original-price-${product.id}`}>
-              {priceData.original}
-            </span>
-          </>
+        {product.reference && (
+          <span className="text-muted-foreground text-xs bg-gray-100 px-2 py-1 rounded" data-testid={`text-reference-${product.id}`}>
+            Ref: {product.reference}
+          </span>
         )}
       </div>
       

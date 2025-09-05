@@ -115,8 +115,8 @@ export default function AdminPanel() {
     defaultValues: {
       name: "",
       description: "",
-      price: "0",
-      originalPrice: "0",
+      price: "1",
+      originalPrice: null,
       imageUrl: "",
       reference: "",
       stock: 0,
@@ -229,8 +229,8 @@ export default function AdminPanel() {
       imageUrl: product.imageUrl || undefined,
       reference: product.reference || "",
       stock: product.stock || 0,
-      categoryId: product.categoryId,
-      brandId: product.brandId,
+      categoryId: product.categoryId || undefined,
+      brandId: product.brandId || undefined,
       isFlashSale: product.isFlashSale || false,
       isFeatured: product.isFeatured || false,
       images: product.images || [],
@@ -262,6 +262,9 @@ export default function AdminPanel() {
       // Asegurar que las imágenes adicionales se incluyan en los datos
       const productData = {
         ...data,
+        price: "1", // Precio predeterminado, el precio real se da por WhatsApp
+        originalPrice: null,
+        discountPercentage: 0,
         images: productImages.filter(img => img.trim() !== ""),
         sizes: productSizes,
         colors: productColors,
@@ -297,6 +300,9 @@ export default function AdminPanel() {
       
       const productData = {
         ...data,
+        price: "1", // Precio predeterminado, el precio real se da por WhatsApp
+        originalPrice: null,
+        discountPercentage: 0,
         images: productImages.filter(img => img.trim() !== ""),
         sizes: productSizes,
         colors: productColors,
@@ -617,101 +623,8 @@ export default function AdminPanel() {
                       )}
                     />
 
-                    {/* Precios y Stock */}
+                    {/* Stock */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-                      <FormField
-                        control={productForm.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Precio Final *</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
-                                <Input 
-                                  type="text" 
-                                  className="pl-8"
-                                  value={field.value ? formatPrice(field.value.toString()) : ""} 
-                                  onChange={(e) => {
-                                    const formatted = formatPrice(e.target.value);
-                                    const rawValue = parsePrice(formatted);
-                                    field.onChange(rawValue);
-                                    
-                                    // Auto-calcular descuento si hay precio original
-                                    const originalPrice = productForm.getValues("originalPrice");
-                                    if (originalPrice) {
-                                      const discount = calculateDiscount(originalPrice.toString(), rawValue);
-                                      productForm.setValue("discountPercentage", discount);
-                                    }
-                                  }}
-                                  placeholder="120.000"
-                                  data-testid="input-product-price" 
-                                />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={productForm.control}
-                        name="originalPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Precio Original (Si hay descuento)</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
-                                <Input 
-                                  type="text" 
-                                  className="pl-8"
-                                  value={field.value ? formatPrice(field.value.toString()) : ""} 
-                                  onChange={(e) => {
-                                    const formatted = formatPrice(e.target.value);
-                                    const rawValue = parsePrice(formatted);
-                                    field.onChange(rawValue || null);
-                                    
-                                    // Auto-calcular descuento
-                                    const salePrice = productForm.getValues("price");
-                                    if (salePrice && rawValue) {
-                                      const discount = calculateDiscount(rawValue, salePrice.toString());
-                                      productForm.setValue("discountPercentage", discount);
-                                    }
-                                  }}
-                                  placeholder="150.000"
-                                  data-testid="input-product-original-price" 
-                                />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={productForm.control}
-                        name="discountPercentage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descuento (%) <span className="text-xs text-muted-foreground">- Auto calculado</span></FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Input 
-                                  type="number" 
-                                  min="0" 
-                                  max="100" 
-                                  className="pr-8 bg-muted/50"
-                                  value={field.value || ""} 
-                                  onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
-                                  data-testid="input-product-discount-percentage"
-                                  readOnly
-                                />
-                                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">%</span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                       <FormField
                         control={productForm.control}
                         name="stock"
