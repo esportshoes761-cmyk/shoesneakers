@@ -67,19 +67,31 @@ export default function CheckoutPage() {
     setIsProcessing(true);
     
     try {
+      // Función auxiliar para obtener la imagen principal
+      const getMainImage = (product: any): string => {
+        if (product.imageUrl && product.imageUrl.trim() !== '') {
+          return product.imageUrl;
+        }
+        if (product.images && product.images.length > 0 && product.images[0].trim() !== '') {
+          return product.images[0];
+        }
+        return '';
+      };
+
       // Preparar mensaje para WhatsApp
-      const itemsList = cartItems.map(item => 
-        `• ${item.name} (Talla ${item.selectedSize}) x${item.quantity} - ${formatCurrency(Number(item.price) * item.quantity)}`
-      ).join('\n');
+      const itemsList = cartItems.map(item => {
+        const productImage = getMainImage(item);
+        return `• ${item.name} (Talla ${item.selectedSize}) x${item.quantity} - ${formatCurrency(Number(item.price) * item.quantity)}\n  📸 Imagen: ${productImage}`;
+      }).join('\n\n');
 
       const whatsappMessage = encodeURIComponent(
-        `🛍️ *NUEVA ORDEN - ZAPASHOP*\n\n` +
+        `🛍️ *NUEVA ORDEN - FASTSNIKER*\n\n` +
         `👤 *Cliente:* ${data.fullName}\n` +
         `📱 *Teléfono:* ${data.phone}\n` +
         `🏙️ *Ciudad:* ${data.city}\n` +
         `📍 *Dirección:* ${data.address}\n` +
         `${data.additionalInfo ? `💬 *Información adicional:* ${data.additionalInfo}\n` : ''}` +
-        `\n📦 *PRODUCTOS:*\n${itemsList}\n\n` +
+        `\n📦 *PRODUCTOS SOLICITADOS:*\n${itemsList}\n\n` +
         `${appliedDiscount > 0 ? `💰 *Subtotal:* ${formatCurrency(subtotalPrice)}\n🎁 *Descuento por ahorros:* -${formatCurrency(appliedDiscount)}\n💰 *TOTAL: ${formatCurrency(totalPrice)}*\n\n` : `💰 *TOTAL: ${formatCurrency(totalPrice)}*\n\n`}` +
         `Por favor confirmen disponibilidad y tiempo de entrega. ¡Gracias!`
       );

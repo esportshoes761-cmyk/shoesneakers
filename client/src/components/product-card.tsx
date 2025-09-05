@@ -65,6 +65,9 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     const discountInfo = priceData.savings ? ` (¡Ahorras ${priceData.savings}!)` : '';
     const totalPrice = formatCurrency(Number(product.price.replace(/[^0-9]/g, '')) * orderForm.quantity);
     
+    // Obtener la imagen principal del producto
+    const productImage = getMainImage(product);
+    
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
       `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
@@ -74,6 +77,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       `🔢 *Cantidad:* ${orderForm.quantity}\n` +
       `💰 *Precio unitario:* ${finalPrice}${discountInfo}\n` +
       `💵 *Total a pagar:* ${totalPrice}\n\n` +
+      `📸 *Imagen del producto:*\n${productImage}\n\n` +
       `📍 *DATOS DE ENTREGA*\n` +
       `👤 *Nombre:* ${orderForm.fullName}\n` +
       `🏠 *Dirección:* ${orderForm.address}\n` +
