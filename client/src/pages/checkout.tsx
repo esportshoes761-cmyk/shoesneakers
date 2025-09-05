@@ -69,7 +69,7 @@ export default function CheckoutPage() {
     try {
       // Preparar mensaje para WhatsApp
       const itemsList = cartItems.map(item => {
-        return `• ${item.name}\n  🔖 Referencia: ${item.reference || 'Sin referencia'}\n  📏 Talla: ${item.selectedSize}\n  🔢 Cantidad: ${item.quantity}`;
+        return `• ${item.name}\n  🔖 Referencia: ${item.reference || 'Sin referencia'}\n  📏 Talla: ${item.selectedSize}\n  🔢 Cantidad: ${item.quantity}${item.imageUrl ? `\n  📸 Imagen: ${item.imageUrl}` : ''}`;
       }).join('\n\n');
 
       const whatsappMessage = encodeURIComponent(
