@@ -1,5 +1,8 @@
 import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { users, categories, brands, products, promotions, events, cartItems, customerSavings } from "@shared/schema";
+import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -675,4 +678,617 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// DatabaseStorage implementation for persistent data
+export class DatabaseStorage implements IStorage {
+  constructor() {
+    this.initializeDefaultData();
+  }
+
+  private async initializeDefaultData() {
+    try {
+      // Only initialize if no data exists
+      const existingCategories = await db.select().from(categories).limit(1);
+      if (existingCategories.length === 0) {
+        // Initialize default categories
+        const defaultCategories = [
+          { name: "Tacones", emoji: "👠", description: "Elegantes tacones para toda ocasión" },
+          { name: "Deportivos", emoji: "👟", description: "Zapatos deportivos y cómodos" },
+          { name: "Botas", emoji: "👢", description: "Botas para todas las temporadas" },
+          { name: "Sandalias", emoji: "🩴", description: "Sandalias frescas y cómodas" },
+          { name: "Casuales", emoji: "🥿", description: "Zapatos casuales para el día a día" },
+          { name: "Formales", emoji: "👞", description: "Zapatos formales y elegantes" },
+        ];
+        
+        await db.insert(categories).values(defaultCategories);
+      }
+
+      // Initialize default brands
+      const existingBrands = await db.select().from(brands).limit(1);
+      if (existingBrands.length === 0) {
+        const defaultBrands = [
+          { 
+            name: "Nike", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png",
+            description: "Just Do It - Marca líder en deportivos",
+            catalogUrl: "https://nike.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Adidas", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png",
+            description: "Impossible is Nothing - Deportivos de alta calidad",
+            catalogUrl: "https://adidas.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Puma", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png",
+            description: "Forever Faster - Estilo deportivo innovador",
+            catalogUrl: "https://puma.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Jordan", 
+            logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png",
+            description: "Jumpman - Calzado de baloncesto premium",
+            catalogUrl: "https://jordan.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Asics", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png",
+            description: "Sound Mind, Sound Body - Tecnología japonesa",
+            catalogUrl: "https://asics.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "New Balance", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/New-Balance-Logo.png",
+            description: "Endorsed by No One - Calidad y rendimiento",
+            catalogUrl: "https://newbalance.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Under Armour", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Under-Armour-Logo.png",
+            description: "I Will - Innovación deportiva y rendimiento",
+            catalogUrl: "https://underarmour.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Reebok", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Reebok-Logo.png",
+            description: "Be More Human - Fitness y lifestyle",
+            catalogUrl: "https://reebok.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "Skechers", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Skechers-Logo.png",
+            description: "Comfort Technology - Comodidad y estilo",
+            catalogUrl: "https://skechers.com/catalog",
+            isActive: true
+          },
+          { 
+            name: "On Cloud", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/12/On-Running-Logo.png",
+            description: "Run on Clouds - Tecnología suiza innovadora",
+            catalogUrl: "https://on-running.com/catalog",
+            isActive: true
+          }
+        ];
+        
+        await db.insert(brands).values(defaultBrands);
+      }
+
+      // Initialize admin user only if it doesn't exist
+      const existingAdmin = await db.select().from(users).where(eq(users.username, "admin")).limit(1);
+      if (existingAdmin.length === 0) {
+        await db.insert(users).values({
+          username: "admin",
+          email: "admin@zapashop.com",
+          password: "admin123",
+          firstName: "Administrador",
+          lastName: "ZapaShop",
+          phone: null,
+          isSeller: false,
+          isAdmin: true,
+          credits: "0",
+          totalPurchases: "0",
+          loyaltyLevel: "platinum",
+        });
+      }
+    } catch (error) {
+      console.error('Error initializing default data:', error);
+    }
+  }
+
+  // User methods
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [newUser] = await db.insert(users).values(user).returning();
+    return newUser;
+  }
+
+  async updateUserCredits(userId: string, amount: string): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ credits: amount })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(and(eq(users.username, username), eq(users.password, password)));
+    return user;
+  }
+
+  // Category methods
+  async getCategories(): Promise<Category[]> {
+    return await db.select().from(categories);
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const [newCategory] = await db.insert(categories).values(category).returning();
+    return newCategory;
+  }
+
+  // Brand methods
+  async getBrands(): Promise<Brand[]> {
+    return await db.select().from(brands).where(eq(brands.isActive, true));
+  }
+
+  async getBrandsWithProducts(): Promise<BrandWithProducts[]> {
+    const brandList = await db.select().from(brands).where(eq(brands.isActive, true));
+    return brandList.map(brand => ({ ...brand, products: [], productCount: 0 }));
+  }
+
+  async getBrand(id: string): Promise<Brand | undefined> {
+    const [brand] = await db.select().from(brands).where(eq(brands.id, id));
+    return brand;
+  }
+
+  async createBrand(brand: InsertBrand): Promise<Brand> {
+    const [newBrand] = await db.insert(brands).values(brand).returning();
+    return newBrand;
+  }
+
+  // Product methods
+  async getProducts(): Promise<ProductWithCategory[]> {
+    const result = await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      categoryId2: categories.id,
+      categoryName: categories.name,
+      categoryEmoji: categories.emoji,
+      categoryDescription: categories.description
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id));
+    
+    return result.map(item => ({
+      ...item,
+      category: item.categoryId2 ? {
+        id: item.categoryId2,
+        name: item.categoryName!,
+        emoji: item.categoryEmoji!,
+        description: item.categoryDescription
+      } : undefined
+    }));
+  }
+
+  async getProductsByCategory(categoryId: string): Promise<ProductWithCategory[]> {
+    return await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      category: {
+        id: categories.id,
+        name: categories.name,
+        emoji: categories.emoji,
+        description: categories.description
+      }
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(eq(products.categoryId, categoryId));
+  }
+
+  async getProductsByBrand(brandId: string): Promise<ProductWithCategory[]> {
+    return await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      category: {
+        id: categories.id,
+        name: categories.name,
+        emoji: categories.emoji,
+        description: categories.description
+      }
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(eq(products.brandId, brandId));
+  }
+
+  async getFlashSaleProducts(): Promise<ProductWithCategory[]> {
+    return await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      category: {
+        id: categories.id,
+        name: categories.name,
+        emoji: categories.emoji,
+        description: categories.description
+      }
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(eq(products.isFlashSale, true));
+  }
+
+  async getFeaturedProducts(): Promise<ProductWithCategory[]> {
+    return await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      category: {
+        id: categories.id,
+        name: categories.name,
+        emoji: categories.emoji,
+        description: categories.description
+      }
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(eq(products.isFeatured, true));
+  }
+
+  async getProduct(id: string): Promise<ProductWithCategory | undefined> {
+    const result = await db.select({
+      id: products.id,
+      name: products.name,
+      description: products.description,
+      price: products.price,
+      originalPrice: products.originalPrice,
+      discountPercentage: products.discountPercentage,
+      categoryId: products.categoryId,
+      brandId: products.brandId,
+      sellerId: products.sellerId,
+      imageUrl: products.imageUrl,
+      images: products.images,
+      reference: products.reference,
+      sizes: products.sizes,
+      colors: products.colors,
+      stock: products.stock,
+      rating: products.rating,
+      reviewCount: products.reviewCount,
+      isFlashSale: products.isFlashSale,
+      isFeatured: products.isFeatured,
+      createdAt: products.createdAt,
+      category: {
+        id: categories.id,
+        name: categories.name,
+        emoji: categories.emoji,
+        description: categories.description
+      }
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(eq(products.id, id))
+    .limit(1);
+    
+    return result[0];
+  }
+
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const [newProduct] = await db.insert(products).values(product).returning();
+    return newProduct;
+  }
+
+  async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
+    const [updatedProduct] = await db.update(products)
+      .set(product)
+      .where(eq(products.id, id))
+      .returning();
+    return updatedProduct;
+  }
+
+  async deleteProduct(id: string): Promise<boolean> {
+    const result = await db.delete(products).where(eq(products.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Promotion methods
+  async getPromotions(): Promise<Promotion[]> {
+    return await db.select().from(promotions);
+  }
+
+  async getActivePromotions(): Promise<Promotion[]> {
+    const now = new Date();
+    return await db.select().from(promotions)
+      .where(and(
+        eq(promotions.isActive, true),
+        lte(promotions.startDate, now),
+        gte(promotions.endDate, now)
+      ));
+  }
+
+  async getPromotion(id: string): Promise<Promotion | undefined> {
+    const [promotion] = await db.select().from(promotions).where(eq(promotions.id, id));
+    return promotion;
+  }
+
+  async createPromotion(promotion: InsertPromotion): Promise<Promotion> {
+    const [newPromotion] = await db.insert(promotions).values(promotion).returning();
+    return newPromotion;
+  }
+
+  async updatePromotion(id: string, promotion: Partial<InsertPromotion>): Promise<Promotion | undefined> {
+    const [updatedPromotion] = await db.update(promotions)
+      .set(promotion)
+      .where(eq(promotions.id, id))
+      .returning();
+    return updatedPromotion;
+  }
+
+  async deletePromotion(id: string): Promise<boolean> {
+    const result = await db.delete(promotions).where(eq(promotions.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Event methods
+  async getEvents(): Promise<Event[]> {
+    return await db.select().from(events);
+  }
+
+  async getActiveEvents(): Promise<Event[]> {
+    const now = new Date();
+    return await db.select().from(events)
+      .where(and(
+        eq(events.isActive, true),
+        lte(events.startDate, now),
+        gte(events.endDate, now)
+      ));
+  }
+
+  async getEvent(id: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event;
+  }
+
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const [newEvent] = await db.insert(events).values(event).returning();
+    return newEvent;
+  }
+
+  async updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined> {
+    const [updatedEvent] = await db.update(events)
+      .set(event)
+      .where(eq(events.id, id))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: string): Promise<boolean> {
+    const result = await db.delete(events).where(eq(events.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Cart methods
+  async getCartItems(userId: string): Promise<CartItemWithProduct[]> {
+    return await db.select({
+      id: cartItems.id,
+      userId: cartItems.userId,
+      productId: cartItems.productId,
+      quantity: cartItems.quantity,
+      createdAt: cartItems.createdAt,
+      product: {
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        price: products.price,
+        originalPrice: products.originalPrice,
+        discountPercentage: products.discountPercentage,
+        categoryId: products.categoryId,
+        brandId: products.brandId,
+        sellerId: products.sellerId,
+        imageUrl: products.imageUrl,
+        images: products.images,
+        reference: products.reference,
+        sizes: products.sizes,
+        colors: products.colors,
+        stock: products.stock,
+        rating: products.rating,
+        reviewCount: products.reviewCount,
+        isFlashSale: products.isFlashSale,
+        isFeatured: products.isFeatured,
+        createdAt: products.createdAt
+      }
+    })
+    .from(cartItems)
+    .leftJoin(products, eq(cartItems.productId, products.id))
+    .where(eq(cartItems.userId, userId));
+  }
+
+  async addToCart(cartItem: InsertCartItem): Promise<CartItem> {
+    const [newCartItem] = await db.insert(cartItems).values(cartItem).returning();
+    return newCartItem;
+  }
+
+  async updateCartItem(id: string, quantity: number): Promise<CartItem | undefined> {
+    const [updatedCartItem] = await db.update(cartItems)
+      .set({ quantity })
+      .where(eq(cartItems.id, id))
+      .returning();
+    return updatedCartItem;
+  }
+
+  async removeFromCart(id: string): Promise<boolean> {
+    const result = await db.delete(cartItems).where(eq(cartItems.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async clearCart(userId: string): Promise<boolean> {
+    const result = await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    return (result.rowCount ?? 0) >= 0;
+  }
+
+  // Customer Savings methods
+  async getCustomerSavings(customerId: string): Promise<CustomerSavings | undefined> {
+    const [savings] = await db.select().from(customerSavings).where(eq(customerSavings.customerId, customerId));
+    return savings;
+  }
+
+  async createCustomerSavings(customerSaving: InsertCustomerSavings): Promise<CustomerSavings> {
+    const [newCustomerSavings] = await db.insert(customerSavings).values(customerSaving).returning();
+    return newCustomerSavings;
+  }
+
+  async updateCustomerSavings(customerId: string, updateData: Partial<InsertCustomerSavings>): Promise<CustomerSavings | undefined> {
+    const [updatedCustomerSavings] = await db.update(customerSavings)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(customerSavings.customerId, customerId))
+      .returning();
+    return updatedCustomerSavings;
+  }
+
+  async addSavings(customerId: string, amount: string): Promise<CustomerSavings | undefined> {
+    const existingSaving = await this.getCustomerSavings(customerId);
+    
+    if (!existingSaving) {
+      return await this.createCustomerSavings({
+        customerId,
+        totalSaved: amount,
+        achievementsUnlocked: [],
+        lastPurchaseAmount: "0",
+        totalPurchases: 0
+      });
+    } else {
+      const currentSavings = parseFloat(existingSaving.totalSaved || "0");
+      const addAmount = parseFloat(amount);
+      const newTotal = currentSavings + addAmount;
+      
+      return await this.updateCustomerSavings(customerId, {
+        totalSaved: newTotal.toString()
+      });
+    }
+  }
+
+  async applySavingsDiscount(customerId: string, discountAmount: string): Promise<CustomerSavings | undefined> {
+    const existingSaving = await this.getCustomerSavings(customerId);
+    if (!existingSaving) return undefined;
+
+    const currentSavings = parseFloat(existingSaving.totalSaved || "0");
+    const discount = parseFloat(discountAmount);
+    const newTotal = Math.max(0, currentSavings - discount);
+    
+    return await this.updateCustomerSavings(customerId, {
+      totalSaved: newTotal.toString()
+    });
+  }
+}
+
+export const storage = new DatabaseStorage();

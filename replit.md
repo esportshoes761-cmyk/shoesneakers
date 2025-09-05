@@ -21,7 +21,7 @@ Preferred communication style: Simple, everyday language.
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js web framework
 - **Database**: PostgreSQL with Drizzle ORM for type-safe database operations
-- **Storage Strategy**: Dual storage implementation - in-memory storage for development and database storage for production
+- **Storage Strategy**: PostgreSQL database storage for full data persistence - all admin changes are permanently saved
 - **API Design**: RESTful API endpoints following conventional HTTP methods
 - **Development**: Hot module replacement via Vite integration for seamless development experience
 
