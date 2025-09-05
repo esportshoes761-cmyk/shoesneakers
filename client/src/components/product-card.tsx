@@ -7,6 +7,9 @@ import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
 import { Star, Edit, Trash2, MessageCircle, ZoomIn } from "lucide-react";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -14,8 +17,15 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
-  const [selectedSize, setSelectedSize] = useState<string>("");
-  const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
+  const [orderForm, setOrderForm] = useState({
+    fullName: "",
+    address: "",
+    city: "",
+    size: "",
+    quantity: 1,
+    deliveryTime: ""
+  });
   const { toast } = useToast();
 
   // Funciones auxiliares para manejo de imágenes
@@ -39,11 +49,12 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return count;
   };
 
-  const handleWhatsAppOrder = (size: string) => {
-    if (!size) {
+  const handleOrderSubmit = () => {
+    // Validar campos requeridos
+    if (!orderForm.fullName || !orderForm.address || !orderForm.city || !orderForm.size || !orderForm.deliveryTime) {
       toast({
-        title: "Selecciona una talla",
-        description: "Por favor selecciona una talla antes de continuar",
+        title: "Campos requeridos",
+        description: "Por favor completa todos los campos del formulario",
         variant: "destructive"
       });
       return;
@@ -52,33 +63,54 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     // Calcular precio con descuento si aplica
     const finalPrice = priceData.discounted;
     const discountInfo = priceData.savings ? ` (¡Ahorras ${priceData.savings}!)` : '';
+    const totalPrice = formatCurrency(Number(product.price.replace(/[^0-9]/g, '')) * orderForm.quantity);
     
-    // Preparar mensaje para WhatsApp
+    // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
-      `👋 ¡Hola! Me interesa este producto de FastSniker:\n\n` +
-      `👟 *${product.name}*\n` +
-      `📏 *Talla:* ${size}\n` +
-      `💰 *Precio:* ${finalPrice}${discountInfo}\n` +
-      `🔗 *Producto:* ${product.name}\n\n` +
-      `¿Está disponible? ¿Cuál es el tiempo de entrega?`
+      `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
+      `📝 *DATOS DEL PEDIDO*\n` +
+      `👟 *Producto:* ${product.name}\n` +
+      `📏 *Talla:* ${orderForm.size}\n` +
+      `🔢 *Cantidad:* ${orderForm.quantity}\n` +
+      `💰 *Precio unitario:* ${finalPrice}${discountInfo}\n` +
+      `💵 *Total a pagar:* ${totalPrice}\n\n` +
+      `📍 *DATOS DE ENTREGA*\n` +
+      `👤 *Nombre:* ${orderForm.fullName}\n` +
+      `🏠 *Dirección:* ${orderForm.address}\n` +
+      `🌆 *Ciudad:* ${orderForm.city}\n` +
+      `⏰ *Horario de entrega:* ${orderForm.deliveryTime}\n\n` +
+      `¿Puedes confirmar la disponibilidad y el tiempo de entrega?`
     );
     
     // Abrir WhatsApp
     window.open(`https://wa.me/573237697966?text=${whatsappMessage}`, '_blank');
     
-    setIsZoomOpen(false);
-    setSelectedSize("");
+    // Limpiar formulario y cerrar modal
+    setOrderForm({
+      fullName: "",
+      address: "",
+      city: "",
+      size: "",
+      quantity: 1,
+      deliveryTime: ""
+    });
+    setIsOrderFormOpen(false);
     
     toast({
-      title: "¡Redirigiendo a WhatsApp!",
+      title: "¡Pedido enviado!",
       description: "Te contactaremos pronto para confirmar tu pedido",
     });
   };
 
-  const handleSizeConfirm = () => {
-    if (selectedSize) {
-      handleWhatsAppOrder(selectedSize);
-    }
+  const resetForm = () => {
+    setOrderForm({
+      fullName: "",
+      address: "",
+      city: "",
+      size: "",
+      quantity: 1,
+      deliveryTime: ""
+    });
   };
 
   const discountPercentage = product.discountPercentage || 0;
@@ -198,90 +230,152 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
-      <Dialog open={isZoomOpen} onOpenChange={setIsZoomOpen}>
+      <Dialog open={isOrderFormOpen} onOpenChange={setIsOrderFormOpen}>
         <DialogTrigger asChild>
           <Button 
             size="sm"
             className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
             disabled={(product.stock || 0) === 0}
-            data-testid={`button-view-product-${product.id}`}
+            data-testid={`button-order-product-${product.id}`}
           >
-            <ZoomIn className="w-3 h-3 mr-1" />
-            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Ver Producto'}
+            <MessageCircle className="w-3 h-3 mr-1" />
+            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Hacer Pedido'}
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{product.name}</DialogTitle>
+            <DialogTitle>Formulario de Pedido - {product.name}</DialogTitle>
             <DialogDescription>
-              Selecciona tu talla y conéctate por WhatsApp
+              Completa tus datos para hacer el pedido por WhatsApp
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-6 py-4">
-            {/* Imagen de zoom */}
+            {/* Imagen del producto */}
             <div className="flex justify-center">
-              <div className="relative aspect-square w-full max-w-sm bg-muted rounded-lg overflow-hidden">
+              <div className="relative aspect-square w-32 bg-muted rounded-lg overflow-hidden">
                 {getMainImage(product) ? (
                   <img 
                     src={getMainImage(product)} 
                     alt={product.name}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                    data-testid={`img-zoom-${product.id}`}
+                    className="w-full h-full object-cover"
+                    data-testid={`img-product-${product.id}`}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    <ZoomIn className="w-16 h-16" />
+                    <ZoomIn className="w-8 h-8" />
                   </div>
                 )}
               </div>
             </div>
             
-            {/* Información del producto */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-2xl font-bold text-primary">
-                  {priceData.discounted}
-                </span>
-                {hasDiscount && priceData.original && (
-                  <div className="text-right">
-                    <span className="text-muted-foreground line-through text-sm">
-                      {priceData.original}
+            {/* Información del precio */}
+            <div className="text-center">
+              <span className="text-xl font-bold text-primary">
+                {priceData.discounted}
+              </span>
+              {hasDiscount && priceData.original && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground line-through mr-2">
+                    {priceData.original}
+                  </span>
+                  {priceData.savings && (
+                    <span className="text-green-600 font-semibold">
+                      ¡Ahorras {priceData.savings}!
                     </span>
-                    {priceData.savings && (
-                      <div className="text-green-600 font-semibold text-sm">
-                        ¡Ahorras {priceData.savings}!
-                      </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Formulario de pedido */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <Label htmlFor="fullName">Nombre completo *</Label>
+                  <Input
+                    id="fullName"
+                    value={orderForm.fullName}
+                    onChange={(e) => setOrderForm({...orderForm, fullName: e.target.value})}
+                    placeholder="Ingresa tu nombre completo"
+                    data-testid={`input-fullname-${product.id}`}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="address">Dirección exacta *</Label>
+                  <Textarea
+                    id="address"
+                    value={orderForm.address}
+                    onChange={(e) => setOrderForm({...orderForm, address: e.target.value})}
+                    placeholder="Ingresa tu dirección completa con detalles (calle, número, apartamento, referencias)"
+                    rows={3}
+                    data-testid={`input-address-${product.id}`}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="city">Ciudad *</Label>
+                  <Input
+                    id="city"
+                    value={orderForm.city}
+                    onChange={(e) => setOrderForm({...orderForm, city: e.target.value})}
+                    placeholder="¿En qué ciudad te encuentras?"
+                    data-testid={`input-city-${product.id}`}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="size">Talla *</Label>
+                    {product.sizes && product.sizes.length > 0 ? (
+                      <Select value={orderForm.size} onValueChange={(value) => setOrderForm({...orderForm, size: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {product.sizes.map((size) => (
+                            <SelectItem key={size} value={size}>
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select value={orderForm.size} onValueChange={(value) => setOrderForm({...orderForm, size: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unica">Talla única</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
-                )}
-              </div>
-              
-              {/* Selector de talla */}
-              <div className="space-y-3">
-                <h4 className="font-medium">Selecciona tu talla:</h4>
-                {product.sizes && product.sizes.length > 0 ? (
-                  <Select value={selectedSize} onValueChange={setSelectedSize}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Elige una talla" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {product.sizes.map((size) => (
-                        <SelectItem key={size} value={size}>
-                          Talla {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Select value={selectedSize} onValueChange={setSelectedSize}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Talla única" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unica">Talla única</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                  
+                  <div>
+                    <Label htmlFor="quantity">Cantidad *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={orderForm.quantity}
+                      onChange={(e) => setOrderForm({...orderForm, quantity: parseInt(e.target.value) || 1})}
+                      data-testid={`input-quantity-${product.id}`}
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="deliveryTime">Horario de entrega preferido *</Label>
+                  <Textarea
+                    id="deliveryTime"
+                    value={orderForm.deliveryTime}
+                    onChange={(e) => setOrderForm({...orderForm, deliveryTime: e.target.value})}
+                    placeholder="¿En qué momento prefieres que se haga el domicilio? (ej: Entre 9am-5pm, Solo fines de semana, etc.)"
+                    rows={2}
+                    data-testid={`input-delivery-time-${product.id}`}
+                  />
+                </div>
               </div>
             </div>
             
@@ -289,20 +383,22 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             <div className="flex gap-3 pt-4">
               <Button 
                 variant="outline" 
-                onClick={() => setIsZoomOpen(false)}
+                onClick={() => {
+                  setIsOrderFormOpen(false);
+                  resetForm();
+                }}
                 className="flex-1"
-                data-testid={`button-cancel-zoom-${product.id}`}
+                data-testid={`button-cancel-order-${product.id}`}
               >
                 Cancelar
               </Button>
               <Button 
-                onClick={handleSizeConfirm}
-                disabled={!selectedSize}
+                onClick={handleOrderSubmit}
                 className="flex-1 bg-green-600 hover:bg-green-700"
-                data-testid={`button-whatsapp-order-${product.id}`}
+                data-testid={`button-submit-order-${product.id}`}
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
-                Pedir por WhatsApp
+                Enviar Pedido
               </Button>
             </div>
           </div>

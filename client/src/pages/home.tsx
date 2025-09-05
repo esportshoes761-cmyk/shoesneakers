@@ -260,7 +260,7 @@ export default function Home() {
         <div className="relative mb-4 sm:mb-8 rounded-xl sm:rounded-2xl overflow-hidden gradient-bg p-4 sm:p-8 text-white">
           <div className="relative z-10">
             <h2 className="text-xl sm:text-4xl font-bold mb-2 sm:mb-4" data-testid="text-main-promo-title">¡SUPER OFERTAS!</h2>
-            <p className="text-sm sm:text-xl mb-3 sm:mb-4" data-testid="text-main-promo-subtitle">Zapatos de marca hasta 70% de descuento</p>
+            <p className="text-sm sm:text-xl mb-3 sm:mb-4" data-testid="text-main-promo-subtitle">Zapatos de marca con los mejores precios</p>
             <button className="bg-white text-primary px-4 sm:px-8 py-2 sm:py-3 rounded-full font-bold hover:bg-gray-100 transition-colors bounce-animation text-sm sm:text-base" data-testid="button-shop-now">
               ¡Comprar Ahora!
             </button>
