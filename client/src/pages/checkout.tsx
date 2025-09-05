@@ -115,7 +115,7 @@ export default function CheckoutPage() {
 
       // Redirigir a WhatsApp después de un breve delay
       setTimeout(() => {
-        window.open(`https://wa.me/573237697966?text=${whatsappMessage}`, '_blank');
+        window.open(`https://wa.me/573218646620?text=${whatsappMessage}`, '_blank');
         window.location.href = '/';
       }, 1500);
 

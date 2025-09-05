@@ -83,7 +83,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     );
     
     // Abrir WhatsApp
-    window.open(`https://wa.me/573237697966?text=${whatsappMessage}`, '_blank');
+    window.open(`https://wa.me/573218646620?text=${whatsappMessage}`, '_blank');
     
     // Limpiar formulario y cerrar modal
     setOrderForm({
@@ -327,29 +327,18 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label htmlFor="size">Talla *</Label>
-                    {product.sizes && product.sizes.length > 0 ? (
-                      <Select value={orderForm.size} onValueChange={(value) => setOrderForm({...orderForm, size: value})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {product.sizes.map((size) => (
-                            <SelectItem key={size} value={size}>
-                              {size}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Select value={orderForm.size} onValueChange={(value) => setOrderForm({...orderForm, size: value})}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unica">Talla única</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Select value={orderForm.size} onValueChange={(value) => setOrderForm({...orderForm, size: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tu talla" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({length: 11}, (_, i) => 35 + i).map((size) => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <div>
