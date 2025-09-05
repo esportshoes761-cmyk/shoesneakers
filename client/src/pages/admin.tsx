@@ -101,9 +101,18 @@ export default function AdminPanel() {
   // Estados para edición
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // Estado para búsqueda por referencia
+  const [searchReference, setSearchReference] = useState("");
 
   // Consultas de datos
-  const { data: products = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
+  const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
+  
+  // Filtrar productos por referencia
+  const products = allProducts.filter(product => 
+    !searchReference || 
+    (product.reference && product.reference.toLowerCase().includes(searchReference.toLowerCase()))
+  );
   const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
   const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
@@ -952,6 +961,29 @@ export default function AdminPanel() {
                 </Form>
               </DialogContent>
             </Dialog>
+          </div>
+          
+          {/* Búsqueda por referencia */}
+          <div className="mb-4">
+            <div className="max-w-sm">
+              <label htmlFor="search-reference" className="block text-sm font-medium mb-2">
+                Buscar por referencia
+              </label>
+              <Input
+                id="search-reference"
+                type="text"
+                placeholder="Ingresa la referencia del producto..."
+                value={searchReference}
+                onChange={(e) => setSearchReference(e.target.value)}
+                className="w-full"
+                data-testid="input-search-reference"
+              />
+              {searchReference && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {products.length} producto(s) encontrado(s)
+                </p>
+              )}
+            </div>
           </div>
           
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
