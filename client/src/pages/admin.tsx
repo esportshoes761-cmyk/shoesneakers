@@ -657,7 +657,7 @@ export default function AdminPanel() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Categoría *</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-product-category">
                                   <SelectValue placeholder="Selecciona una categoría" />
@@ -681,7 +681,7 @@ export default function AdminPanel() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Marca *</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-product-brand">
                                   <SelectValue placeholder="Selecciona una marca" />
