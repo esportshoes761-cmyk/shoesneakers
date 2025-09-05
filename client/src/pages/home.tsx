@@ -372,41 +372,6 @@ export default function Home() {
         </section>
 
 
-        {/* Categories Grid - Compacto para móvil */}
-        <section className="mb-4 sm:mb-8">
-          <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-4" data-testid="text-categories-title">🏪 Explora por Categorías</h3>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-            {categories.map((category, index) => {
-              const gradients = [
-                "from-red-400 to-pink-500",
-                "from-blue-400 to-purple-500", 
-                "from-green-400 to-blue-500",
-                "from-yellow-400 to-orange-500"
-              ];
-              
-              // Count products across all brands for this category
-              const categoryProductCount = brands.reduce((total, brand) => {
-                return total + brand.products.filter(p => p.categoryId === category.id).length;
-              }, 0);
-              
-              return (
-                <div 
-                  key={category.id}
-                  className={`bg-gradient-to-br ${gradients[index % gradients.length]} rounded-lg sm:rounded-xl p-3 sm:p-6 text-white text-center hover:shadow-lg transition-shadow cursor-pointer`}
-                  onClick={() => {}}
-                  data-testid={`card-category-${category.id}`}
-                >
-                  <div className="text-xl sm:text-3xl mb-1 sm:mb-2">{category.emoji}</div>
-                  <h4 className="font-semibold text-xs sm:text-base">{category.name}</h4>
-                  <p className="text-xs sm:text-sm opacity-90">
-                    {categoryProductCount} productos
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
 
       </main>
 
@@ -415,8 +380,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h5 className="font-bold text-lg mb-4">👟 ZapaShop</h5>
-              <p className="text-muted-foreground mb-4">Tu tienda de zapatos online favorita con los mejores precios y calidad.</p>
+              <h5 className="font-bold text-lg mb-4">🚀 FastSniker</h5>
+              <p className="text-muted-foreground mb-4">Los mejores zapatos deportivos y casuales con envío rápido y garantía de calidad.</p>
               <div className="flex space-x-4">
                 <i className="fab fa-facebook text-xl text-muted-foreground hover:text-primary cursor-pointer"></i>
                 <i className="fab fa-instagram text-xl text-muted-foreground hover:text-primary cursor-pointer"></i>
@@ -425,19 +390,11 @@ export default function Home() {
             </div>
             
             <div>
-              <h6 className="font-semibold mb-4">Categorías</h6>
+              <h6 className="font-semibold mb-4">Información</h6>
               <ul className="space-y-2 text-muted-foreground">
-                {categories.map(category => (
-                  <li key={category.id}>
-                    <button 
-                      onClick={() => {}}
-                      className="hover:text-primary transition-colors text-left"
-                      data-testid={`link-footer-category-${category.id}`}
-                    >
-                      {category.name}
-                    </button>
-                  </li>
-                ))}
+                <li><a href="#" className="hover:text-primary transition-colors">Sobre FastSniker</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Calidad Garantizada</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Productos Originales</a></li>
               </ul>
             </div>
             
@@ -454,7 +411,7 @@ export default function Home() {
           </div>
           
           <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 ZapaShop. Todos los derechos reservados.</p>
+            <p>&copy; 2024 FastSniker. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>

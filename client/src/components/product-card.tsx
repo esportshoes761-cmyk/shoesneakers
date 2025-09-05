@@ -2,13 +2,11 @@ import { type ProductWithCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
 import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
-import { Star, Edit, Trash2 } from "lucide-react";
-import { SavingsBadge } from "@/components/savings-badge";
-import { useSavingsStore } from "@/lib/savings-store";
+import { Star, Edit, Trash2, MessageCircle, ZoomIn } from "lucide-react";
 import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -17,10 +15,8 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
   const [selectedSize, setSelectedSize] = useState<string>("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const addItem = useCartStore(state => state.addItem);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
   const { toast } = useToast();
-  const { addSaving } = useSavingsStore();
 
   // Funciones auxiliares para manejo de imágenes
   const getMainImage = (product: ProductWithCategory): string => {
@@ -43,43 +39,45 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return count;
   };
 
-  const handleAddToCart = async (size: string) => {
-    addItem(product.id, size);
-    setIsDialogOpen(false);
+  const handleWhatsAppOrder = (size: string) => {
+    if (!size) {
+      toast({
+        title: "Selecciona una talla",
+        description: "Por favor selecciona una talla antes de continuar",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Calcular precio con descuento si aplica
+    const finalPrice = priceData.discounted;
+    const discountInfo = priceData.savings ? ` (¡Ahorras ${priceData.savings}!)` : '';
+    
+    // Preparar mensaje para WhatsApp
+    const whatsappMessage = encodeURIComponent(
+      `👋 ¡Hola! Me interesa este producto de FastSniker:\n\n` +
+      `👟 *${product.name}*\n` +
+      `📏 *Talla:* ${size}\n` +
+      `💰 *Precio:* ${finalPrice}${discountInfo}\n` +
+      `🔗 *Producto:* ${product.name}\n\n` +
+      `¿Está disponible? ¿Cuál es el tiempo de entrega?`
+    );
+    
+    // Abrir WhatsApp
+    window.open(`https://wa.me/573237697966?text=${whatsappMessage}`, '_blank');
+    
+    setIsZoomOpen(false);
     setSelectedSize("");
     
-    // Calculate savings if there's a discount
-    const discountPercentage = product.discountPercentage || 0;
-    const hasDiscount = discountPercentage > 0 && product.originalPrice;
-    
-    if (hasDiscount && product.originalPrice) {
-      const originalPrice = Number(product.originalPrice);
-      const currentPrice = Number(product.price);
-      const savingsAmount = originalPrice - currentPrice;
-      
-      if (savingsAmount > 0) {
-        await addSaving(savingsAmount);
-        toast({
-          title: "¡Producto agregado y dinero ahorrado! 🎉",
-          description: `${product.name} (Talla ${size}) se agregó a tu carrito. ¡Ahorraste ${formatCurrency(savingsAmount)}!`,
-        });
-      } else {
-        toast({
-          title: "¡Producto agregado!",
-          description: `${product.name} (Talla ${size}) se agregó a tu carrito`,
-        });
-      }
-    } else {
-      toast({
-        title: "¡Producto agregado!",
-        description: `${product.name} (Talla ${size}) se agregó a tu carrito`,
-      });
-    }
+    toast({
+      title: "¡Redirigiendo a WhatsApp!",
+      description: "Te contactaremos pronto para confirmar tu pedido",
+    });
   };
 
-  const handleSizeConfirm = async () => {
+  const handleSizeConfirm = () => {
     if (selectedSize) {
-      await handleAddToCart(selectedSize);
+      handleWhatsAppOrder(selectedSize);
     }
   };
 
@@ -181,14 +179,6 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             <span className="text-muted-foreground line-through text-[10px] sm:text-xs" data-testid={`text-original-price-${product.id}`}>
               {priceData.original}
             </span>
-            {priceData.savings && (
-              <SavingsBadge 
-                savingsAmount={Number(product.originalPrice) - Number(product.price)}
-                discountPercentage={discountPercentage}
-                className="ml-1"
-                showAnimation={true}
-              />
-            )}
           </>
         )}
       </div>
@@ -208,64 +198,111 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isZoomOpen} onOpenChange={setIsZoomOpen}>
         <DialogTrigger asChild>
           <Button 
             size="sm"
             className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
             disabled={(product.stock || 0) === 0}
-            data-testid={`button-add-to-cart-${product.id}`}
+            data-testid={`button-view-product-${product.id}`}
           >
-            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar'}
+            <ZoomIn className="w-3 h-3 mr-1" />
+            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Ver Producto'}
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Selecciona tu talla</DialogTitle>
+            <DialogTitle>{product.name}</DialogTitle>
             <DialogDescription>
-              Elige la talla para {product.name}
+              Selecciona tu talla y conéctate por WhatsApp
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-3">
-              <h4 className="font-medium">Tallas disponibles:</h4>
-              <div className="grid grid-cols-3 gap-2">
-                {product.sizes && product.sizes.length > 0 ? (
-                  product.sizes.map((size) => (
-                    <Button
-                      key={size}
-                      variant={selectedSize === size ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSelectedSize(size)}
-                      className="h-10"
-                      data-testid={`button-size-${size}-${product.id}`}
-                    >
-                      {size}
-                    </Button>
-                  ))
+          <div className="grid gap-6 py-4">
+            {/* Imagen de zoom */}
+            <div className="flex justify-center">
+              <div className="relative aspect-square w-full max-w-sm bg-muted rounded-lg overflow-hidden">
+                {getMainImage(product) ? (
+                  <img 
+                    src={getMainImage(product)} 
+                    alt={product.name}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    data-testid={`img-zoom-${product.id}`}
+                  />
                 ) : (
-                  <p className="col-span-3 text-sm text-muted-foreground">
-                    No hay tallas específicas para este producto
-                  </p>
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                    <ZoomIn className="w-16 h-16" />
+                  </div>
                 )}
               </div>
             </div>
-            <div className="flex gap-2 pt-4">
+            
+            {/* Información del producto */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-2xl font-bold text-primary">
+                  {priceData.discounted}
+                </span>
+                {hasDiscount && priceData.original && (
+                  <div className="text-right">
+                    <span className="text-muted-foreground line-through text-sm">
+                      {priceData.original}
+                    </span>
+                    {priceData.savings && (
+                      <div className="text-green-600 font-semibold text-sm">
+                        ¡Ahorras {priceData.savings}!
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Selector de talla */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Selecciona tu talla:</h4>
+                {product.sizes && product.sizes.length > 0 ? (
+                  <Select value={selectedSize} onValueChange={setSelectedSize}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Elige una talla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {product.sizes.map((size) => (
+                        <SelectItem key={size} value={size}>
+                          Talla {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={selectedSize} onValueChange={setSelectedSize}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Talla única" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unica">Talla única</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+            
+            {/* Botones de acción */}
+            <div className="flex gap-3 pt-4">
               <Button 
                 variant="outline" 
-                onClick={() => setIsDialogOpen(false)}
+                onClick={() => setIsZoomOpen(false)}
                 className="flex-1"
-                data-testid={`button-cancel-size-${product.id}`}
+                data-testid={`button-cancel-zoom-${product.id}`}
               >
                 Cancelar
               </Button>
               <Button 
                 onClick={handleSizeConfirm}
                 disabled={!selectedSize}
-                className="flex-1"
-                data-testid={`button-confirm-size-${product.id}`}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                data-testid={`button-whatsapp-order-${product.id}`}
               >
-                Agregar al Carrito
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Pedir por WhatsApp
               </Button>
             </div>
           </div>
