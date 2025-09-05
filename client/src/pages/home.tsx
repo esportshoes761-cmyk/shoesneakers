@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/header";
-import CategoryTabs from "@/components/category-tabs";
 import PromotionalBanners from "@/components/promotional-banners";
 import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
-import FloatingCart from "@/components/floating-cart";
 import { SavingsDashboard } from "@/components/savings-dashboard";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState, useMemo } from "react";
@@ -14,7 +12,6 @@ import { formatCurrency } from "@/lib/currency";
 import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
 
 export default function Home() {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: "",
@@ -99,14 +96,8 @@ export default function Home() {
     });
   };
 
-  // Filtrar productos mostrados basado en categoría seleccionada
-  const displayedProducts = useMemo(() => {
-    if (!selectedCategory) return allProducts;
-    return allProducts.filter(product => {
-      const productCategory = typeof product.category === 'string' ? product.category : product.category?.name || '';
-      return productCategory === selectedCategory;
-    });
-  }, [allProducts, selectedCategory]);
+  // Mostrar todos los productos
+  const displayedProducts = allProducts;
 
   // Si se seleccionó una marca, mostrar su catálogo
   if (selectedBrand) {
@@ -237,8 +228,6 @@ export default function Home() {
             </div>
           )}
         </main>
-        
-        <FloatingCart />
       </div>
     );
   }
@@ -265,13 +254,6 @@ export default function Home() {
           categories={categories}
           brands={brands}
           onClear={clearFilters}
-        />
-        
-        <CategoryTabs 
-          categories={categories}
-          selectedCategory={selectedCategory}
-          onCategorySelect={setSelectedCategory}
-          isLoading={categoriesLoading}
         />
 
         {/* Main Promo Banner - Compacto para móvil */}
@@ -412,7 +394,7 @@ export default function Home() {
                 <div 
                   key={category.id}
                   className={`bg-gradient-to-br ${gradients[index % gradients.length]} rounded-lg sm:rounded-xl p-3 sm:p-6 text-white text-center hover:shadow-lg transition-shadow cursor-pointer`}
-                  onClick={() => setSelectedCategory(category.id)}
+                  onClick={() => {}}
                   data-testid={`card-category-${category.id}`}
                 >
                   <div className="text-xl sm:text-3xl mb-1 sm:mb-2">{category.emoji}</div>
@@ -427,8 +409,6 @@ export default function Home() {
         </section>
 
       </main>
-
-      <FloatingCart />
 
       {/* Footer */}
       <footer className="bg-muted mt-16 py-12">
@@ -450,7 +430,7 @@ export default function Home() {
                 {categories.map(category => (
                   <li key={category.id}>
                     <button 
-                      onClick={() => setSelectedCategory(category.id)}
+                      onClick={() => {}}
                       className="hover:text-primary transition-colors text-left"
                       data-testid={`link-footer-category-${category.id}`}
                     >
