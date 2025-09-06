@@ -65,6 +65,15 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     
     // Sin cálculos de precio - se cotiza por WhatsApp
     
+    // Obtener la imagen principal del producto
+    const getProductImageUrl = () => {
+      let imageUrl = product.imageUrl || product.images?.[0];
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `${window.location.origin}${imageUrl}`;
+      }
+      return imageUrl;
+    };
+
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
       `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
@@ -78,7 +87,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       `🏠 *Dirección:* ${orderForm.address}\n` +
       `🌆 *Ciudad:* ${orderForm.city}\n` +
       `⏰ *Horario de entrega:* ${orderForm.deliveryTime}\n\n` +
-      `Por favor envía la fotografía del producto y cotización. ¡Gracias!`
+      `📸 *IMAGEN DEL PRODUCTO:*\n${getProductImageUrl()}\n\n` +
+      `Por favor confirma disponibilidad y envía cotización. ¡Gracias!`
     );
     
     // Abrir WhatsApp

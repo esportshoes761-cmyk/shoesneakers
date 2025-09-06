@@ -68,6 +68,12 @@ export default function CartModal() {
     // Preparar mensaje para WhatsApp
     let productsList = '';
     items.forEach((item, index) => {
+      // Obtener imagen del producto
+      let imageUrl = item.product.imageUrl || item.product.images?.[0];
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `${window.location.origin}${imageUrl}`;
+      }
+      
       productsList += `${index + 1}. 👟 ${item.product.name}\n`;
       if (item.product.reference) {
         productsList += `   🔖 Ref: ${item.product.reference}\n`;
@@ -75,7 +81,11 @@ export default function CartModal() {
       if (item.selectedSize) {
         productsList += `   📏 Talla: ${item.selectedSize}\n`;
       }
-      productsList += `   🔢 Cantidad: ${item.quantity}\n\n`;
+      productsList += `   🔢 Cantidad: ${item.quantity}\n`;
+      if (imageUrl) {
+        productsList += `   📸 Imagen: ${imageUrl}\n`;
+      }
+      productsList += `\n`;
     });
 
     const whatsappMessage = encodeURIComponent(
