@@ -7,12 +7,14 @@ import { SavingsDashboard } from "@/components/savings-dashboard";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
 
 export default function Home() {
   const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
+  const [imageZoomData, setImageZoomData] = useState<{product: ProductWithCategory; isOpen: boolean} | null>(null);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: "",
     priceMin: 0,
@@ -143,14 +145,31 @@ export default function Home() {
               {brandProducts.map((product) => (
                 <div key={product.id} className="bg-card border border-border rounded-lg sm:rounded-xl overflow-hidden hover:shadow-lg transition-shadow" data-testid={`card-brand-product-${product.id}`}>
                   {/* Imagen del producto */}
-                  <div className="aspect-square bg-muted relative overflow-hidden">
-                    {product.images && product.images.length > 0 ? (
-                      <img 
-                        src={product.images[0]} 
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                        data-testid={`img-brand-product-${product.id}`}
-                      />
+                  <div className="aspect-square bg-muted relative overflow-hidden group cursor-pointer">
+                    {((product.imageUrl && product.imageUrl.trim() !== '') || (product.images && product.images.length > 0)) ? (
+                      <>
+                        <img 
+                          src={product.imageUrl && product.imageUrl.trim() !== '' ? product.imageUrl : product.images?.[0]} 
+                          alt={product.name}
+                          className="w-full h-full object-cover transition-transform hover:scale-105"
+                          data-testid={`img-brand-product-${product.id}`}
+                          onClick={() => setImageZoomData({product, isOpen: true})}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            console.error(`❌ Error cargando imagen: ${target.src} para producto: ${product.name}`);
+                            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
+                          }}
+                          onLoad={() => {
+                            console.log(`✅ Imagen cargada correctamente para producto en catálogo: ${product.name}`);
+                          }}
+                        />
+                        {/* Zoom icon overlay */}
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+                            🔍
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                         <Package className="w-8 h-8" />
@@ -228,6 +247,28 @@ export default function Home() {
             </div>
           )}
         </main>
+
+        {/* Modal de zoom para imágenes del catálogo */}
+        {imageZoomData && (
+          <Dialog open={imageZoomData.isOpen} onOpenChange={(open) => setImageZoomData(open ? imageZoomData : null)}>
+            <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+              <DialogHeader>
+                <DialogTitle>{imageZoomData.product.name}</DialogTitle>
+                <DialogDescription>
+                  Imagen en detalle del producto
+                </DialogDescription>
+              </DialogHeader>
+              <div className="relative flex justify-center">
+                <img 
+                  src={imageZoomData.product.imageUrl && imageZoomData.product.imageUrl.trim() !== '' ? imageZoomData.product.imageUrl : imageZoomData.product.images?.[0]} 
+                  alt={imageZoomData.product.name}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  data-testid={`img-catalog-zoom-${imageZoomData.product.id}`}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     );
   }

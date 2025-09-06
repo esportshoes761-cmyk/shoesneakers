@@ -18,6 +18,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
   const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
+  const [isImageZoomOpen, setIsImageZoomOpen] = useState(false);
   const [orderForm, setOrderForm] = useState({
     fullName: "",
     address: "",
@@ -174,11 +175,11 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative group">
         <img 
           src={getMainImage(product) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>'} 
           alt={product.name}
-          className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3"
+          className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3 cursor-pointer transition-transform hover:scale-105"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             console.error(`❌ Error cargando imagen: ${target.src} para producto: ${product.name}`);
@@ -187,8 +188,15 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           onLoad={() => {
             console.log(`✅ Imagen cargada correctamente para producto: ${product.name}`);
           }}
+          onClick={() => setIsImageZoomOpen(true)}
           data-testid={`img-product-${product.id}`}
         />
+        
+        {/* Zoom icon overlay */}
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <ZoomIn className="w-6 h-6 text-white" />
+        </div>
+        
         {/* Indicador de múltiples imágenes */}
         {getImageCount(product) > 1 && (
           <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-1.5 py-0.5 rounded">
@@ -384,6 +392,26 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                 Enviar Pedido
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de zoom para imagen */}
+      <Dialog open={isImageZoomOpen} onOpenChange={setIsImageZoomOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+          <DialogHeader>
+            <DialogTitle>{product.name}</DialogTitle>
+            <DialogDescription>
+              Imagen en detalle del producto
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative flex justify-center">
+            <img 
+              src={getMainImage(product)} 
+              alt={product.name}
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              data-testid={`img-zoom-${product.id}`}
+            />
           </div>
         </DialogContent>
       </Dialog>
