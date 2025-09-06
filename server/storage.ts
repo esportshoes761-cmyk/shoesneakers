@@ -855,7 +855,24 @@ export class DatabaseStorage implements IStorage {
 
   async getBrandsWithProducts(): Promise<BrandWithProducts[]> {
     const brandList = await db.select().from(brands).where(eq(brands.isActive, true));
-    return brandList.map(brand => ({ ...brand, products: [], productCount: 0 }));
+    const allProducts = await db.select().from(products);
+    const allCategories = await db.select().from(categories);
+    
+    return brandList.map(brand => {
+      const brandProducts = allProducts
+        .filter(product => product.brandId === brand.id)
+        .map(product => ({
+          ...product,
+          category: product.categoryId ? allCategories.find(c => c.id === product.categoryId) : undefined,
+          brand: brand
+        } as ProductWithCategory));
+      
+      return {
+        ...brand,
+        products: brandProducts,
+        productCount: brandProducts.length
+      };
+    });
   }
 
   async getBrand(id: string): Promise<Brand | undefined> {
