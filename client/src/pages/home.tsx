@@ -154,7 +154,13 @@ export default function Home() {
                     {((product.imageUrl && product.imageUrl.trim() !== '') || (product.images && product.images.length > 0)) ? (
                       <>
                         <img 
-                          src={product.imageUrl && product.imageUrl.trim() !== '' ? product.imageUrl : product.images?.[0]} 
+                          src={(() => {
+                            let imageUrl = product.imageUrl && product.imageUrl.trim() !== '' ? product.imageUrl : product.images?.[0];
+                            if (imageUrl && !imageUrl.startsWith('http')) {
+                              imageUrl = `${window.location.origin}${imageUrl}`;
+                            }
+                            return imageUrl;
+                          })()} 
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform hover:scale-105"
                           data-testid={`img-brand-product-${product.id}`}

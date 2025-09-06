@@ -130,7 +130,13 @@ export default function CartModal() {
               {items.map((item) => (
                 <div key={item.product.id} className="flex gap-4 p-4 border rounded-lg">
                   <img 
-                    src={item.product.imageUrl || item.product.images?.[0] || 'https://via.placeholder.com/80'} 
+                    src={(() => {
+                      let imageUrl = item.product.imageUrl || item.product.images?.[0];
+                      if (imageUrl && !imageUrl.startsWith('http')) {
+                        imageUrl = `${window.location.origin}${imageUrl}`;
+                      }
+                      return imageUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><rect width="80" height="80" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="12" fill="%236b7280">Sin imagen</text></svg>';
+                    })()} 
                     alt={item.product.name}
                     className="w-20 h-20 object-cover rounded"
                     data-testid={`img-cart-item-${item.product.id}`}

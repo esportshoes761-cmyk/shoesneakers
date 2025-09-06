@@ -34,10 +34,11 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const getMainImage = (product: ProductWithCategory): string => {
     // Prioridad: imageUrl primero, luego primera imagen del array
     if (product.imageUrl && product.imageUrl.trim() !== '') {
-      return product.imageUrl;
+      // Si la URL no es absoluta, añadir el dominio base
+      return product.imageUrl.startsWith('http') ? product.imageUrl : `${window.location.origin}${product.imageUrl}`;
     }
     if (product.images && product.images.length > 0 && product.images[0].trim() !== '') {
-      return product.images[0];
+      return product.images[0].startsWith('http') ? product.images[0] : `${window.location.origin}${product.images[0]}`;
     }
     return '';
   };
