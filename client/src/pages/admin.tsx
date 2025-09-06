@@ -1014,41 +1014,63 @@ export default function AdminPanel() {
                   <CardDescription>{product.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <p className="font-semibold">{formatCurrency(product.price)}</p>
-                    {product.reference && (
-                      <p className="text-sm text-muted-foreground">Ref: {product.reference}</p>
+                  <div className="space-y-3">
+                    {/* Imagen del producto */}
+                    {(product.imageUrl || (product.images && product.images.length > 0)) && (
+                      <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                        <img 
+                          src={(() => {
+                            let imageUrl = product.imageUrl || product.images?.[0];
+                            if (imageUrl && !imageUrl.startsWith('http')) {
+                              imageUrl = `${window.location.origin}${imageUrl}`;
+                            }
+                            return imageUrl;
+                          })()} 
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
+                          }}
+                        />
+                      </div>
                     )}
-                    <div className="flex gap-2">
-                      {product.isFlashSale && <Badge variant="destructive">Oferta Flash</Badge>}
-                      {product.isFeatured && <Badge>Destacado</Badge>}
+                    
+                    <div className="space-y-2">
+                      {product.reference && (
+                        <p className="text-sm font-medium text-primary">Ref: {product.reference}</p>
+                      )}
+                      <div className="flex gap-2">
+                        {product.isFlashSale && <Badge variant="destructive">Oferta Flash</Badge>}
+                        {product.isFeatured && <Badge>Destacado</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Stock: {product.stock}</p>
+                      {product.images && product.images.length > 0 && (
+                        <p className="text-sm text-muted-foreground">Imágenes: {product.images.length + 1}</p>
+                      )}
+                      {product.sizes && product.sizes.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">Tallas:</span>
+                          {product.sizes.slice(0, 3).map((size) => (
+                            <Badge key={size} variant="outline" className="text-xs">{size}</Badge>
+                          ))}
+                          {product.sizes.length > 3 && (
+                            <Badge variant="outline" className="text-xs">+{product.sizes.length - 3}</Badge>
+                          )}
+                        </div>
+                      )}
+                      {product.colors && product.colors.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">Colores:</span>
+                          {product.colors.slice(0, 3).map((color) => (
+                            <Badge key={color} variant="outline" className="text-xs">{color}</Badge>
+                          ))}
+                          {product.colors.length > 3 && (
+                            <Badge variant="outline" className="text-xs">+{product.colors.length - 3}</Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">Stock: {product.stock}</p>
-                    {product.images && product.images.length > 0 && (
-                      <p className="text-sm text-muted-foreground">Imágenes: {product.images.length + 1}</p>
-                    )}
-                    {product.sizes && product.sizes.length > 0 && (
-                      <div className="flex gap-1 flex-wrap">
-                        <span className="text-xs text-muted-foreground">Tallas:</span>
-                        {product.sizes.slice(0, 3).map((size) => (
-                          <Badge key={size} variant="outline" className="text-xs">{size}</Badge>
-                        ))}
-                        {product.sizes.length > 3 && (
-                          <Badge variant="outline" className="text-xs">+{product.sizes.length - 3}</Badge>
-                        )}
-                      </div>
-                    )}
-                    {product.colors && product.colors.length > 0 && (
-                      <div className="flex gap-1 flex-wrap">
-                        <span className="text-xs text-muted-foreground">Colores:</span>
-                        {product.colors.slice(0, 3).map((color) => (
-                          <Badge key={color} variant="outline" className="text-xs">{color}</Badge>
-                        ))}
-                        {product.colors.length > 3 && (
-                          <Badge variant="outline" className="text-xs">+{product.colors.length - 3}</Badge>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>
