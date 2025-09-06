@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, ShoppingCart } from "lucide-react";
+import { Search } from "lucide-react";
+import CartButton from "./cart-button";
+import CartModal from "./cart-modal";
 import logoImage from "@assets/file_00000000693c61f594344a1f92b67023_1757040378682.png";
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const [location] = useLocation();
-  const cartItemCount = useCartStore(state => state.getItemCount());
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,9 +55,15 @@ export default function Header() {
                 <Search className="h-4 w-4" />
               </Button>
             </div>
+            
+            {/* Botón del carrito */}
+            <CartButton />
           </div>
         </div>
       </div>
+      
+      {/* Modal del carrito */}
+      <CartModal />
     </header>
   );
 }

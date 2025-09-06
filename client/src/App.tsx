@@ -9,7 +9,6 @@ import AdminPanel from "@/pages/admin";
 import LoginPage from "@/pages/login";
 import CheckoutPage from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
-import FloatingCart from "@/components/floating-cart";
 
 function Router() {
   return (
@@ -30,7 +29,6 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
-        <FloatingCart />
       </TooltipProvider>
     </QueryClientProvider>
   );

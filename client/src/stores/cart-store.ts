@@ -18,8 +18,6 @@ interface CartStore {
   clearCart: () => void;
   setIsOpen: (isOpen: boolean) => void;
   getTotalItems: () => number;
-  // Legacy methods for compatibility
-  getItemCount: () => number;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -88,11 +86,6 @@ export const useCartStore = create<CartStore>()(
       
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0);
-      },
-      
-      // Legacy method for compatibility
-      getItemCount: () => {
-        return get().getTotalItems();
       }
     }),
     {

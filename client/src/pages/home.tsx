@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ArrowLeft, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
+import { useCartStore } from "@/lib/cart-store";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
@@ -26,6 +28,9 @@ export default function Home() {
     onSale: false,
     inStock: false,
   });
+  
+  const { addItem } = useCartStore();
+  const { toast } = useToast();
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -176,12 +181,6 @@ export default function Home() {
                       </div>
                     )}
                     
-                    {/* Badge de descuento */}
-                    {product.discountPercentage && product.discountPercentage > 0 && (
-                      <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                        -{product.discountPercentage}%
-                      </div>
-                    )}
                   </div>
 
                   {/* Información del producto */}
@@ -190,23 +189,14 @@ export default function Home() {
                       {product.name}
                     </h3>
                     
-                    {/* Precios */}
-                    <div className="mb-2">
-                      {product.discountPercentage && product.discountPercentage > 0 ? (
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                          <span className="text-lg sm:text-xl font-bold text-green-600" data-testid={`text-brand-product-sale-price-${product.id}`}>
-                            {formatCurrency(Number(product.price))}
-                          </span>
-                          <span className="text-sm text-muted-foreground line-through" data-testid={`text-brand-product-original-price-${product.id}`}>
-                            {formatCurrency(Math.round((Number(product.price) || 0) / (1 - ((product.discountPercentage || 0) / 100))))}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-lg sm:text-xl font-bold" data-testid={`text-brand-product-price-${product.id}`}>
-                          {formatCurrency(Number(product.price))}
+                    {/* Referencia del producto */}
+                    {product.reference && (
+                      <div className="mb-2">
+                        <span className="text-sm text-muted-foreground bg-gray-100 px-2 py-1 rounded" data-testid={`text-brand-product-reference-${product.id}`}>
+                          Ref: {product.reference}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Tallas disponibles */}
                     {product.sizes && product.sizes.length > 0 && (
@@ -232,9 +222,25 @@ export default function Home() {
                     )}
 
                     {/* Stock */}
-                    <div className="text-xs text-muted-foreground" data-testid={`text-brand-product-stock-${product.id}`}>
+                    <div className="text-xs text-muted-foreground mb-3" data-testid={`text-brand-product-stock-${product.id}`}>
                       {(product.stock || 0) > 0 ? `${product.stock} disponibles` : 'Sin stock'}
                     </div>
+
+                    {/* Botón de Agregar al Carrito */}
+                    <button 
+                      className="w-full bg-primary text-primary-foreground py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={(product.stock || 0) === 0}
+                      onClick={() => {
+                        addItem(product);
+                        toast({
+                          title: "Producto agregado",
+                          description: `${product.name} se agregó al carrito`,
+                        });
+                      }}
+                      data-testid={`button-add-to-cart-brand-${product.id}`}
+                    >
+                      {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar al Carrito'}
+                    </button>
                   </div>
                 </div>
               ))}

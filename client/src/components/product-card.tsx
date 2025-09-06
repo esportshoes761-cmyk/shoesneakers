@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatDiscountedPrice, formatCurrency } from "@/lib/currency";
-import { Star, Edit, Trash2, MessageCircle, ZoomIn } from "lucide-react";
+import { Star, Edit, Trash2, MessageCircle, ZoomIn, ShoppingCart } from "lucide-react";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useCartStore } from "@/lib/cart-store";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -28,6 +28,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     deliveryTime: ""
   });
   const { toast } = useToast();
+  const { addItem } = useCartStore();
 
   // Funciones auxiliares para manejo de imágenes
   const getMainImage = (product: ProductWithCategory): string => {
@@ -61,10 +62,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       return;
     }
     
-    // Calcular precio con descuento si aplica
-    const finalPrice = priceData.discounted;
-    const discountInfo = priceData.savings ? ` (¡Ahorras ${priceData.savings}!)` : '';
-    const totalPrice = formatCurrency(Number(product.price.replace(/[^0-9]/g, '')) * orderForm.quantity);
+    // Sin cálculos de precio - se cotiza por WhatsApp
     
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
@@ -113,18 +111,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     });
   };
 
-  const discountPercentage = product.discountPercentage || 0;
-  const hasDiscount = discountPercentage > 0 && product.originalPrice;
-  
-  // Calcular precios usando las utilidades de moneda
-  const priceData = hasDiscount && product.originalPrice 
-    ? formatDiscountedPrice(product.originalPrice, discountPercentage)
-    : { 
-        discounted: formatCurrency(product.price),
-        original: null,
-        savings: null,
-        discountPercentage: 0
-      };
+  // Remover cálculos de precio - ahora solo se cotiza por WhatsApp
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -151,9 +138,9 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     <div className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
       {/* Badges */}
       <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 flex flex-col gap-1">
-        {product.isFlashSale && discountPercentage > 0 && (
+        {product.isFlashSale && (
           <Badge variant="destructive" className="text-[10px] sm:text-xs font-bold px-1 py-0 sm:px-2 sm:py-1">
-            -{discountPercentage}%
+            ¡OFERTA!
           </Badge>
         )}
         {product.isFeatured && !product.isFlashSale && (
@@ -232,18 +219,39 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
+      {/* Botones de acción */}
+      <div className="flex gap-2 mb-2">
+        <Button 
+          size="sm"
+          variant="outline"
+          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
+          disabled={(product.stock || 0) === 0}
+          onClick={() => {
+            addItem(product);
+            toast({
+              title: "Producto agregado",
+              description: `${product.name} se agregó al carrito`,
+            });
+          }}
+          data-testid={`button-add-to-cart-${product.id}`}
+        >
+          <ShoppingCart className="w-3 h-3 mr-1" />
+          {(product.stock || 0) === 0 ? 'Sin Stock' : 'Al Carrito'}
+        </Button>
+        
+        <Button 
+          size="sm"
+          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
+          disabled={(product.stock || 0) === 0}
+          onClick={() => setIsOrderFormOpen(true)}
+          data-testid={`button-order-product-${product.id}`}
+        >
+          <MessageCircle className="w-3 h-3 mr-1" />
+          {(product.stock || 0) === 0 ? 'Sin Stock' : 'Pedir Ya'}
+        </Button>
+      </div>
+      
       <Dialog open={isOrderFormOpen} onOpenChange={setIsOrderFormOpen}>
-        <DialogTrigger asChild>
-          <Button 
-            size="sm"
-            className="w-full py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
-            disabled={(product.stock || 0) === 0}
-            data-testid={`button-order-product-${product.id}`}
-          >
-            <MessageCircle className="w-3 h-3 mr-1" />
-            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Hacer Pedido'}
-          </Button>
-        </DialogTrigger>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Formulario de Pedido - {product.name}</DialogTitle>
@@ -270,23 +278,19 @@ export default function ProductCard({ product, showManageButton = false }: Produ
               </div>
             </div>
             
-            {/* Información del precio */}
+            {/* Información del producto */}
             <div className="text-center">
-              <span className="text-xl font-bold text-primary">
-                {priceData.discounted}
-              </span>
-              {hasDiscount && priceData.original && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground line-through mr-2">
-                    {priceData.original}
-                  </span>
-                  {priceData.savings && (
-                    <span className="text-green-600 font-semibold">
-                      ¡Ahorras {priceData.savings}!
-                    </span>
-                  )}
-                </div>
+              <h3 className="text-xl font-bold text-primary mb-2">
+                {product.name}
+              </h3>
+              {product.reference && (
+                <p className="text-sm text-muted-foreground">
+                  Referencia: {product.reference}
+                </p>
               )}
+              <p className="text-sm text-muted-foreground mt-2">
+                El precio será cotizado via WhatsApp
+              </p>
             </div>
             
             {/* Formulario de pedido */}
