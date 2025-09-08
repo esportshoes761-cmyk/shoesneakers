@@ -82,6 +82,7 @@ export default function AdminPanel() {
   const [, setLocation] = useLocation();
   
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [imageZoomData, setImageZoomData] = useState<{product: Product; isOpen: boolean} | null>(null);
   const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [brandDialogOpen, setBrandDialogOpen] = useState(false);
@@ -1017,7 +1018,7 @@ export default function AdminPanel() {
                   <div className="space-y-3">
                     {/* Imagen del producto */}
                     {(product.imageUrl || (product.images && product.images.length > 0)) && (
-                      <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                      <div className="aspect-square bg-muted rounded-lg overflow-hidden relative group cursor-pointer">
                         <img 
                           src={(() => {
                             let imageUrl = product.imageUrl || product.images?.[0];
@@ -1027,12 +1028,19 @@ export default function AdminPanel() {
                             return imageUrl;
                           })()} 
                           alt={product.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform hover:scale-105"
+                          onClick={() => setImageZoomData({product, isOpen: true})}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
                           }}
                         />
+                        {/* Zoom icon overlay */}
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <div className="w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg">
+                            <ZoomIn className="w-5 h-5 text-gray-700" />
+                          </div>
+                        </div>
                       </div>
                     )}
                     
@@ -1708,6 +1716,34 @@ export default function AdminPanel() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de zoom para imágenes de productos en admin */}
+      {imageZoomData && (
+        <Dialog open={imageZoomData.isOpen} onOpenChange={(open) => setImageZoomData(open ? imageZoomData : null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+            <DialogHeader>
+              <DialogTitle>{imageZoomData.product.name}</DialogTitle>
+              <DialogDescription>
+                Imagen en detalle del producto - Panel Admin
+              </DialogDescription>
+            </DialogHeader>
+            <div className="relative flex justify-center">
+              <img 
+                src={(() => {
+                  let imageUrl = imageZoomData.product.imageUrl || imageZoomData.product.images?.[0];
+                  if (imageUrl && !imageUrl.startsWith('http')) {
+                    imageUrl = `${window.location.origin}${imageUrl}`;
+                  }
+                  return imageUrl;
+                })()} 
+                alt={imageZoomData.product.name}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                data-testid={`img-admin-zoom-${imageZoomData.product.id}`}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
