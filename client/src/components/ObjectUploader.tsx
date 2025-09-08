@@ -82,22 +82,33 @@ export function ObjectUploader({
 
     setIsUploading(true);
     try {
+      console.log("🚀 Iniciando subida de archivo:", selectedFile.name);
+
       // 1. Obtener URL de subida del backend
       const uploadResponse = await fetch('/api/objects/upload', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         credentials: 'include',
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Error al obtener URL de subida');
+        const errorText = await uploadResponse.text();
+        console.error("❌ Error obteniendo URL de subida:", errorText);
+        throw new Error(`Error del servidor: ${uploadResponse.status} - ${errorText}`);
       }
 
       const { uploadURL } = await uploadResponse.json();
+      console.log("✅ URL de subida obtenida:", uploadURL);
 
       // 2. Subir archivo directamente al almacenamiento
-      console.log("🚀 Intentando subir archivo a:", uploadURL);
-      console.log("🚀 Tipo de archivo:", selectedFile.type);
-      console.log("🚀 Tamaño del archivo:", selectedFile.size);
+      console.log("🚀 Iniciando subida directa al almacenamiento...");
+      console.log("📄 Archivo:", {
+        name: selectedFile.name,
+        type: selectedFile.type,
+        size: selectedFile.size
+      });
       
       const uploadFileResponse = await fetch(uploadURL, {
         method: 'PUT',
@@ -108,30 +119,37 @@ export function ObjectUploader({
       });
 
       if (!uploadFileResponse.ok) {
-        const errorText = await uploadFileResponse.text();
-        console.error("❌ Error en la respuesta de subida:", {
+        let errorText = "";
+        try {
+          errorText = await uploadFileResponse.text();
+        } catch (e) {
+          errorText = "No se pudo obtener detalles del error";
+        }
+        
+        console.error("❌ Error en la subida al almacenamiento:", {
           status: uploadFileResponse.status,
           statusText: uploadFileResponse.statusText,
           errorText: errorText
         });
-        throw new Error(`Error al subir archivo: ${uploadFileResponse.status} - ${errorText}`);
+        
+        throw new Error(`Error al subir al almacenamiento: ${uploadFileResponse.status} ${uploadFileResponse.statusText}`);
       }
       
-      console.log("✅ Archivo subido exitosamente!");
+      console.log("✅ Archivo subido exitosamente al almacenamiento!");
 
-      // 3. Obtener la ruta normalizada del objeto
-      // Extraer el ID del archivo de la URL
+      // 3. Extraer el ID del archivo desde la URL de subida
       const urlObj = new URL(uploadURL);
       const pathParts = urlObj.pathname.split('/');
-      const fileId = pathParts[pathParts.length - 1]; // Último elemento es el ID del archivo
+      const fileId = pathParts[pathParts.length - 1].split('?')[0]; // Remover query params
       const normalizedPath = `/objects/uploads/${fileId}`;
+
+      console.log("🎯 Ruta final normalizada:", normalizedPath);
 
       toast({
         title: "¡Éxito!",
         description: "Imagen subida correctamente",
       });
 
-      console.log("🚀 Llamando onComplete con ruta:", normalizedPath);
       if (onComplete) {
         onComplete(normalizedPath);
       }
@@ -139,11 +157,25 @@ export function ObjectUploader({
       // Limpiar estado
       setSelectedFile(null);
       setPreview(null);
+      
     } catch (error) {
-      console.error('❌ Error completo al subir archivo:', error);
+      console.error('❌ Error completo en la subida:', error);
+      
+      let errorMessage = "Error desconocido al subir la imagen";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = "Error de conexión. Verifica tu internet y vuelve a intentar.";
+        } else if (error.message.includes('NetworkError')) {
+          errorMessage = "Error de red. Verifica tu conexión a internet.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error al subir la imagen",
+        title: "Error al subir imagen",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
