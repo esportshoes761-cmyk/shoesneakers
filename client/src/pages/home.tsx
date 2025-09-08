@@ -433,7 +433,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h5 className="font-bold text-lg mb-4">🚀 FastSniker</h5>
+              <h5 className="font-bold text-lg mb-4">🚀 FastSneaker</h5>
               <p className="text-muted-foreground mb-4">Los mejores zapatos deportivos y casuales con envío rápido y garantía de calidad.</p>
               <div className="flex space-x-4">
                 <i className="fab fa-facebook text-xl text-muted-foreground hover:text-primary cursor-pointer"></i>
@@ -445,7 +445,7 @@ export default function Home() {
             <div>
               <h6 className="font-semibold mb-4">Información</h6>
               <ul className="space-y-2 text-muted-foreground">
-                <li><a href="#" className="hover:text-primary transition-colors">Sobre FastSniker</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Sobre FastSneaker</a></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Calidad Garantizada</a></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Productos Originales</a></li>
               </ul>
@@ -464,7 +464,7 @@ export default function Home() {
           </div>
           
           <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 FastSniker. Todos los derechos reservados.</p>
+            <p>&copy; 2024 FastSneaker. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>

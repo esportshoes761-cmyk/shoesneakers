@@ -76,7 +76,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
 
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
-      `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
+      `👋 ¡Hola! Quiero hacer un pedido de FastSneaker:\n\n` +
       `📝 *DATOS DEL PEDIDO*\n` +
       `👟 *Producto:* ${product.name}\n` +
       `🔖 *Referencia:* ${product.reference || 'Sin referencia'}\n` +

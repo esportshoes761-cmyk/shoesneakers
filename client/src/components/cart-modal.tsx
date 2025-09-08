@@ -89,7 +89,7 @@ export default function CartModal() {
     });
 
     const whatsappMessage = encodeURIComponent(
-      `👋 ¡Hola! Quiero hacer un pedido de FastSniker:\n\n` +
+      `👋 ¡Hola! Quiero hacer un pedido de FastSneaker:\n\n` +
       `📝 *PRODUCTOS SOLICITADOS*\n${productsList}` +
       `📍 *DATOS DE ENTREGA*\n` +
       `👤 *Nombre:* ${checkoutForm.fullName}\n` +
