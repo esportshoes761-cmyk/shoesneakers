@@ -323,15 +323,6 @@ export default function LoginPage({ isAdmin = false, onSuccess }: LoginPageProps
                 </div>
                 
                 {/* Credenciales de prueba */}
-                <div className="text-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-                    📋 Credenciales de administrador:
-                  </p>
-                  <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                    <p><strong>Usuario:</strong> admin</p>
-                    <p><strong>Contraseña:</strong> admin123</p>
-                  </div>
-                </div>
                 
                 <Form {...loginForm}>
                   <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
