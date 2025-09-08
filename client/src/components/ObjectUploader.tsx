@@ -142,6 +142,11 @@ export function ObjectUploader({
           }
         } catch (error) {
           console.error(`❌ Error en intento ${attempt}:`, error);
+          console.error(`❌ Detalles del error:`, {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : 'No stack trace'
+          });
           lastError = error;
           
           if (attempt === maxRetries) {
@@ -154,7 +159,7 @@ export function ObjectUploader({
       }
 
       if (!uploadFileResponse?.ok) {
-        throw new Error(`Error al subir después de ${maxRetries} intentos: ${lastError?.message || 'Error desconocido'}`);
+        throw new Error(`Error al subir después de ${maxRetries} intentos: ${lastError instanceof Error ? lastError.message : 'Error desconocido'}`);
       }
       
       console.log("✅ Archivo subido exitosamente al almacenamiento!");
@@ -187,13 +192,16 @@ export function ObjectUploader({
       
       if (error instanceof Error) {
         if (error.message.includes('Failed to fetch')) {
-          errorMessage = "Error de conexión. Puedes usar una URL directa de imagen como alternativa.";
+          errorMessage = "Error de conexión al almacenamiento. Usa el botón 'Usar URL de Imagen' como alternativa.";
         } else if (error.message.includes('NetworkError')) {
-          errorMessage = "Error de red. Intenta usar una URL directa de imagen.";
+          errorMessage = "Error de red. Usa el botón 'Usar URL de Imagen' para continuar.";
         } else {
           errorMessage = error.message;
         }
       }
+      
+      // Mostrar automáticamente la opción de URL
+      setShowUrlInput(true);
       
       toast({
         title: "Error al subir imagen",
