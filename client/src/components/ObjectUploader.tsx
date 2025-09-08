@@ -102,7 +102,7 @@ export function ObjectUploader({
       const { uploadURL } = await uploadResponse.json();
       console.log("✅ URL de subida obtenida:", uploadURL);
 
-      // 2. Subir archivo directamente al almacenamiento
+      // 2. Subir archivo directamente al almacenamiento con reintentos
       console.log("🚀 Iniciando subida directa al almacenamiento...");
       console.log("📄 Archivo:", {
         name: selectedFile.name,
@@ -110,29 +110,51 @@ export function ObjectUploader({
         size: selectedFile.size
       });
       
-      const uploadFileResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: selectedFile,
-        headers: {
-          'Content-Type': selectedFile.type || 'application/octet-stream',
-        },
-      });
-
-      if (!uploadFileResponse.ok) {
-        let errorText = "";
+      let uploadFileResponse;
+      let lastError;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          errorText = await uploadFileResponse.text();
-        } catch (e) {
-          errorText = "No se pudo obtener detalles del error";
+          console.log(`🔄 Intento ${attempt}/${maxRetries} de subida...`);
+          
+          uploadFileResponse = await fetch(uploadURL, {
+            method: 'PUT',
+            body: selectedFile,
+            headers: {
+              'Content-Type': selectedFile.type || 'application/octet-stream',
+            },
+          });
+
+          if (uploadFileResponse.ok) {
+            console.log("✅ Subida exitosa en intento", attempt);
+            break;
+          } else {
+            console.warn(`⚠️ Intento ${attempt} falló con status:`, uploadFileResponse.status);
+            lastError = new Error(`HTTP ${uploadFileResponse.status}: ${uploadFileResponse.statusText}`);
+            
+            if (attempt === maxRetries) {
+              throw lastError;
+            }
+            
+            // Esperar un poco antes del siguiente intento
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        } catch (error) {
+          console.error(`❌ Error en intento ${attempt}:`, error);
+          lastError = error;
+          
+          if (attempt === maxRetries) {
+            throw lastError;
+          }
+          
+          // Esperar un poco antes del siguiente intento
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
-        
-        console.error("❌ Error en la subida al almacenamiento:", {
-          status: uploadFileResponse.status,
-          statusText: uploadFileResponse.statusText,
-          errorText: errorText
-        });
-        
-        throw new Error(`Error al subir al almacenamiento: ${uploadFileResponse.status} ${uploadFileResponse.statusText}`);
+      }
+
+      if (!uploadFileResponse?.ok) {
+        throw new Error(`Error al subir después de ${maxRetries} intentos: ${lastError?.message || 'Error desconocido'}`);
       }
       
       console.log("✅ Archivo subido exitosamente al almacenamiento!");
@@ -165,9 +187,9 @@ export function ObjectUploader({
       
       if (error instanceof Error) {
         if (error.message.includes('Failed to fetch')) {
-          errorMessage = "Error de conexión. Verifica tu internet y vuelve a intentar.";
+          errorMessage = "Error de conexión. Puedes usar una URL directa de imagen como alternativa.";
         } else if (error.message.includes('NetworkError')) {
-          errorMessage = "Error de red. Verifica tu conexión a internet.";
+          errorMessage = "Error de red. Intenta usar una URL directa de imagen.";
         } else {
           errorMessage = error.message;
         }
