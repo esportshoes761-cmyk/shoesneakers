@@ -4,8 +4,20 @@ import { storage } from "./storage";
 import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema } from "@shared/schema";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { randomBytes } from "crypto";
 
 // Helper functions
+function generateUniqueReference(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  const randomValues = randomBytes(20);
+  
+  for (let i = 0; i < 20; i++) {
+    result += chars[randomValues[i] % chars.length];
+  }
+  
+  return result;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
@@ -243,6 +255,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("🔥 DATOS RECIBIDOS EN BACKEND:", JSON.stringify(req.body, null, 2));
       const productData = insertProductSchema.parse(req.body);
       console.log("🔥 DATOS DESPUÉS DE VALIDAR:", JSON.stringify(productData, null, 2));
+      
+      // Generar referencia única si no se proporciona
+      if (!productData.reference) {
+        let reference = generateUniqueReference();
+        let isUnique = false;
+        let attempts = 0;
+        
+        // Verificar que la referencia sea única (máximo 10 intentos)
+        while (!isUnique && attempts < 10) {
+          const existingProduct = await storage.getProductByReference(reference);
+          if (!existingProduct) {
+            isUnique = true;
+          } else {
+            reference = generateUniqueReference();
+            attempts++;
+          }
+        }
+        
+        if (!isUnique) {
+          return res.status(500).json({ message: "Error generando referencia única" });
+        }
+        
+        productData.reference = reference;
+        console.log("🔥 REFERENCIA GENERADA:", reference);
+      }
+      
       const product = await storage.createProduct(productData);
       console.log("🔥 PRODUCTO CREADO:", JSON.stringify(product, null, 2));
       res.status(201).json(product);

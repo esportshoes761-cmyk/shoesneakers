@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Search } from "lucide-react";
 import CartButton from "./cart-button";
 import CartModal from "./cart-modal";
-import logoImage from "@assets/file_00000000693c61f594344a1f92b67023_1757040378682.png";
+import logoImage from "@assets/file_000000000f14622fbf39449e51c8a12e (1)_1757302271494.png";
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,7 +28,7 @@ export default function Header() {
             <Link href="/admin-login" data-testid="link-admin-access">
               <img 
                 src={logoImage} 
-                alt="FastSniker" 
+                alt="FastSneaker" 
                 className="h-8 sm:h-12 w-auto cursor-pointer hover:scale-105 transition-transform"
               />
             </Link>

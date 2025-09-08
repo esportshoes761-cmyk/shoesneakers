@@ -30,6 +30,7 @@ export interface IStorage {
   getFlashSaleProducts(): Promise<ProductWithCategory[]>;
   getFeaturedProducts(): Promise<ProductWithCategory[]>;
   getProduct(id: string): Promise<ProductWithCategory | undefined>;
+  getProductByReference(reference: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
@@ -499,6 +500,15 @@ export class MemStorage implements IStorage {
       category: product.categoryId ? this.categories.get(product.categoryId) : undefined,
       brand: product.brandId ? this.brands.get(product.brandId) : undefined,
     };
+  }
+
+  async getProductByReference(reference: string): Promise<Product | undefined> {
+    for (const product of this.products.values()) {
+      if (product.reference === reference) {
+        return product;
+      }
+    }
+    return undefined;
   }
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
@@ -1098,6 +1108,11 @@ export class DatabaseStorage implements IStorage {
     .limit(1);
     
     return result[0];
+  }
+
+  async getProductByReference(reference: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.reference, reference));
+    return product;
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
