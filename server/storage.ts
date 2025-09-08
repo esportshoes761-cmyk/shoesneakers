@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings } from "@shared/schema";
+import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { users, categories, brands, products, promotions, events, cartItems, customerSavings } from "@shared/schema";
+import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders } from "@shared/schema";
 import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
 
 export interface IStorage {
@@ -34,6 +34,16 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
+  getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
+
+  // Review methods
+  createReview(review: InsertReview): Promise<Review>;
+  getProductReviews(productId: string): Promise<Review[]>;
+
+  // Order methods
+  createOrder(order: InsertOrder): Promise<Order>;
+  getCustomerOrdersForProduct(customerId: string, productId: string): Promise<Order[]>;
+  updateOrderStatus(orderId: string, status: string): Promise<Order | undefined>;
 
   // Promotion methods
   getPromotions(): Promise<Promotion[]>;
@@ -1320,6 +1330,55 @@ export class DatabaseStorage implements IStorage {
     return await this.updateCustomerSavings(customerId, {
       totalSaved: newTotal.toString()
     });
+  }
+
+  // Review methods
+  async createReview(review: InsertReview): Promise<Review> {
+    const [newReview] = await db.insert(reviews).values(review).returning();
+    return newReview;
+  }
+
+  async getProductReviews(productId: string): Promise<Review[]> {
+    return await db.select().from(reviews)
+      .where(eq(reviews.productId, productId))
+      .orderBy(reviews.createdAt);
+  }
+
+  async getProductWithReviews(id: string): Promise<ProductWithReviews | undefined> {
+    const product = await this.getProduct(id);
+    if (!product) {
+      return undefined;
+    }
+
+    const productReviews = await this.getProductReviews(id);
+    
+    return {
+      ...product,
+      reviews: productReviews,
+    };
+  }
+
+  // Order methods
+  async createOrder(order: InsertOrder): Promise<Order> {
+    const [newOrder] = await db.insert(orders).values(order).returning();
+    return newOrder;
+  }
+
+  async getCustomerOrdersForProduct(customerId: string, productId: string): Promise<Order[]> {
+    return await db.select().from(orders)
+      .where(and(
+        eq(orders.customerId, customerId),
+        eq(orders.productId, productId)
+      ))
+      .orderBy(orders.createdAt);
+  }
+
+  async updateOrderStatus(orderId: string, status: string): Promise<Order | undefined> {
+    const [updatedOrder] = await db.update(orders)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updatedOrder;
   }
 }
 

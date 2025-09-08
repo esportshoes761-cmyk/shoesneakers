@@ -127,6 +127,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Product details with reviews
+  app.get("/api/products/:id/details", async (req, res) => {
+    try {
+      const productWithReviews = await storage.getProductWithReviews(req.params.id);
+      if (!productWithReviews) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(productWithReviews);
+    } catch (error) {
+      console.error("Error fetching product details:", error);
+      res.status(500).json({ message: "Error fetching product details" });
+    }
+  });
+
+  // Reviews endpoints
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      const review = await storage.createReview(req.body);
+      res.status(201).json(review);
+    } catch (error) {
+      console.error("Error creating review:", error);
+      res.status(500).json({ message: "Error creating review" });
+    }
+  });
+
+  app.get("/api/products/:productId/reviews", async (req, res) => {
+    try {
+      const reviews = await storage.getProductReviews(req.params.productId);
+      res.json(reviews);
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+      res.status(500).json({ message: "Error fetching reviews" });
+    }
+  });
+
+  // Orders endpoints  
+  app.post("/api/orders", async (req, res) => {
+    try {
+      const order = await storage.createOrder(req.body);
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating order:", error);
+      res.status(500).json({ message: "Error creating order" });
+    }
+  });
+
+  app.get("/api/orders/customer/:customerId/product/:productId", async (req, res) => {
+    try {
+      const orders = await storage.getCustomerOrdersForProduct(
+        req.params.customerId, 
+        req.params.productId
+      );
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching customer orders:", error);
+      res.status(500).json({ message: "Error fetching customer orders" });
+    }
+  });
+
+  app.put("/api/orders/:id/status", async (req, res) => {
+    try {
+      const { status } = req.body;
+      const order = await storage.updateOrderStatus(req.params.id, status);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      res.status(500).json({ message: "Error updating order status" });
+    }
+  });
+
   app.get("/api/brands/:id", async (req, res) => {
     try {
       const brand = await storage.getBrand(req.params.id);

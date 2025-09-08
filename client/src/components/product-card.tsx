@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCartStore } from "@/lib/cart-store";
+import { useLocation } from "wouter";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -30,6 +31,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   });
   const { toast } = useToast();
   const { addItem } = useCartStore();
+  const [, navigate] = useLocation();
 
   // Funciones auxiliares para manejo de imágenes
   const getMainImage = (product: ProductWithCategory): string => {
@@ -165,8 +167,24 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return stars;
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Evitar navegación si se hace clic en botones o imagen
+    const target = e.target as HTMLElement;
+    const isButton = target.closest('button') !== null;
+    const isImage = target.closest('img') !== null;
+    const isImageOverlay = target.closest('[data-zoom-overlay]') !== null;
+    
+    if (!isButton && !isImage && !isImageOverlay) {
+      navigate(`/product/${product.id}`);
+    }
+  };
+
   return (
-    <div className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
+    <div 
+      className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg cursor-pointer" 
+      data-testid={`card-product-${product.id}`}
+      onClick={handleCardClick}
+    >
       {/* Badges */}
       <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 flex flex-col gap-1">
         {product.isFlashSale && (
@@ -213,6 +231,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         {/* Zoom icon overlay */}
         <div 
           className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+          data-zoom-overlay="true"
           onClick={() => setIsImageZoomOpen(true)}
         >
           <div className="w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg">

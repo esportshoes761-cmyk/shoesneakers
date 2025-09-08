@@ -8,6 +8,7 @@ import SellerDashboard from "@/pages/seller-dashboard";
 import AdminPanel from "@/pages/admin";
 import LoginPage from "@/pages/login";
 import CheckoutPage from "@/pages/checkout";
+import ProductDetails from "@/pages/product-details";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/seller" component={SellerDashboard} />
       <Route path="/admin" component={AdminPanel} />
       <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/product/:id" component={ProductDetails} />
       <Route path="/admin-login" component={() => <LoginPage isAdmin={true} />} />
       <Route component={NotFound} />
     </Switch>
