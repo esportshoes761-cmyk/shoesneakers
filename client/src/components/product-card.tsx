@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Star, Edit, Trash2, MessageCircle, ZoomIn, ShoppingCart } from "lucide-react";
+import { Star, Edit, Trash2, MessageCircle, ZoomIn, ShoppingCart, StarIcon } from "lucide-react";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ interface ProductCardProps {
 export default function ProductCard({ product, showManageButton = false }: ProductCardProps) {
   const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
   const [isImageZoomOpen, setIsImageZoomOpen] = useState(false);
+  const [userRating, setUserRating] = useState(0);
   const [orderForm, setOrderForm] = useState({
     fullName: "",
     address: "",
@@ -145,6 +146,25 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     return stars;
   };
 
+  const renderInteractiveStars = (currentRating: number, onRatingChange: (rating: number) => void) => {
+    const stars = [];
+    
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <Star 
+          key={i}
+          className={`w-5 h-5 cursor-pointer transition-colors hover:text-yellow-400 ${
+            i <= currentRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300 hover:fill-yellow-400/50'
+          }`}
+          onClick={() => onRatingChange(i)}
+          data-testid={`star-${i}-${product.id}`}
+        />
+      );
+    }
+    
+    return stars;
+  };
+
   return (
     <div className="product-card bg-card border border-border rounded-lg p-2 sm:p-4 relative transition-all duration-300 hover:shadow-lg" data-testid={`card-product-${product.id}`}>
       {/* Badges */}
@@ -225,6 +245,26 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           ({product.reviewCount || 0})
         </span>
       </div>
+
+      {/* Sección de calificación para clientes */}
+      {!showManageButton && (
+        <div className="mb-3 sm:mb-4 p-2 bg-muted/30 rounded-lg">
+          <p className="text-xs sm:text-sm font-medium mb-2">¿Cómo calificarías este producto?</p>
+          <div className="flex items-center gap-2">
+            <div className="flex">
+              {renderInteractiveStars(userRating, setUserRating)}
+            </div>
+            {userRating > 0 && (
+              <span className="text-xs text-muted-foreground">
+                ({userRating} estrella{userRating > 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+          {userRating > 0 && (
+            <p className="text-xs text-green-600 mt-1">¡Gracias por tu calificación!</p>
+          )}
+        </div>
+      )}
 
       {product.stock !== undefined && (
         <div className="text-[10px] sm:text-xs text-muted-foreground mb-1 sm:mb-2" data-testid={`text-stock-${product.id}`}>

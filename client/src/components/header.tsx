@@ -21,15 +21,15 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-lg border-b border-border">
+    <header className="sticky top-0 z-50 bg-gradient-to-r from-white via-blue-50 to-white shadow-xl border-b-2 border-primary/20">
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-        <div className="flex items-center justify-between h-12 sm:h-16">
+        <div className="flex items-center justify-between h-14 sm:h-20">
           <div className="flex items-center space-x-2 sm:space-x-4">
             <Link href="/admin-login" data-testid="link-admin-access">
               <img 
                 src={logoImage} 
                 alt="FastSneaker" 
-                className="h-8 sm:h-12 w-auto cursor-pointer hover:scale-105 transition-transform opacity-30"
+                className="h-10 sm:h-16 w-auto cursor-pointer hover:scale-110 transition-all duration-300 drop-shadow-lg"
               />
             </Link>
             <div className="hidden lg:block">
