@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBrandSchema } from "@shared/schema";
-import type { Product, Promotion, Event, Category, Brand } from "@shared/schema";
+import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star } from "lucide-react";
@@ -117,7 +117,7 @@ export default function AdminPanel() {
   const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
   const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/with-products"] });
 
   // Formularios
   const productForm = useForm<ProductFormData>({
@@ -1275,6 +1275,15 @@ export default function AdminPanel() {
                   {brand.description && (
                     <p className="text-xs sm:text-sm text-muted-foreground mb-2">{brand.description}</p>
                   )}
+                  
+                  {/* Mostrar conteo de productos */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Package className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+                    <span className="text-xs sm:text-sm text-muted-foreground" data-testid={`text-brand-product-count-${brand.id}`}>
+                      {brand.productCount || 0} productos asignados
+                    </span>
+                  </div>
+                  
                   {brand.catalogUrl && (
                     <p className="text-xs text-blue-600 truncate">
                       <a href={brand.catalogUrl} target="_blank" rel="noopener noreferrer">
