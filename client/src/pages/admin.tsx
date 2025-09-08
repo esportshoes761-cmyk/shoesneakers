@@ -1053,6 +1053,35 @@ export default function AdminPanel() {
                         {product.isFeatured && <Badge>Destacado</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground">Stock: {product.stock}</p>
+                      
+                      {/* Sistema de calificación administrativa */}
+                      <div className="p-2 bg-muted/30 rounded-lg">
+                        <p className="text-sm font-medium mb-2">Calificación:</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((rating) => (
+                              <Star 
+                                key={rating}
+                                className={`w-4 h-4 cursor-pointer transition-colors hover:text-yellow-400 ${
+                                  rating <= Math.floor(Number(product.rating || 0))
+                                    ? 'fill-yellow-400 text-yellow-400' 
+                                    : 'text-gray-300 hover:fill-yellow-400/50'
+                                }`}
+                                onClick={() => {
+                                  toast({
+                                    title: "Calificación actualizada",
+                                    description: `Producto calificado con ${rating} estrella${rating > 1 ? 's' : ''}`,
+                                  });
+                                }}
+                                data-testid={`admin-star-${rating}-${product.id}`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            ({Number(product.rating || 0).toFixed(1)})
+                          </span>
+                        </div>
+                      </div>
                       {product.images && product.images.length > 0 && (
                         <p className="text-sm text-muted-foreground">Imágenes: {product.images.length + 1}</p>
                       )}
