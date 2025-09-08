@@ -128,6 +128,37 @@ export const customerSavings = pgTable("customer_savings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const reviews = pgTable("reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  customerId: varchar("customer_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  rating: integer("rating").notNull(), // 1-5 estrellas
+  comment: text("comment"),
+  isVerified: boolean("is_verified").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerAddress: text("customer_address").notNull(),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  quantity: integer("quantity").default(1),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }),
+  status: text("status").notNull().default("confirmed"), // 'confirmed', 'picked_up', 'in_transit', 'delivered'
+  deliveryTime: text("delivery_time"),
+  notes: text("notes"),
+  whatsappSent: boolean("whatsapp_sent").default(true),
+  trackingNumber: text("tracking_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -184,6 +215,17 @@ export const insertCartItemSchema = createInsertSchema(cartItems).omit({
   createdAt: true,
 });
 
+export const insertReviewSchema = createInsertSchema(reviews).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -224,6 +266,22 @@ export type BrandWithProducts = Brand & {
   productCount: number;
 };
 
+export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type Review = typeof reviews.$inferSelect;
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof orders.$inferSelect;
+
 export type CartItemWithProduct = CartItem & {
+  product: Product;
+};
+
+export type ProductWithReviews = Product & {
+  reviews?: Review[];
+  category?: Category;
+  brand?: Brand;
+};
+
+export type OrderWithProduct = Order & {
   product: Product;
 };
