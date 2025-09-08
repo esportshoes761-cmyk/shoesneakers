@@ -269,11 +269,11 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       )}
       
       {/* Botones de acción */}
-      <div className="flex gap-2 mb-2">
+      <div className="flex gap-2 mb-2 w-full">
         <Button 
           size="sm"
           variant="outline"
-          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
+          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0 max-w-[48%]"
           disabled={(product.stock || 0) === 0}
           onClick={() => {
             addItem(product);
@@ -285,18 +285,18 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           data-testid={`button-add-to-cart-${product.id}`}
         >
           <ShoppingCart className="w-3 h-3 mr-1" />
-          {(product.stock || 0) === 0 ? 'Sin Stock' : 'Al Carrito'}
+          <span className="truncate">{(product.stock || 0) === 0 ? 'Sin Stock' : 'Al Carrito'}</span>
         </Button>
         
         <Button 
           size="sm"
-          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto"
+          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0 max-w-[48%]"
           disabled={(product.stock || 0) === 0}
           onClick={() => setIsOrderFormOpen(true)}
           data-testid={`button-order-product-${product.id}`}
         >
           <MessageCircle className="w-3 h-3 mr-1" />
-          {(product.stock || 0) === 0 ? 'Sin Stock' : 'Pedir Ya'}
+          <span className="truncate">{(product.stock || 0) === 0 ? 'Sin Stock' : 'Pedir Ya'}</span>
         </Button>
       </div>
       
