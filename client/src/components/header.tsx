@@ -29,7 +29,7 @@ export default function Header() {
               <img 
                 src={logoImage} 
                 alt="FastSneaker" 
-                className="h-8 sm:h-12 w-auto cursor-pointer hover:scale-105 transition-transform"
+                className="h-8 sm:h-12 w-auto cursor-pointer hover:scale-105 transition-transform opacity-30"
               />
             </Link>
             <div className="hidden lg:block">
