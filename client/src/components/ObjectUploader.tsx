@@ -82,95 +82,45 @@ export function ObjectUploader({
 
     setIsUploading(true);
     try {
-      console.log("🚀 Iniciando subida de archivo:", selectedFile.name);
+      console.log("🚀 Iniciando subida directa de archivo:", selectedFile.name);
 
-      // 1. Obtener URL de subida del backend
-      const uploadResponse = await fetch('/api/objects/upload', {
+      // Convertir archivo a base64
+      const reader = new FileReader();
+      const fileDataPromise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Error al leer archivo'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Error al leer archivo'));
+        reader.readAsDataURL(selectedFile);
+      });
+
+      const fileData = await fileDataPromise;
+      
+      // Subir directamente al servidor
+      const uploadResponse = await fetch('/api/objects/upload-direct', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        body: JSON.stringify({
+          imageData: fileData,
+          fileName: selectedFile.name,
+          mimeType: selectedFile.type
+        }),
       });
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
-        console.error("❌ Error obteniendo URL de subida:", errorText);
-        throw new Error(`Error del servidor: ${uploadResponse.status} - ${errorText}`);
+        console.error("❌ Error en subida directa:", errorText);
+        throw new Error(`Error del servidor: ${uploadResponse.status}`);
       }
 
-      const { uploadURL } = await uploadResponse.json();
-      console.log("✅ URL de subida obtenida:", uploadURL);
-
-      // 2. Subir archivo directamente al almacenamiento con reintentos
-      console.log("🚀 Iniciando subida directa al almacenamiento...");
-      console.log("📄 Archivo:", {
-        name: selectedFile.name,
-        type: selectedFile.type,
-        size: selectedFile.size
-      });
-      
-      let uploadFileResponse;
-      let lastError;
-      const maxRetries = 3;
-      
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          console.log(`🔄 Intento ${attempt}/${maxRetries} de subida...`);
-          
-          uploadFileResponse = await fetch(uploadURL, {
-            method: 'PUT',
-            body: selectedFile,
-            headers: {
-              'Content-Type': selectedFile.type || 'application/octet-stream',
-            },
-          });
-
-          if (uploadFileResponse.ok) {
-            console.log("✅ Subida exitosa en intento", attempt);
-            break;
-          } else {
-            console.warn(`⚠️ Intento ${attempt} falló con status:`, uploadFileResponse.status);
-            lastError = new Error(`HTTP ${uploadFileResponse.status}: ${uploadFileResponse.statusText}`);
-            
-            if (attempt === maxRetries) {
-              throw lastError;
-            }
-            
-            // Esperar un poco antes del siguiente intento
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
-        } catch (error) {
-          console.error(`❌ Error en intento ${attempt}:`, error);
-          console.error(`❌ Detalles del error:`, {
-            name: error instanceof Error ? error.name : 'Unknown',
-            message: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : 'No stack trace'
-          });
-          lastError = error;
-          
-          if (attempt === maxRetries) {
-            throw lastError;
-          }
-          
-          // Esperar un poco antes del siguiente intento
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-      }
-
-      if (!uploadFileResponse?.ok) {
-        throw new Error(`Error al subir después de ${maxRetries} intentos: ${lastError instanceof Error ? lastError.message : 'Error desconocido'}`);
-      }
-      
-      console.log("✅ Archivo subido exitosamente al almacenamiento!");
-
-      // 3. Extraer el ID del archivo desde la URL de subida
-      const urlObj = new URL(uploadURL);
-      const pathParts = urlObj.pathname.split('/');
-      const fileId = pathParts[pathParts.length - 1].split('?')[0]; // Remover query params
-      const normalizedPath = `/objects/uploads/${fileId}`;
-
-      console.log("🎯 Ruta final normalizada:", normalizedPath);
+      const { imageUrl } = await uploadResponse.json();
+      console.log("✅ Imagen subida exitosamente:", imageUrl);
 
       toast({
         title: "¡Éxito!",
@@ -178,7 +128,7 @@ export function ObjectUploader({
       });
 
       if (onComplete) {
-        onComplete(normalizedPath);
+        onComplete(imageUrl);
       }
 
       // Limpiar estado
@@ -186,26 +136,20 @@ export function ObjectUploader({
       setPreview(null);
       
     } catch (error) {
-      console.error('❌ Error completo en la subida:', error);
+      console.error('❌ Error en la subida:', error);
       
-      let errorMessage = "Error desconocido al subir la imagen";
+      let errorMessage = "Error al subir la imagen";
       
       if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage = "Error de conexión al almacenamiento. Usa el botón 'Usar URL de Imagen' como alternativa.";
-        } else if (error.message.includes('NetworkError')) {
-          errorMessage = "Error de red. Usa el botón 'Usar URL de Imagen' para continuar.";
-        } else {
-          errorMessage = error.message;
-        }
+        errorMessage = error.message;
       }
       
-      // Mostrar automáticamente la opción de URL
+      // Mostrar automáticamente la opción de URL como respaldo
       setShowUrlInput(true);
       
       toast({
         title: "Error al subir imagen",
-        description: errorMessage,
+        description: errorMessage + ". Puedes usar una URL de imagen como alternativa.",
         variant: "destructive",
       });
     } finally {

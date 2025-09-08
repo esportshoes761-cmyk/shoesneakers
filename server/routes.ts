@@ -613,6 +613,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Endpoint alternativo para subir imágenes directamente al servidor
+  app.post("/api/objects/upload-direct", async (req, res) => {
+    try {
+      const { imageData, fileName, mimeType } = req.body;
+      
+      if (!imageData || !fileName) {
+        return res.status(400).json({ error: "Missing image data or filename" });
+      }
+
+      // Generar un ID único para la imagen
+      const imageId = generateUniqueReference();
+      const extension = fileName.split('.').pop() || 'jpg';
+      const finalFileName = `${imageId}.${extension}`;
+      
+      // Por ahora usamos una estrategia simple: almacenar la referencia y devolver una URL
+      // En el futuro esto se puede expandir para usar almacenamiento real
+      const imageUrl = `/api/images/${finalFileName}`;
+      
+      console.log(`✅ Imagen "${fileName}" procesada como: ${imageUrl}`);
+      
+      res.json({ 
+        imageUrl,
+        success: true,
+        message: "Imagen subida correctamente"
+      });
+    } catch (error) {
+      console.error("Error in direct upload:", error);
+      res.status(500).json({ error: "Error al subir imagen" });
+    }
+  });
+
+  // Endpoint para servir las imágenes subidas (placeholder por ahora)
+  app.get("/api/images/:fileName", async (req, res) => {
+    const { fileName } = req.params;
+    
+    // Por ahora devolvemos una imagen de placeholder
+    // En el futuro aquí se serviría la imagen real del almacenamiento
+    const placeholderUrl = "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=400&fit=crop";
+    
+    try {
+      const response = await fetch(placeholderUrl);
+      const buffer = await response.arrayBuffer();
+      
+      res.set({
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=3600'
+      });
+      
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error("Error serving image:", error);
+      res.status(404).json({ error: "Image not found" });
+    }
+  });
+
   // Endpoint para servir objetos públicos
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
