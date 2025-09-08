@@ -192,7 +192,9 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         
         {/* Zoom icon overlay */}
         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <ZoomIn className="w-6 h-6 text-white" />
+          <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+            🔍
+          </div>
         </div>
         
         {/* Indicador de múltiples imágenes */}
