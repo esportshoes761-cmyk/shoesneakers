@@ -5,6 +5,8 @@ import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, inser
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { randomBytes } from "crypto";
+import * as fs from "fs-extra";
+import * as path from "path";
 
 // Helper functions
 function generateUniqueReference(): string {
@@ -20,6 +22,15 @@ function generateUniqueReference(): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Crear directorio para las imágenes si no existe
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  await fs.ensureDir(uploadsDir);
+  
+  // Límites de la aplicación
+  const LIMITS = {
+    MAX_PRODUCTS: 1000000,
+    MAX_IMAGES: 1000000
+  };
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -326,6 +337,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", async (req, res) => {
     try {
       console.log("🔥 DATOS RECIBIDOS EN BACKEND:", JSON.stringify(req.body, null, 2));
+      
+      // Verificar límite de productos
+      const existingProducts = await storage.getAllProducts();
+      if (existingProducts.length >= LIMITS.MAX_PRODUCTS) {
+        return res.status(400).json({ 
+          message: `Límite alcanzado: máximo ${LIMITS.MAX_PRODUCTS.toLocaleString()} productos permitidos`
+        });
+      }
+      
       const productData = insertProductSchema.parse(req.body);
       console.log("🔥 DATOS DESPUÉS DE VALIDAR:", JSON.stringify(productData, null, 2));
       
@@ -622,16 +642,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing image data or filename" });
       }
 
+      // Verificar límite de imágenes
+      const existingImages = await fs.readdir(uploadsDir).catch(() => []);
+      if (existingImages.length >= LIMITS.MAX_IMAGES) {
+        return res.status(400).json({ error: `Límite alcanzado: máximo ${LIMITS.MAX_IMAGES.toLocaleString()} imágenes permitidas` });
+      }
+
+      // Procesar los datos de la imagen
+      const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+
       // Generar un ID único para la imagen
       const imageId = generateUniqueReference();
       const extension = fileName.split('.').pop() || 'jpg';
       const finalFileName = `${imageId}.${extension}`;
+      const filePath = path.join(uploadsDir, finalFileName);
       
-      // Por ahora usamos una estrategia simple: almacenar la referencia y devolver una URL
-      // En el futuro esto se puede expandir para usar almacenamiento real
+      // Guardar la imagen físicamente
+      await fs.writeFile(filePath, buffer);
+      
       const imageUrl = `/api/images/${finalFileName}`;
       
-      console.log(`✅ Imagen "${fileName}" procesada como: ${imageUrl}`);
+      console.log(`✅ Imagen "${fileName}" guardada físicamente como: ${imageUrl}`);
       
       res.json({ 
         imageUrl,
@@ -644,27 +676,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint para servir las imágenes subidas (placeholder por ahora)
+  // Endpoint para servir las imágenes subidas
   app.get("/api/images/:fileName", async (req, res) => {
-    const { fileName } = req.params;
-    
-    // Por ahora devolvemos una imagen de placeholder
-    // En el futuro aquí se serviría la imagen real del almacenamiento
-    const placeholderUrl = "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=400&fit=crop";
-    
     try {
-      const response = await fetch(placeholderUrl);
-      const buffer = await response.arrayBuffer();
+      const { fileName } = req.params;
+      const filePath = path.join(uploadsDir, fileName);
       
-      res.set({
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=3600'
-      });
+      // Verificar que el archivo existe
+      if (!(await fs.pathExists(filePath))) {
+        return res.status(404).json({ error: "Imagen no encontrada" });
+      }
       
-      res.send(Buffer.from(buffer));
+      // Servir la imagen
+      res.sendFile(path.resolve(filePath));
     } catch (error) {
       console.error("Error serving image:", error);
-      res.status(404).json({ error: "Image not found" });
+      res.status(500).json({ error: "Error al servir imagen" });
     }
   });
 
