@@ -43,7 +43,10 @@ export interface IStorage {
   // Order methods
   createOrder(order: InsertOrder): Promise<Order>;
   getCustomerOrdersForProduct(customerId: string, productId: string): Promise<Order[]>;
-  updateOrderStatus(orderId: string, status: string): Promise<Order | undefined>;
+  updateOrderStatus(orderId: string, updateData: { status?: string; deliveryTime?: string; notes?: string }): Promise<Order | undefined>;
+  getOrdersByCustomerId(customerId: string): Promise<Order[]>;
+  getOrdersByTrackingNumber(trackingNumber: string): Promise<Order[]>;
+  getAllOrders(): Promise<Order[]>;
 
   // Promotion methods
   getPromotions(): Promise<Promotion[]>;
@@ -1373,12 +1376,39 @@ export class DatabaseStorage implements IStorage {
       .orderBy(orders.createdAt);
   }
 
-  async updateOrderStatus(orderId: string, status: string): Promise<Order | undefined> {
+  async updateOrderStatus(orderId: string, updateData: { status?: string; deliveryTime?: string; notes?: string }): Promise<Order | undefined> {
     const [updatedOrder] = await db.update(orders)
-      .set({ status, updatedAt: new Date() })
+      .set({ 
+        ...(updateData.status && { status: updateData.status }),
+        ...(updateData.deliveryTime && { deliveryTime: updateData.deliveryTime }),
+        ...(updateData.notes && { notes: updateData.notes }),
+        updatedAt: new Date() 
+      })
       .where(eq(orders.id, orderId))
       .returning();
     return updatedOrder;
+  }
+
+  async getOrdersByCustomerId(customerId: string): Promise<Order[]> {
+    const orderList = await db.select()
+      .from(orders)
+      .where(eq(orders.customerId, customerId))
+      .orderBy(orders.createdAt);
+    return orderList;
+  }
+
+  async getOrdersByTrackingNumber(trackingNumber: string): Promise<Order[]> {
+    const orderList = await db.select()
+      .from(orders)
+      .where(eq(orders.trackingNumber, trackingNumber));
+    return orderList;
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    const orderList = await db.select()
+      .from(orders)
+      .orderBy(orders.createdAt);
+    return orderList;
   }
 }
 

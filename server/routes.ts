@@ -668,6 +668,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API para seguimiento de pedidos - buscar por ID de cliente
+  app.get("/api/orders/customer/:customerId", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+      const orders = await storage.getOrdersByCustomerId(customerId);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching orders by customer ID:", error);
+      res.status(500).json({ error: "Error al buscar pedidos" });
+    }
+  });
+
+  // API para seguimiento de pedidos - buscar por número de tracking
+  app.get("/api/orders/tracking/:trackingNumber", async (req, res) => {
+    try {
+      const { trackingNumber } = req.params;
+      const orders = await storage.getOrdersByTrackingNumber(trackingNumber);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching orders by tracking number:", error);
+      res.status(500).json({ error: "Error al buscar pedido" });
+    }
+  });
+
+  // API para actualizar estado de pedido (solo para admin)
+  app.put("/api/orders/:orderId/status", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status, deliveryTime, notes } = req.body;
+      
+      // Validar estados permitidos
+      const validStatuses = ['confirmed', 'picked_up', 'in_transit', 'delivered'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Estado inválido" });
+      }
+
+      const updatedOrder = await storage.updateOrderStatus(orderId, { status, deliveryTime, notes });
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      res.status(500).json({ error: "Error al actualizar estado del pedido" });
+    }
+  });
+
+  // API para obtener todos los pedidos (para admin)
+  app.get("/api/orders/admin/all", async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching all orders:", error);
+      res.status(500).json({ error: "Error al obtener pedidos" });
+    }
+  });
+
   // Endpoint para servir objetos públicos
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
