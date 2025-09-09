@@ -1285,17 +1285,9 @@ export default function AdminPanel() {
                   <div className="flex items-center gap-2 mb-2">
                     <Package className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
                     <span className="text-xs sm:text-sm text-muted-foreground" data-testid={`text-brand-product-count-${brand.id}`}>
-                      {brand.productCount || 0} productos asignados
+                      {brand.productCount || 0} productos en la tienda
                     </span>
                   </div>
-                  
-                  {brand.catalogUrl && (
-                    <p className="text-xs text-blue-600 truncate">
-                      <a href={brand.catalogUrl} target="_blank" rel="noopener noreferrer">
-                        Ver catálogo →
-                      </a>
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             ))}
