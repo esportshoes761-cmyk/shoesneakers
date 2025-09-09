@@ -339,7 +339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("🔥 DATOS RECIBIDOS EN BACKEND:", JSON.stringify(req.body, null, 2));
       
       // Verificar límite de productos
-      const existingProducts = await storage.getAllProducts();
+      const existingProducts = await storage.getProducts();
       if (existingProducts.length >= LIMITS.MAX_PRODUCTS) {
         return res.status(400).json({ 
           message: `Límite alcanzado: máximo ${LIMITS.MAX_PRODUCTS.toLocaleString()} productos permitidos`
