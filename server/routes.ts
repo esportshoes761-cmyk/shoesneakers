@@ -636,27 +636,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint alternativo para subir imágenes directamente al servidor
   app.post("/api/objects/upload-direct", async (req, res) => {
     try {
+      console.log("🔥 INICIANDO UPLOAD - Body keys:", Object.keys(req.body));
+      console.log("🔥 UPLOADS DIR:", uploadsDir);
+      
       const { imageData, fileName, mimeType } = req.body;
       
       if (!imageData || !fileName) {
+        console.log("🔥 ERROR: Missing data - imageData:", !!imageData, "fileName:", !!fileName);
         return res.status(400).json({ error: "Missing image data or filename" });
       }
 
-      // Verificar límite de imágenes
-      const existingImages = await fs.readdir(uploadsDir).catch(() => []);
+      console.log("🔥 VALIDATING FILE:", fileName);
+
+      // Verificar límite de imágenes (simplificado)
+      let existingImages = [];
+      try {
+        existingImages = await fs.readdir(uploadsDir);
+        console.log("🔥 EXISTING IMAGES COUNT:", existingImages.length);
+      } catch (dirError) {
+        console.log("🔥 DIR READ ERROR:", dirError.message);
+        // Si no existe el directorio, continuar
+      }
+      
       if (existingImages.length >= LIMITS.MAX_IMAGES) {
         return res.status(400).json({ error: `Límite alcanzado: máximo ${LIMITS.MAX_IMAGES.toLocaleString()} imágenes permitidas` });
       }
 
+      console.log("🔥 PROCESSING BASE64 DATA");
       // Procesar los datos de la imagen
       const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
       const buffer = Buffer.from(base64Data, 'base64');
+      console.log("🔥 BUFFER SIZE:", buffer.length);
 
       // Generar un ID único para la imagen
       const imageId = generateUniqueReference();
       const extension = fileName.split('.').pop() || 'jpg';
       const finalFileName = `${imageId}.${extension}`;
       const filePath = path.join(uploadsDir, finalFileName);
+      
+      console.log("🔥 SAVING TO:", filePath);
       
       // Guardar la imagen físicamente
       await fs.writeFile(filePath, buffer);
@@ -671,8 +689,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Imagen subida correctamente"
       });
     } catch (error) {
-      console.error("Error in direct upload:", error);
-      res.status(500).json({ error: "Error al subir imagen" });
+      console.error("🔥 ERROR DETALLADO EN UPLOAD:", error);
+      console.error("🔥 ERROR STACK:", error.stack);
+      res.status(500).json({ error: "Error al subir imagen: " + error.message });
     }
   });
 
