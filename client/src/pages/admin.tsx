@@ -18,7 +18,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -87,6 +87,8 @@ export default function AdminPanel() {
   const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [brandDialogOpen, setBrandDialogOpen] = useState(false);
+  const [brandProductsDialogOpen, setBrandProductsDialogOpen] = useState(false);
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
 
   // Check de autenticación
   useEffect(() => {
@@ -119,6 +121,12 @@ export default function AdminPanel() {
   const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/with-products"] });
+  
+  // Query para productos de una marca específica
+  const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products", { brands: selectedBrandId }],
+    enabled: !!selectedBrandId && brandProductsDialogOpen,
+  });
 
   // Formularios
   const productForm = useForm<ProductFormData>({
@@ -1288,6 +1296,23 @@ export default function AdminPanel() {
                       {brand.productCount || 0} productos en la tienda
                     </span>
                   </div>
+                  
+                  {/* Botón para ver productos */}
+                  {(brand.productCount || 0) > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2 text-xs"
+                      onClick={() => {
+                        setSelectedBrandId(brand.id);
+                        setBrandProductsDialogOpen(true);
+                      }}
+                      data-testid={`button-view-brand-products-${brand.id}`}
+                    >
+                      <Eye className="w-3 h-3 mr-1" />
+                      Ver Productos
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -1298,6 +1323,104 @@ export default function AdminPanel() {
         <TabsContent value="orders" className="space-y-2 sm:space-y-4">
           <AdminOrders />
         </TabsContent>
+
+        {/* Modal para ver productos de una marca */}
+        <Dialog open={brandProductsDialogOpen} onOpenChange={setBrandProductsDialogOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Productos de {brands.find(b => b.id === selectedBrandId)?.name || 'la marca'}
+              </DialogTitle>
+              <DialogDescription>
+                Lista de todos los productos asignados a esta marca
+              </DialogDescription>
+            </DialogHeader>
+            
+            {brandProductsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3" />
+                <span>Cargando productos...</span>
+              </div>
+            ) : brandProducts.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="font-semibold mb-2">No hay productos</h3>
+                <p className="text-sm text-gray-600">
+                  Esta marca no tiene productos asignados aún.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                {brandProducts.map((product) => (
+                  <Card key={product.id} className="relative">
+                    <CardHeader className="pb-3">
+                      <div className="aspect-square bg-muted rounded-lg overflow-hidden mb-3">
+                        {product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <Package className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <CardTitle className="text-sm line-clamp-2">{product.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {product.description && (
+                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                          {product.description}
+                        </p>
+                      )}
+                      
+                      <div className="space-y-2">
+                        {product.reference && (
+                          <div className="text-xs">
+                            <span className="font-medium">Ref:</span> {product.reference}
+                          </div>
+                        )}
+                        
+                        {product.stock !== undefined && (
+                          <div className="text-xs">
+                            <span className="font-medium">Stock:</span> {product.stock}
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center gap-2">
+                          {product.isFlashSale && (
+                            <Badge variant="destructive" className="text-xs">
+                              ¡OFERTA!
+                            </Badge>
+                          )}
+                          {product.isFeatured && (
+                            <Badge className="text-xs">
+                              Destacado
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setBrandProductsDialogOpen(false)}
+              >
+                Cerrar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Panel de Promociones - Manteniendo el código existente */}
         <TabsContent value="promotions" className="space-y-4">
