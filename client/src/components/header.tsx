@@ -56,6 +56,16 @@ export default function Header() {
               </Button>
             </div>
             
+            {/* Enlace de seguimiento */}
+            <Link href="/seguimiento">
+              <Button variant="outline" size="sm" className="hidden sm:flex">
+                📦 Seguimiento
+              </Button>
+              <Button variant="ghost" size="sm" className="sm:hidden h-8 w-8">
+                📦
+              </Button>
+            </Link>
+            
             {/* Botón del carrito */}
             <CartButton />
           </div>

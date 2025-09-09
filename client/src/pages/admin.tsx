@@ -18,13 +18,14 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { formatCurrency } from "@/lib/currency";
+import AdminOrders from "@/components/admin-orders";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -527,7 +528,7 @@ export default function AdminPanel() {
       </div>
 
       <Tabs defaultValue="products" className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-4 h-auto">
+        <TabsList className="grid w-full grid-cols-5 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Productos</span>
@@ -535,6 +536,10 @@ export default function AdminPanel() {
           <TabsTrigger value="brands" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brands">
             <Briefcase className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Marcas</span>
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-orders">
+            <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Pedidos</span>
           </TabsTrigger>
           <TabsTrigger value="promotions" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-promotions">
             <Gift className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -1295,6 +1300,11 @@ export default function AdminPanel() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        {/* Panel de Pedidos */}
+        <TabsContent value="orders" className="space-y-2 sm:space-y-4">
+          <AdminOrders />
         </TabsContent>
 
         {/* Panel de Promociones - Manteniendo el código existente */}
