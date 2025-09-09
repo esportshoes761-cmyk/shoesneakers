@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCartStore } from "@/lib/cart-store";
 import { useLocation } from "wouter";
+import { SavingsAnimation, PulsingDiscount } from "./savings-animation";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -185,9 +186,31 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       data-testid={`card-product-${product.id}`}
       onClick={handleCardClick}
     >
-      {/* Badges */}
+      {/* Badges con animaciones de ahorro */}
       <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 flex flex-col gap-1">
-        {product.isFlashSale && (
+        {product.isFlashSale && product.originalPrice && product.price && (
+          <div className="relative">
+            {(() => {
+              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const savings = originalPrice - currentPrice;
+              const discountPercentage = Math.round((savings / originalPrice) * 100);
+              
+              return (
+                <>
+                  <PulsingDiscount discountPercentage={discountPercentage} />
+                  <SavingsAnimation 
+                    savings={savings}
+                    originalPrice={originalPrice}
+                    showAnimation={true}
+                    className="absolute -top-1 -right-1"
+                  />
+                </>
+              );
+            })()}
+          </div>
+        )}
+        {product.isFlashSale && (!product.originalPrice || !product.price) && (
           <Badge variant="destructive" className="text-[10px] sm:text-xs font-bold px-1 py-0 sm:px-2 sm:py-1">
             ¡OFERTA!
           </Badge>

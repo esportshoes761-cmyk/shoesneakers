@@ -18,6 +18,7 @@ interface CartStore {
   clearCart: () => void;
   setIsOpen: (isOpen: boolean) => void;
   getTotalItems: () => number;
+  getTotalSavings: () => number;
   // Legacy methods for compatibility
   getItemCount: () => number;
 }
@@ -88,6 +89,19 @@ export const useCartStore = create<CartStore>()(
       
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0);
+      },
+      
+      getTotalSavings: () => {
+        return get().items.reduce((total, item) => {
+          const product = item.product;
+          if (product.originalPrice && product.price) {
+            const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+            const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+            const savings = (originalPrice - currentPrice) * item.quantity;
+            return total + savings;
+          }
+          return total;
+        }, 0);
       },
       
       // Legacy method for compatibility
