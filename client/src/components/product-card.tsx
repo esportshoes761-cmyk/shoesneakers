@@ -319,9 +319,22 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           disabled={(product.stock || 0) === 0}
           onClick={() => {
             addItem(product);
+            
+            // Calcular ahorro si hay descuento
+            let savingsMessage = "";
+            if (product.originalPrice && product.price) {
+              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const savings = originalPrice - currentPrice;
+              if (savings > 0) {
+                savingsMessage = ` ¡Ahorras $${Math.round(savings).toLocaleString('es-CO')} COP!`;
+              }
+            }
+            
             toast({
-              title: "Producto agregado",
-              description: `${product.name} se agregó al carrito`,
+              title: "¡Producto agregado! 🎉",
+              description: `${product.name} se agregó al carrito.${savingsMessage}`,
+              duration: 3000,
             });
           }}
           data-testid={`button-add-to-cart-${product.id}`}
