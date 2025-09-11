@@ -633,40 +633,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint simple
+  app.post("/api/test", (req, res) => {
+    console.log("🔥 TEST ENDPOINT LLAMADO");
+    res.json({ message: "Test OK" });
+  });
+
   // Endpoint alternativo para subir imágenes directamente al servidor
   app.post("/api/objects/upload-direct", async (req, res) => {
+    console.log("🔥🔥🔥 UPLOAD ENDPOINT LLAMADO 🔥🔥🔥");
+    console.log("🔥 Headers:", req.headers);
+    console.log("🔥 Body keys:", Object.keys(req.body || {}));
+    console.log("🔥 Body size:", JSON.stringify(req.body || {}).length);
+
     try {
-      console.log("🔥 INICIANDO UPLOAD - Body keys:", Object.keys(req.body));
-      console.log("🔥 UPLOADS DIR:", uploadsDir);
-      
-      const { imageData, fileName, mimeType } = req.body;
+      const { imageData, fileName, mimeType } = req.body || {};
       
       if (!imageData || !fileName) {
         console.log("🔥 ERROR: Missing data - imageData:", !!imageData, "fileName:", !!fileName);
         return res.status(400).json({ error: "Missing image data or filename" });
       }
 
-      console.log("🔥 VALIDATING FILE:", fileName);
+      console.log("🔥 Processing file:", fileName);
+      console.log("🔥 Uploads dir:", uploadsDir);
 
-      // Verificar límite de imágenes (simplificado)
-      let existingImages = [];
-      try {
-        existingImages = await fs.readdir(uploadsDir);
-        console.log("🔥 EXISTING IMAGES COUNT:", existingImages.length);
-      } catch (dirError) {
-        console.log("🔥 DIR READ ERROR:", dirError.message);
-        // Si no existe el directorio, continuar
-      }
-      
-      if (existingImages.length >= LIMITS.MAX_IMAGES) {
-        return res.status(400).json({ error: `Límite alcanzado: máximo ${LIMITS.MAX_IMAGES.toLocaleString()} imágenes permitidas` });
-      }
+      // Asegurarse de que el directorio existe
+      await fs.ensureDir(uploadsDir);
 
-      console.log("🔥 PROCESSING BASE64 DATA");
       // Procesar los datos de la imagen
       const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log("🔥 BUFFER SIZE:", buffer.length);
+      console.log("🔥 Buffer created, size:", buffer.length);
 
       // Generar un ID único para la imagen
       const imageId = generateUniqueReference();
@@ -674,14 +671,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const finalFileName = `${imageId}.${extension}`;
       const filePath = path.join(uploadsDir, finalFileName);
       
-      console.log("🔥 SAVING TO:", filePath);
+      console.log("🔥 Saving to:", filePath);
       
       // Guardar la imagen físicamente
       await fs.writeFile(filePath, buffer);
       
       const imageUrl = `/api/images/${finalFileName}`;
       
-      console.log(`✅ Imagen "${fileName}" guardada físicamente como: ${imageUrl}`);
+      console.log(`✅ SUCCESS: "${fileName}" saved as: ${imageUrl}`);
       
       res.json({ 
         imageUrl,
@@ -689,8 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Imagen subida correctamente"
       });
     } catch (error) {
-      console.error("🔥 ERROR DETALLADO EN UPLOAD:", error);
-      console.error("🔥 ERROR STACK:", error.stack);
+      console.error("🔥 UPLOAD ERROR:", error);
       res.status(500).json({ error: "Error al subir imagen: " + error.message });
     }
   });
