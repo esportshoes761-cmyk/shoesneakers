@@ -383,35 +383,59 @@ export default function AdminPanel() {
   });
 
   const deleteProductMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/products/${id}`, "DELETE"),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/products/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({ title: "Éxito", description: "Producto eliminado exitosamente" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Error al eliminar el producto", variant: "destructive" });
+    onError: async (error: any) => {
+      console.error("Error eliminando producto:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al eliminar el producto");
+      
+      toast({ 
+        title, 
+        description, 
+        variant: "destructive" 
+      });
     },
   });
 
   const deletePromotionMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/promotions/${id}`, "DELETE"),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/promotions/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
       toast({ title: "Éxito", description: "Promoción eliminada exitosamente" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Error al eliminar la promoción", variant: "destructive" });
+    onError: async (error: any) => {
+      console.error("Error eliminando promoción:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al eliminar la promoción");
+      
+      toast({ 
+        title, 
+        description, 
+        variant: "destructive" 
+      });
     },
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/events/${id}`, "DELETE"),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/events/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({ title: "Éxito", description: "Evento eliminado exitosamente" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Error al eliminar el evento", variant: "destructive" });
+    onError: async (error: any) => {
+      console.error("Error eliminando evento:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al eliminar el evento");
+      
+      toast({ 
+        title, 
+        description, 
+        variant: "destructive" 
+      });
     },
   });
 
