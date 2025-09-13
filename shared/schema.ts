@@ -65,9 +65,22 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tabla para imágenes con hash único
+export const images = pgTable("images", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fileName: text("file_name").notNull(),
+  originalName: text("original_name").notNull(),
+  path: text("path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(), // Tamaño en bytes
+  sha256: varchar("sha256", { length: 64 }).notNull().unique(), // Hash SHA-256 único
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  nameNormalized: text("name_normalized").notNull().unique(), // Nombre normalizado para detectar duplicados
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   originalPrice: decimal("original_price", { precision: 10, scale: 2 }),
@@ -201,8 +214,14 @@ export const insertEventSchema = createInsertSchema(events).omit({
   createdAt: true,
 });
 
+export const insertImageSchema = createInsertSchema(images).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
+  nameNormalized: true, // Se genera automáticamente en el servidor
   createdAt: true,
 }).extend({
   images: z.array(z.string()).max(9, "Máximo 9 imágenes permitidas").optional(),
@@ -268,6 +287,9 @@ export type BrandWithProducts = Brand & {
 
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type Review = typeof reviews.$inferSelect;
+
+export type InsertImage = z.infer<typeof insertImageSchema>;
+export type Image = typeof images.$inferSelect;
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
