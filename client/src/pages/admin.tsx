@@ -26,6 +26,7 @@ import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { formatCurrency } from "@/lib/currency";
 import AdminOrders from "@/components/admin-orders";
+import { parseApiError } from "@/lib/parse-api-error";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -302,12 +303,14 @@ export default function AdminPanel() {
       setProductColors([]);
       toast({ title: "¡Éxito!", description: "Producto publicado correctamente con todas sus imágenes" });
     },
-    onError: (error: any) => {
-      const errorMessage = error?.message || "Error al crear el producto";
-      console.error("Error creando producto:", error); // Debug
+    onError: async (error: any) => {
+      console.error("Error creando producto:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al crear el producto");
+      
       toast({ 
-        title: "Error", 
-        description: errorMessage, 
+        title, 
+        description, 
         variant: "destructive" 
       });
     },
@@ -340,12 +343,14 @@ export default function AdminPanel() {
       setProductColors([]);
       toast({ title: "¡Éxito!", description: "Producto actualizado correctamente" });
     },
-    onError: (error: any) => {
-      const errorMessage = error?.message || "Error al actualizar el producto";
+    onError: async (error: any) => {
       console.error("Error actualizando producto:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al actualizar el producto");
+      
       toast({ 
-        title: "Error", 
-        description: errorMessage, 
+        title, 
+        description, 
         variant: "destructive" 
       });
     },

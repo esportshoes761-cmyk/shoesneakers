@@ -88,10 +88,38 @@ export default function ProductUploadForm({ onProductCreated }: ProductUploadFor
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       onProductCreated?.();
     },
-    onError: (error) => {
+    onError: async (error) => {
+      console.error("Product creation error:", error);
+      
+      // Handle different types of errors
+      let title = "Error";
+      let description = "No se pudo crear el producto";
+      
+      // Check if it's a Response object (from apiRequest)
+      if (error instanceof Response) {
+        try {
+          const errorData = await error.json();
+          
+          // Handle 409 duplicate errors specifically
+          if (error.status === 409) {
+            title = "Producto duplicado";
+            description = errorData.message || errorData.error || "Ya existe un producto con este nombre";
+          } else if (error.status === 400) {
+            title = "Datos inválidos";
+            description = errorData.message || "Por favor verifica los datos del producto";
+          } else {
+            description = errorData.message || errorData.error || description;
+          }
+        } catch (parseError) {
+          console.error("Failed to parse error response:", parseError);
+        }
+      } else if (error?.message) {
+        description = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: "No se pudo crear el producto",
+        title,
+        description,
         variant: "destructive",
       });
     },
