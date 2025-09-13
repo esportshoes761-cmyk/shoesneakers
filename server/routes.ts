@@ -338,16 +338,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("🔥 DATOS RECIBIDOS EN BACKEND:", JSON.stringify(req.body, null, 2));
       
-      // Verificar límite de productos
-      const existingProducts = await storage.getProducts();
-      if (existingProducts.length >= LIMITS.MAX_PRODUCTS) {
-        return res.status(400).json({ 
-          message: `Límite alcanzado: máximo ${LIMITS.MAX_PRODUCTS.toLocaleString()} productos permitidos`
-        });
-      }
+      // RENDIMIENTO: Eliminar verificación costosa de límites con readdir
+      // El límite se verificará a nivel de base de datos si es necesario
       
       const productData = insertProductSchema.parse(req.body);
       console.log("🔥 DATOS DESPUÉS DE VALIDAR:", JSON.stringify(productData, null, 2));
+      
+      // CRÍTICO: Verificar duplicados por nombre normalizado ANTES de crear producto
+      const nameNormalized = productData.name.toLowerCase().trim().replace(/\s+/g, ' ');
+      const existingProductByName = await storage.getProductByNameNormalized(nameNormalized);
+      if (existingProductByName) {
+        console.log("🔥 DUPLICATE PRODUCT NAME DETECTED:", nameNormalized);
+        return res.status(409).json({ 
+          error: "Ya existe un producto con este nombre",
+          exists: true,
+          message: `Ya existe un producto llamado "${productData.name}"`,
+          productId: existingProductByName.id
+        });
+      }
       
       // Generar referencia única si no se proporciona
       if (!productData.reference) {
@@ -389,6 +397,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", async (req, res) => {
     try {
       const productData = insertProductSchema.partial().parse(req.body);
+      
+      // CRÍTICO: Si se actualiza el nombre, verificar duplicados
+      if (productData.name) {
+        const nameNormalized = productData.name.toLowerCase().trim().replace(/\s+/g, ' ');
+        const existingProduct = await storage.getProductByNameNormalized(nameNormalized);
+        
+        // Verificar que no sea el mismo producto que estamos actualizando
+        if (existingProduct && existingProduct.id !== req.params.id) {
+          console.log("🔥 DUPLICATE PRODUCT NAME ON UPDATE:", nameNormalized);
+          return res.status(409).json({ 
+            error: "Ya existe un producto con este nombre",
+            exists: true,
+            message: `Ya existe un producto llamado "${productData.name}"`,
+            productId: existingProduct.id
+          });
+        }
+      }
+      
       const product = await storage.updateProduct(req.params.id, productData);
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
@@ -633,29 +659,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test endpoint simple
-  app.post("/api/test", (req, res) => {
-    console.log("🔥 TEST ENDPOINT LLAMADO");
-    res.json({ message: "Test OK" });
+  // Endpoint para verificar hash de imagen antes de subir
+  app.post("/api/images/check-hash", async (req, res) => {
+    try {
+      // VALIDACIÓN: Usar Zod para validar datos de entrada
+      const hashSchema = z.object({
+        hash: z.string().min(1, "Hash requerido").regex(/^[a-fA-F0-9]{64}$/, "Hash SHA-256 inválido")
+      });
+      
+      const { hash } = hashSchema.parse(req.body);
+
+      const existingImage = await storage.getImageByHash(hash);
+      
+      if (existingImage) {
+        return res.status(409).json({ 
+          exists: true,
+          message: "La imagen ya existe",
+          imageUrl: `/api/images/${existingImage.fileName}`,
+          hash: hash
+        });
+      }
+
+      res.json({ exists: false });
+    } catch (error) {
+      console.error("Error checking image hash:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      res.status(500).json({ error: "Error al verificar imagen" });
+    }
+  });
+
+  // Endpoint para verificar nombre de producto duplicado
+  app.get("/api/products/check-name", async (req, res) => {
+    try {
+      // VALIDACIÓN: Usar Zod para validar parámetros de query
+      const nameSchema = z.object({
+        name: z.string().min(1, "Nombre requerido").max(255, "Nombre demasiado largo")
+      });
+      
+      const { name } = nameSchema.parse(req.query);
+
+      // Normalizar el nombre igual que en el storage
+      const nameNormalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+      const existingProduct = await storage.getProductByNameNormalized(nameNormalized);
+      
+      if (existingProduct) {
+        return res.status(409).json({ 
+          exists: true,
+          message: "Ya existe un producto con este nombre",
+          productId: existingProduct.id,
+          existingName: existingProduct.name
+        });
+      }
+
+      res.json({ exists: false });
+    } catch (error) {
+      console.error("Error checking product name:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      res.status(500).json({ error: "Error al verificar nombre del producto" });
+    }
   });
 
   // Endpoint alternativo para subir imágenes directamente al servidor
   app.post("/api/objects/upload-direct", async (req, res) => {
     console.log("🔥🔥🔥 UPLOAD ENDPOINT LLAMADO 🔥🔥🔥");
-    console.log("🔥 Headers:", req.headers);
-    console.log("🔥 Body keys:", Object.keys(req.body || {}));
-    console.log("🔥 Body size:", JSON.stringify(req.body || {}).length);
 
     try {
       const { imageData, fileName, mimeType } = req.body || {};
       
-      if (!imageData || !fileName) {
-        console.log("🔥 ERROR: Missing data - imageData:", !!imageData, "fileName:", !!fileName);
-        return res.status(400).json({ error: "Missing image data or filename" });
+      if (!imageData) {
+        console.log("🔥 ERROR: Missing imageData");
+        return res.status(400).json({ error: "Datos de imagen requeridos" });
       }
-
-      console.log("🔥 Processing file:", fileName);
-      console.log("🔥 Uploads dir:", uploadsDir);
 
       // Asegurarse de que el directorio existe
       await fs.ensureDir(uploadsDir);
@@ -665,9 +743,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const buffer = Buffer.from(base64Data, 'base64');
       console.log("🔥 Buffer created, size:", buffer.length);
 
-      // Generar un ID único para la imagen
+      // SEGURIDAD: Validar tamaño (máximo 10MB)
+      const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+      if (buffer.length > MAX_SIZE) {
+        return res.status(400).json({ 
+          error: "Imagen demasiado grande", 
+          message: `Tamaño máximo permitido: ${(MAX_SIZE / 1024 / 1024).toFixed(1)}MB` 
+        });
+      }
+
+      // SEGURIDAD: Validar mime type
+      const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      const detectedMime = mimeType || 'image/jpeg';
+      if (!allowedMimes.includes(detectedMime)) {
+        return res.status(400).json({ 
+          error: "Tipo de archivo no permitido", 
+          message: "Solo se permiten imágenes JPEG, PNG, GIF y WebP" 
+        });
+      }
+
+      // SEGURIDAD: SIEMPRE calcular hash en servidor (nunca confiar en cliente)
+      const crypto = await import('crypto');
+      const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      // CRÍTICO: Verificar duplicados ANTES de escribir archivo
+      const existingImage = await storage.getImageByHash(imageHash);
+      if (existingImage) {
+        console.log("🔥 DUPLICATE IMAGE DETECTED:", imageHash);
+        return res.status(409).json({
+          error: "La imagen ya existe",
+          exists: true,
+          imageUrl: `/api/images/${existingImage.fileName}`,
+          message: "Esta imagen ya fue subida anteriormente",
+          hash: imageHash
+        });
+      }
+
+      // SEGURIDAD: Generar fileName seguro en servidor (ignorar cliente)
       const imageId = generateUniqueReference();
-      const extension = fileName.split('.').pop() || 'jpg';
+      const extension = detectedMime.split('/')[1] || 'jpg';
       const finalFileName = `${imageId}.${extension}`;
       const filePath = path.join(uploadsDir, finalFileName);
       
@@ -675,15 +789,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Guardar la imagen físicamente
       await fs.writeFile(filePath, buffer);
+
+      // Guardar información de la imagen en la base de datos
+      await storage.createImage({
+        fileName: finalFileName,
+        originalName: fileName || `image.${extension}`,
+        path: filePath,
+        mimeType: detectedMime,
+        size: buffer.length,
+        sha256: imageHash
+      });
       
       const imageUrl = `/api/images/${finalFileName}`;
       
-      console.log(`✅ SUCCESS: "${fileName}" saved as: ${imageUrl}`);
+      console.log(`✅ SUCCESS: "${fileName}" saved as: ${imageUrl} with hash: ${imageHash}`);
       
       res.json({ 
         imageUrl,
         success: true,
-        message: "Imagen subida correctamente"
+        message: "Imagen subida correctamente",
+        hash: imageHash
       });
     } catch (error) {
       console.error("🔥 UPLOAD ERROR:", error);

@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews } from "@shared/schema";
+import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews, type Image, type InsertImage } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders } from "@shared/schema";
+import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from "@shared/schema";
 import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
 
 export interface IStorage {
@@ -31,10 +31,15 @@ export interface IStorage {
   getFeaturedProducts(): Promise<ProductWithCategory[]>;
   getProduct(id: string): Promise<ProductWithCategory | undefined>;
   getProductByReference(reference: string): Promise<Product | undefined>;
+  getProductByNameNormalized(nameNormalized: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
   getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
+
+  // Image methods
+  getImageByHash(hash: string): Promise<Image | undefined>;
+  createImage(image: InsertImage): Promise<Image>;
 
   // Review methods
   createReview(review: InsertReview): Promise<Review>;
@@ -88,6 +93,9 @@ export class MemStorage implements IStorage {
   private events: Map<string, Event>;
   private cartItems: Map<string, CartItem>;
   private customerSavings: Map<string, CustomerSavings>;
+  private reviews: Map<string, Review>;
+  private images: Map<string, Image>;
+  private orders: Map<string, Order>;
 
   constructor() {
     this.users = new Map();
@@ -98,6 +106,9 @@ export class MemStorage implements IStorage {
     this.events = new Map();
     this.cartItems = new Map();
     this.customerSavings = new Map();
+    this.reviews = new Map();
+    this.images = new Map();
+    this.orders = new Map();
     this.initializeData();
   }
 
@@ -516,8 +527,22 @@ export class MemStorage implements IStorage {
   }
 
   async getProductByReference(reference: string): Promise<Product | undefined> {
-    for (const product of this.products.values()) {
+    for (const product of Array.from(this.products.values())) {
       if (product.reference === reference) {
+        return product;
+      }
+    }
+    return undefined;
+  }
+
+  // Función utilitaria para normalizar nombres
+  private normalizeProductName(name: string): string {
+    return name.toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  async getProductByNameNormalized(nameNormalized: string): Promise<Product | undefined> {
+    for (const product of Array.from(this.products.values())) {
+      if (product.nameNormalized === nameNormalized) {
         return product;
       }
     }
@@ -526,9 +551,11 @@ export class MemStorage implements IStorage {
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
     const id = randomUUID();
+    const nameNormalized = this.normalizeProductName(insertProduct.name);
     const product: Product = { 
       ...insertProduct, 
       id,
+      nameNormalized,
       createdAt: new Date(),
       description: insertProduct.description ?? null,
       originalPrice: insertProduct.originalPrice ?? null,
@@ -555,13 +582,76 @@ export class MemStorage implements IStorage {
     const product = this.products.get(id);
     if (!product) return undefined;
 
-    const updatedProduct = { ...product, ...updateData };
+    // CRÍTICO: Si se actualiza el nombre, actualizar también nameNormalized
+    const finalUpdateData = { ...updateData };
+    if (updateData.name) {
+      finalUpdateData.nameNormalized = this.normalizeProductName(updateData.name);
+    }
+
+    const updatedProduct = { ...product, ...finalUpdateData };
     this.products.set(id, updatedProduct);
     return updatedProduct;
   }
 
   async deleteProduct(id: string): Promise<boolean> {
     return this.products.delete(id);
+  }
+
+  // Image methods
+  async getImageByHash(hash: string): Promise<Image | undefined> {
+    for (const image of Array.from(this.images.values())) {
+      if (image.sha256 === hash) {
+        return image;
+      }
+    }
+    return undefined;
+  }
+
+  async createImage(insertImage: InsertImage): Promise<Image> {
+    const id = randomUUID();
+    const image: Image = {
+      ...insertImage,
+      id,
+      createdAt: new Date()
+    };
+    this.images.set(id, image);
+    return image;
+  }
+
+  // Review methods  
+  async createReview(insertReview: InsertReview): Promise<Review> {
+    const id = randomUUID();
+    const review: Review = {
+      ...insertReview,
+      id,
+      createdAt: new Date(),
+      productId: insertReview.productId ?? null,
+      customerId: insertReview.customerId ?? null,
+      rating: insertReview.rating ?? 5,
+      comment: insertReview.comment ?? null
+    };
+    this.reviews.set(id, review);
+    return review;
+  }
+
+  async getProductReviews(productId: string): Promise<Review[]> {
+    return Array.from(this.reviews.values())
+      .filter(review => review.productId === productId)
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  }
+
+  async getProductWithReviews(id: string): Promise<ProductWithReviews | undefined> {
+    const product = await this.getProduct(id);
+    if (!product) {
+      return undefined;
+    }
+
+    const productReviews = await this.getProductReviews(id);
+    
+    return {
+      ...product,
+      reviews: productReviews,
+    };
   }
 
   // Cart methods
@@ -698,6 +788,62 @@ export class MemStorage implements IStorage {
     return await this.updateCustomerSavings(customerId, {
       totalSaved: newTotal.toString()
     });
+  }
+
+  // Order methods
+  async createOrder(insertOrder: InsertOrder): Promise<Order> {
+    const id = randomUUID();
+    const order: Order = {
+      ...insertOrder,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      customerId: insertOrder.customerId ?? null,
+      productId: insertOrder.productId ?? null,
+      quantity: insertOrder.quantity ?? 1,
+      totalAmount: insertOrder.totalAmount ?? "0",
+      status: insertOrder.status ?? "pending",
+      trackingNumber: insertOrder.trackingNumber ?? null,
+      deliveryTime: insertOrder.deliveryTime ?? null,
+      notes: insertOrder.notes ?? null
+    };
+    this.orders.set(id, order);
+    return order;
+  }
+
+  async getCustomerOrdersForProduct(customerId: string, productId: string): Promise<Order[]> {
+    return Array.from(this.orders.values())
+      .filter(order => order.customerId === customerId && order.productId === productId)
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  }
+
+  async updateOrderStatus(orderId: string, updateData: { status?: string; deliveryTime?: string; notes?: string }): Promise<Order | undefined> {
+    const order = this.orders.get(orderId);
+    if (!order) return undefined;
+
+    const updatedOrder = {
+      ...order,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    this.orders.set(orderId, updatedOrder);
+    return updatedOrder;
+  }
+
+  async getOrdersByCustomerId(customerId: string): Promise<Order[]> {
+    return Array.from(this.orders.values())
+      .filter(order => order.customerId === customerId)
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  }
+
+  async getOrdersByTrackingNumber(trackingNumber: string): Promise<Order[]> {
+    return Array.from(this.orders.values())
+      .filter(order => order.trackingNumber === trackingNumber);
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    return Array.from(this.orders.values())
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
   }
 }
 
@@ -913,6 +1059,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -954,6 +1101,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -988,6 +1136,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -1022,6 +1171,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -1056,6 +1206,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -1090,6 +1241,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select({
       id: products.id,
       name: products.name,
+      nameNormalized: products.nameNormalized,
       description: products.description,
       price: products.price,
       originalPrice: products.originalPrice,
@@ -1128,9 +1280,34 @@ export class DatabaseStorage implements IStorage {
     return product;
   }
 
+  // Función utilitaria para normalizar nombres
+  private normalizeProductName(name: string): string {
+    return name.toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  async getProductByNameNormalized(nameNormalized: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.nameNormalized, nameNormalized));
+    return product;
+  }
+
   async createProduct(product: InsertProduct): Promise<Product> {
-    const [newProduct] = await db.insert(products).values(product).returning();
+    // Generar nameNormalized automáticamente
+    const nameNormalized = this.normalizeProductName(product.name);
+    const productWithNormalized = { ...product, nameNormalized };
+    
+    const [newProduct] = await db.insert(products).values(productWithNormalized).returning();
     return newProduct;
+  }
+
+  // Image methods
+  async getImageByHash(hash: string): Promise<Image | undefined> {
+    const [image] = await db.select().from(images).where(eq(images.sha256, hash));
+    return image;
+  }
+
+  async createImage(image: InsertImage): Promise<Image> {
+    const [newImage] = await db.insert(images).values(image).returning();
+    return newImage;
   }
 
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
@@ -1233,6 +1410,7 @@ export class DatabaseStorage implements IStorage {
       product: {
         id: products.id,
         name: products.name,
+        nameNormalized: products.nameNormalized,
         description: products.description,
         price: products.price,
         originalPrice: products.originalPrice,
