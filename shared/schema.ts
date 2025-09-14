@@ -80,7 +80,7 @@ export const images = pgTable("images", {
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  nameNormalized: text("name_normalized").notNull().unique(), // Nombre normalizado para detectar duplicados
+  nameNormalized: text("name_normalized").notNull(), // Nombre normalizado solo para búsquedas, ya no unique
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   originalPrice: decimal("original_price", { precision: 10, scale: 2 }),

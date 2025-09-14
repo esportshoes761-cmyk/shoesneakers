@@ -344,18 +344,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const productData = insertProductSchema.parse(req.body);
       console.log("🔥 DATOS DESPUÉS DE VALIDAR:", JSON.stringify(productData, null, 2));
       
-      // CRÍTICO: Verificar duplicados por nombre normalizado ANTES de crear producto
-      const nameNormalized = productData.name.toLowerCase().trim().replace(/\s+/g, ' ');
-      const existingProductByName = await storage.getProductByNameNormalized(nameNormalized);
-      if (existingProductByName) {
-        console.log("🔥 DUPLICATE PRODUCT NAME DETECTED:", nameNormalized);
-        return res.status(409).json({ 
-          error: "Ya existe un producto con este nombre",
-          exists: true,
-          message: `Ya existe un producto llamado "${productData.name}"`,
-          productId: existingProductByName.id
-        });
-      }
+      // Solo verificamos duplicados de imagen, no de nombres
+      console.log("✅ Permitiendo múltiples productos con el mismo nombre");
       
       // Generar referencia única si no se proporciona
       if (!productData.reference) {
@@ -398,22 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const productData = insertProductSchema.partial().parse(req.body);
       
-      // CRÍTICO: Si se actualiza el nombre, verificar duplicados
-      if (productData.name) {
-        const nameNormalized = productData.name.toLowerCase().trim().replace(/\s+/g, ' ');
-        const existingProduct = await storage.getProductByNameNormalized(nameNormalized);
-        
-        // Verificar que no sea el mismo producto que estamos actualizando
-        if (existingProduct && existingProduct.id !== req.params.id) {
-          console.log("🔥 DUPLICATE PRODUCT NAME ON UPDATE:", nameNormalized);
-          return res.status(409).json({ 
-            error: "Ya existe un producto con este nombre",
-            exists: true,
-            message: `Ya existe un producto llamado "${productData.name}"`,
-            productId: existingProduct.id
-          });
-        }
-      }
+      // Solo verificamos duplicados de imagen en actualizaciones, no de nombres
       
       const product = await storage.updateProduct(req.params.id, productData);
       if (!product) {
@@ -690,7 +665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint para verificar nombre de producto duplicado
+  // Endpoint para verificar nombre de producto duplicado - AHORA SIEMPRE PERMITE DUPLICADOS
   app.get("/api/products/check-name", async (req, res) => {
     try {
       // VALIDACIÓN: Usar Zod para validar parámetros de query
@@ -700,19 +675,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { name } = nameSchema.parse(req.query);
 
-      // Normalizar el nombre igual que en el storage
-      const nameNormalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-      const existingProduct = await storage.getProductByNameNormalized(nameNormalized);
-      
-      if (existingProduct) {
-        return res.status(409).json({ 
-          exists: true,
-          message: "Ya existe un producto con este nombre",
-          productId: existingProduct.id,
-          existingName: existingProduct.name
-        });
-      }
-
+      // ✅ CAMBIO: Siempre permitir nombres duplicados (solo verificamos imágenes)
+      console.log("✅ Verificación de nombre saltada - permitiendo duplicados:", name);
       res.json({ exists: false });
     } catch (error) {
       console.error("Error checking product name:", error);
