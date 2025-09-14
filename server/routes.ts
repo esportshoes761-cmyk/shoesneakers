@@ -776,7 +776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("🔥 UPLOAD ERROR:", error);
-      res.status(500).json({ error: "Error al subir imagen: " + error.message });
+      res.status(500).json({ error: "Error al subir imagen: " + (error instanceof Error ? error.message : String(error)) });
     }
   });
 
