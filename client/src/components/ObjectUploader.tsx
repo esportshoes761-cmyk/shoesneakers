@@ -17,17 +17,18 @@ export function ObjectUploader({
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [duplicateImageUrl, setDuplicateImageUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Función para calcular hash SHA-256 del archivo
-  const calculateFileHash = async (file: File): Promise<string> => {
+  // Función para calcular hash SHA-256 del archivo y cachear buffer
+  const calculateFileHash = async (file: File): Promise<{ hash: string; buffer: ArrayBuffer }> => {
     const buffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    return { hash: hashHex, buffer };
   };
 
   // Función para verificar si la imagen ya existe
@@ -65,8 +66,45 @@ export function ObjectUploader({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Determinar tipo MIME con fallback
+    let mimeType = file.type;
+    if (!mimeType) {
+      // Inferir tipo desde extensión si está vacío
+      const extension = file.name.toLowerCase().split('.').pop();
+      switch (extension) {
+        case 'jpg':
+        case 'jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case 'png':
+          mimeType = 'image/png';
+          break;
+        case 'webp':
+          mimeType = 'image/webp';
+          break;
+        case 'gif':
+          mimeType = 'image/gif';
+          break;
+        case 'heic':
+        case 'heif':
+          toast({
+            title: "Formato no soportado",
+            description: "Los archivos HEIC/HEIF no son compatibles. Convierte a JPG o PNG.",
+            variant: "destructive",
+          });
+          return;
+        default:
+          toast({
+            title: "Error",
+            description: "Solo se permiten archivos de imagen (JPG, PNG, WEBP, GIF)",
+            variant: "destructive",
+          });
+          return;
+      }
+    }
+
     // Validar que sea una imagen
-    if (!file.type.startsWith('image/')) {
+    if (!mimeType.startsWith('image/')) {
       toast({
         title: "Error",
         description: "Solo se permiten archivos de imagen",
@@ -89,6 +127,7 @@ export function ObjectUploader({
     setSelectedFile(file);
     setIsDuplicate(false);
     setDuplicateImageUrl(null);
+    setFileBuffer(null);
 
     // Crear preview
     const reader = new FileReader();
@@ -100,8 +139,9 @@ export function ObjectUploader({
     // Calcular hash SHA-256 y verificar duplicados
     try {
       setIsCheckingDuplicate(true);
-      const hash = await calculateFileHash(file);
+      const { hash, buffer } = await calculateFileHash(file);
       setFileHash(hash);
+      setFileBuffer(buffer); // Cachear buffer para uso posterior
       
       console.log('🔍 Verificando duplicado para hash:', hash);
       const duplicateCheck = await checkImageDuplicate(hash);
@@ -123,7 +163,7 @@ export function ObjectUploader({
       console.error('Error al verificar duplicado:', error);
       toast({
         title: "Error",
-        description: "Error al verificar la imagen. Inténtalo de nuevo.",
+        description: `Error al verificar la imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`,
         variant: "destructive",
       });
     } finally {
@@ -132,10 +172,10 @@ export function ObjectUploader({
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !fileHash) {
+    if (!selectedFile || !fileHash || !fileBuffer) {
       toast({
         title: "Error",
-        description: "No hay archivo seleccionado o hash no calculado",
+        description: "No hay archivo seleccionado, hash no calculado o buffer no disponible",
         variant: "destructive",
       });
       return;
@@ -155,21 +195,35 @@ export function ObjectUploader({
     try {
       console.log("🚀 Iniciando subida directa de archivo:", selectedFile.name, "con hash:", fileHash);
 
-      // Convertir archivo a base64
-      const reader = new FileReader();
-      const fileDataPromise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            resolve(reader.result);
-          } else {
-            reject(new Error('Error al leer archivo'));
-          }
-        };
-        reader.onerror = () => reject(new Error('Error al leer archivo'));
-        reader.readAsDataURL(selectedFile);
-      });
-
-      const fileData = await fileDataPromise;
+      // Convertir ArrayBuffer cacheado a base64 (sin FileReader)
+      const uint8Array = new Uint8Array(fileBuffer);
+      const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+      const base64 = btoa(binaryString);
+      
+      // Determinar tipo MIME con fallback
+      let mimeType = selectedFile.type;
+      if (!mimeType) {
+        const extension = selectedFile.name.toLowerCase().split('.').pop();
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'webp':
+            mimeType = 'image/webp';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          default:
+            mimeType = 'application/octet-stream';
+        }
+      }
+      
+      const fileData = `data:${mimeType};base64,${base64}`;
       
       // Subir directamente al servidor con hash calculado
       const uploadResponse = await fetch('/api/objects/upload-direct', {
@@ -180,7 +234,7 @@ export function ObjectUploader({
         body: JSON.stringify({
           imageData: fileData,
           fileName: selectedFile.name,
-          mimeType: selectedFile.type,
+          mimeType: mimeType,
           hash: fileHash // Enviar hash calculado en cliente
         }),
       });
@@ -200,9 +254,15 @@ export function ObjectUploader({
       }
 
       if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
+        let errorText;
+        try {
+          const errorData = await uploadResponse.json();
+          errorText = errorData.message || errorData.error || `Error ${uploadResponse.status}`;
+        } catch {
+          errorText = await uploadResponse.text() || `Error del servidor: ${uploadResponse.status}`;
+        }
         console.error("❌ Error en subida directa:", errorText);
-        throw new Error(`Error del servidor: ${uploadResponse.status}`);
+        throw new Error(errorText);
       }
 
       const { imageUrl } = await uploadResponse.json();
@@ -221,6 +281,7 @@ export function ObjectUploader({
       setSelectedFile(null);
       setPreview(null);
       setFileHash(null);
+      setFileBuffer(null);
       setIsDuplicate(false);
       setDuplicateImageUrl(null);
       
@@ -228,14 +289,22 @@ export function ObjectUploader({
       console.error('❌ Error en la subida:', error);
       
       let errorMessage = "Error al subir la imagen";
+      let errorDetail = "Inténtalo de nuevo";
       
       if (error instanceof Error) {
         errorMessage = error.message;
+        if (error.message.includes('Failed to fetch')) {
+          errorDetail = "Problema de conexión. Verifica tu internet.";
+        } else if (error.message.includes('413')) {
+          errorDetail = "El archivo es demasiado grande.";
+        } else if (error.message.includes('415')) {
+          errorDetail = "Formato de imagen no soportado.";
+        }
       }
       
       toast({
         title: "Error al subir imagen",
-        description: errorMessage,
+        description: `${errorMessage}. ${errorDetail}`,
         variant: "destructive",
       });
     } finally {
@@ -247,6 +316,7 @@ export function ObjectUploader({
     setSelectedFile(null);
     setPreview(null);
     setFileHash(null);
+    setFileBuffer(null);
     setIsDuplicate(false);
     setDuplicateImageUrl(null);
   };
@@ -345,7 +415,7 @@ export function ObjectUploader({
               <Button
                 type="button"
                 onClick={handleUpload}
-                disabled={isUploading || isCheckingDuplicate || isDuplicate || !fileHash}
+                disabled={isUploading || isCheckingDuplicate || isDuplicate || !fileHash || !fileBuffer}
                 className="flex-1"
                 variant={isDuplicate ? "secondary" : "default"}
               >
