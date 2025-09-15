@@ -381,22 +381,26 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
               {brands.map((brand) => (
                 <div key={brand.id} className="bg-card border border-border rounded-lg sm:rounded-xl p-3 sm:p-6 hover:shadow-lg transition-shadow" data-testid={`card-brand-${brand.id}`}>
-                  <div className="flex items-center mb-2 sm:mb-4">
+                  {/* Nombre de la marca en la parte superior */}
+                  <h4 className="text-sm sm:text-xl font-bold text-center mb-2 sm:mb-3" data-testid={`text-brand-name-${brand.id}`}>{brand.name}</h4>
+                  
+                  {/* Logo centrado */}
+                  <div className="flex justify-center mb-2 sm:mb-3">
                     <img 
                       src={brand.logo} 
                       alt={brand.name}
-                      className="w-10 h-10 sm:w-16 sm:h-16 object-contain mr-2 sm:mr-4"
+                      className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
                       data-testid={`img-brand-logo-${brand.id}`}
                     />
-                    <div className="flex-1">
-                      <h4 className="text-sm sm:text-xl font-bold" data-testid={`text-brand-name-${brand.id}`}>{brand.name}</h4>
-                      <p className="text-xs sm:text-sm text-muted-foreground" data-testid={`text-brand-product-count-${brand.id}`}>
-                        {brand.productCount} productos
-                      </p>
-                    </div>
                   </div>
                   
-                  <p className="text-muted-foreground mb-2 sm:mb-4 text-xs sm:text-sm line-clamp-2" data-testid={`text-brand-description-${brand.id}`}>
+                  {/* Cantidad de productos */}
+                  <p className="text-xs sm:text-sm text-muted-foreground text-center mb-2 sm:mb-3" data-testid={`text-brand-product-count-${brand.id}`}>
+                    {brand.productCount} productos
+                  </p>
+                  
+                  {/* Descripción */}
+                  <p className="text-muted-foreground mb-2 sm:mb-4 text-xs sm:text-sm line-clamp-2 text-center" data-testid={`text-brand-description-${brand.id}`}>
                     {brand.description}
                   </p>
                   
