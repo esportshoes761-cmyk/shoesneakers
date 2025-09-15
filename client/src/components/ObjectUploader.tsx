@@ -99,11 +99,42 @@ export function ObjectUploader({
     if (!file) return;
 
     let processedFile = file;
-    
-    // Determinar tipo MIME con fallback
     let mimeType = file.type;
-    if (!mimeType) {
-      // Inferir tipo desde extensión si está vacío
+
+    // CRÍTICO: Detectar HEIC tanto por tipo MIME como por extensión
+    const isHeic = file.type?.toLowerCase() === 'image/heic' || 
+                   file.type?.toLowerCase() === 'image/heif' || 
+                   /\.(heic|heif)$/i.test(file.name);
+    
+    if (isHeic) {
+      // Convertir HEIC a JPEG automáticamente
+      try {
+        setIsConvertingHeic(true);
+        toast({
+          title: "Convirtiendo HEIC...",
+          description: "Convirtiendo imagen de iPhone a formato compatible",
+        });
+        
+        processedFile = await convertHeicToJpeg(file);
+        mimeType = 'image/jpeg';
+        
+        toast({
+          title: "¡Conversión exitosa!",
+          description: "Imagen HEIC convertida a JPEG correctamente",
+        });
+      } catch (error) {
+        console.error('Error al convertir HEIC:', error);
+        toast({
+          title: "Error de conversión",
+          description: error instanceof Error ? error.message : "No se pudo convertir el archivo HEIC",
+          variant: "destructive",
+        });
+        return;
+      } finally {
+        setIsConvertingHeic(false);
+      }
+    } else if (!mimeType) {
+      // Solo inferir tipo desde extensión si NO es HEIC y el tipo está vacío
       const extension = file.name.toLowerCase().split('.').pop();
       switch (extension) {
         case 'jpg':
@@ -118,35 +149,6 @@ export function ObjectUploader({
           break;
         case 'gif':
           mimeType = 'image/gif';
-          break;
-        case 'heic':
-        case 'heif':
-          // Convertir HEIC a JPEG
-          try {
-            setIsConvertingHeic(true);
-            toast({
-              title: "Convirtiendo HEIC...",
-              description: "Convirtiendo imagen de iPhone a formato compatible",
-            });
-            
-            processedFile = await convertHeicToJpeg(file);
-            mimeType = 'image/jpeg';
-            
-            toast({
-              title: "¡Conversión exitosa!",
-              description: "Imagen HEIC convertida a JPEG correctamente",
-            });
-          } catch (error) {
-            console.error('Error al convertir HEIC:', error);
-            toast({
-              title: "Error de conversión",
-              description: error instanceof Error ? error.message : "No se pudo convertir el archivo HEIC",
-              variant: "destructive",
-            });
-            return;
-          } finally {
-            setIsConvertingHeic(false);
-          }
           break;
         default:
           toast({

@@ -716,26 +716,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // SEGURIDAD: Validar mime type
-      const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      const blockedMimes = ['image/heic', 'image/heif'];
-      const detectedMime = mimeType || 'image/jpeg';
+      // SEGURIDAD CRÍTICA: Detectar tipo real del archivo usando el contenido binario
+      const { fileTypeFromBuffer } = await import('file-type');
+      const actualFileType = await fileTypeFromBuffer(buffer);
       
-      // Rechazar específicamente archivos HEIC/HEIF
-      if (blockedMimes.includes(detectedMime.toLowerCase())) {
+      console.log('🔒 Tipo detectado por binario:', actualFileType?.mime || 'desconocido');
+      console.log('🔒 Tipo declarado por cliente:', mimeType);
+      
+      // BLOQUEAR HEIC/HEIF basado en detección binaria (no en lo que dice el cliente)
+      if (actualFileType?.mime === 'image/heic' || actualFileType?.mime === 'image/heif') {
         return res.status(415).json({ 
-          error: "Formato HEIC no soportado en servidor", 
-          message: "Los archivos HEIC deben ser convertidos a JPEG en el cliente antes de la subida",
-          mimeType: detectedMime
+          error: "Formato HEIC detectado en servidor", 
+          message: "Los archivos HEIC deben ser convertidos a JPEG en el cliente antes de la subida. El servidor detectó HEIC en el contenido binario.",
+          detectedType: actualFileType.mime,
+          declaredType: mimeType
         });
       }
       
-      if (!allowedMimes.includes(detectedMime)) {
+      // Validar que sea una imagen válida usando detección binaria
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const actualMime = actualFileType?.mime || mimeType || 'application/octet-stream';
+      
+      if (!actualMime.startsWith('image/') || !allowedMimes.includes(actualMime)) {
         return res.status(400).json({ 
           error: "Tipo de archivo no permitido", 
-          message: "Solo se permiten imágenes JPEG, PNG, GIF y WebP" 
+          message: "Solo se permiten imágenes JPEG, PNG, GIF y WebP",
+          detectedType: actualMime,
+          declaredType: mimeType
         });
       }
+      
+      // Usar el tipo detectado por binario para almacenamiento
+      const finalMimeType = actualFileType?.mime || mimeType || 'image/jpeg';
 
       // SEGURIDAD: SIEMPRE calcular hash en servidor (nunca confiar en cliente)
       const crypto = await import('crypto');
@@ -756,11 +768,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SEGURIDAD: Generar fileName seguro en servidor (ignorar cliente)
       const imageId = generateUniqueReference();
-      const extension = detectedMime.split('/')[1] || 'jpg';
+      const extension = finalMimeType.split('/')[1] || 'jpg';
       const finalFileName = `${imageId}.${extension}`;
       const filePath = path.join(uploadsDir, finalFileName);
       
       console.log("🔥 Saving to:", filePath);
+      console.log("🔒 Usando tipo MIME validado:", finalMimeType);
       
       // Guardar la imagen físicamente
       await fs.writeFile(filePath, buffer);
@@ -770,7 +783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName: finalFileName,
         originalName: fileName || `image.${extension}`,
         path: filePath,
-        mimeType: detectedMime,
+        mimeType: finalMimeType, // Usar el tipo validado por detección binaria
         size: buffer.length,
         sha256: imageHash
       });
