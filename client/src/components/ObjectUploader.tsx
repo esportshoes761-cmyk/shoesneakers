@@ -14,6 +14,7 @@ export function ObjectUploader({
 }: ObjectUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [isConvertingHeic, setIsConvertingHeic] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
@@ -62,10 +63,43 @@ export function ObjectUploader({
     }
   };
 
+  // Función para convertir HEIC a JPEG
+  const convertHeicToJpeg = async (file: File): Promise<File> => {
+    try {
+      console.log('🔄 Iniciando conversión HEIC a JPEG para:', file.name);
+      
+      // Lazy import de heic2any
+      const heic2any = await import('heic2any');
+      
+      // Convertir HEIC a JPEG con calidad 0.85
+      const convertedBlob = await heic2any.default({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.85
+      }) as Blob;
+      
+      // Crear nuevo File a partir del Blob convertido
+      const fileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+      const convertedFile = new File([convertedBlob], fileName, {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
+      
+      console.log('✅ HEIC convertido exitosamente:', fileName);
+      return convertedFile;
+      
+    } catch (error) {
+      console.error('❌ Error al convertir HEIC:', error);
+      throw new Error('Error al convertir imagen HEIC. Intenta guardar la imagen como JPG.');
+    }
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    let processedFile = file;
+    
     // Determinar tipo MIME con fallback
     let mimeType = file.type;
     if (!mimeType) {
@@ -87,16 +121,37 @@ export function ObjectUploader({
           break;
         case 'heic':
         case 'heif':
-          toast({
-            title: "Formato no soportado",
-            description: "Los archivos HEIC/HEIF no son compatibles. Convierte a JPG o PNG.",
-            variant: "destructive",
-          });
-          return;
+          // Convertir HEIC a JPEG
+          try {
+            setIsConvertingHeic(true);
+            toast({
+              title: "Convirtiendo HEIC...",
+              description: "Convirtiendo imagen de iPhone a formato compatible",
+            });
+            
+            processedFile = await convertHeicToJpeg(file);
+            mimeType = 'image/jpeg';
+            
+            toast({
+              title: "¡Conversión exitosa!",
+              description: "Imagen HEIC convertida a JPEG correctamente",
+            });
+          } catch (error) {
+            console.error('Error al convertir HEIC:', error);
+            toast({
+              title: "Error de conversión",
+              description: error instanceof Error ? error.message : "No se pudo convertir el archivo HEIC",
+              variant: "destructive",
+            });
+            return;
+          } finally {
+            setIsConvertingHeic(false);
+          }
+          break;
         default:
           toast({
             title: "Error",
-            description: "Solo se permiten archivos de imagen (JPG, PNG, WEBP, GIF)",
+            description: "Solo se permiten archivos de imagen (JPG, PNG, WEBP, GIF, HEIC)",
             variant: "destructive",
           });
           return;
@@ -113,9 +168,9 @@ export function ObjectUploader({
       return;
     }
 
-    // Validar tamaño (máximo 10MB)
+    // Validar tamaño (máximo 10MB) - usar el archivo procesado
     const maxSize = 10485760; // 10MB
-    if (file.size > maxSize) {
+    if (processedFile.size > maxSize) {
       toast({
         title: "Error",
         description: "El archivo es demasiado grande. Máximo 10MB",
@@ -124,22 +179,22 @@ export function ObjectUploader({
       return;
     }
 
-    setSelectedFile(file);
+    setSelectedFile(processedFile);
     setIsDuplicate(false);
     setDuplicateImageUrl(null);
     setFileBuffer(null);
 
-    // Crear preview
+    // Crear preview usando el archivo procesado
     const reader = new FileReader();
     reader.onload = () => {
       setPreview(reader.result as string);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(processedFile);
 
-    // Calcular hash SHA-256 y verificar duplicados
+    // Calcular hash SHA-256 y verificar duplicados usando el archivo procesado
     try {
       setIsCheckingDuplicate(true);
-      const { hash, buffer } = await calculateFileHash(file);
+      const { hash, buffer } = await calculateFileHash(processedFile);
       setFileHash(hash);
       setFileBuffer(buffer); // Cachear buffer para uso posterior
       
@@ -319,6 +374,7 @@ export function ObjectUploader({
     setFileBuffer(null);
     setIsDuplicate(false);
     setDuplicateImageUrl(null);
+    setIsConvertingHeic(false);
   };
 
   return (
@@ -331,10 +387,10 @@ export function ObjectUploader({
             variant="outline"
             className={buttonClassName}
             onClick={() => document.getElementById('file-input')?.click()}
-            disabled={isUploading}
+            disabled={isUploading || isConvertingHeic}
           >
             <Upload className="h-4 w-4 mr-2" />
-            Seleccionar Imagen
+            {isConvertingHeic ? "Convirtiendo..." : "Seleccionar Imagen"}
           </Button>
           
           <input
@@ -361,15 +417,23 @@ export function ObjectUploader({
                   {selectedFile?.size && (selectedFile.size / 1024 / 1024).toFixed(1)} MB
                 </p>
                 
+                {/* Estado de conversión HEIC */}
+                {isConvertingHeic && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-500"></div>
+                    <span className="text-xs text-orange-500">Convirtiendo HEIC a JPEG...</span>
+                  </div>
+                )}
+                
                 {/* Estado de verificación de duplicado */}
-                {isCheckingDuplicate && (
+                {isCheckingDuplicate && !isConvertingHeic && (
                   <div className="flex items-center gap-1 mt-1">
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
                     <span className="text-xs text-blue-500">Verificando duplicados...</span>
                   </div>
                 )}
                 
-                {fileHash && !isCheckingDuplicate && (
+                {fileHash && !isCheckingDuplicate && !isConvertingHeic && (
                   <div className="flex items-center gap-1 mt-1">
                     {isDuplicate ? (
                       <>
@@ -415,7 +479,7 @@ export function ObjectUploader({
               <Button
                 type="button"
                 onClick={handleUpload}
-                disabled={isUploading || isCheckingDuplicate || isDuplicate || !fileHash || !fileBuffer}
+                disabled={isUploading || isCheckingDuplicate || isConvertingHeic || isDuplicate || !fileHash || !fileBuffer}
                 className="flex-1"
                 variant={isDuplicate ? "secondary" : "default"}
               >
@@ -423,6 +487,11 @@ export function ObjectUploader({
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Subiendo...
+                  </>
+                ) : isConvertingHeic ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Convirtiendo...
                   </>
                 ) : isCheckingDuplicate ? (
                   <>
