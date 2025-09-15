@@ -718,7 +718,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SEGURIDAD: Validar mime type
       const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      const blockedMimes = ['image/heic', 'image/heif'];
       const detectedMime = mimeType || 'image/jpeg';
+      
+      // Rechazar específicamente archivos HEIC/HEIF
+      if (blockedMimes.includes(detectedMime.toLowerCase())) {
+        return res.status(415).json({ 
+          error: "Formato HEIC no soportado en servidor", 
+          message: "Los archivos HEIC deben ser convertidos a JPEG en el cliente antes de la subida",
+          mimeType: detectedMime
+        });
+      }
+      
       if (!allowedMimes.includes(detectedMime)) {
         return res.status(400).json({ 
           error: "Tipo de archivo no permitido", 
