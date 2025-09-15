@@ -325,44 +325,7 @@ export default function Home() {
           </div>
         </div>
 
-        <PromotionalBanners />
-
-        <FlashSaleSection products={flashSaleProducts} />
-
-        {/* Search Results Section */}
-        {searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
-         searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
-         searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000 ? (
-          <section className="mb-6 sm:mb-8">
-            <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-search-results-title">
-                🔍 Resultados de búsqueda
-              </h3>
-              <span className="text-sm text-muted-foreground" data-testid="text-search-results-count">
-                {displayedProducts.length} producto{displayedProducts.length !== 1 ? 's' : ''} encontrado{displayedProducts.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            
-            {displayedProducts.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-                {displayedProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground" data-testid="text-no-search-results">
-                <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-semibold mb-2">No se encontraron productos</h3>
-                <p className="mb-4">Intenta ajustar tus filtros de búsqueda</p>
-                <Button onClick={clearFilters} variant="outline" data-testid="button-clear-search-filters">
-                  Limpiar filtros
-                </Button>
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        {/* Brand Catalogs Section */}
+        {/* Brand Catalogs Section - MOVIDA A LA PARTE SUPERIOR */}
         <section className="mb-6 sm:mb-8">
           <h3 className="text-lg sm:text-2xl font-bold mb-3 sm:mb-4" data-testid="text-brand-catalogs-title">👟 Catálogos por Marca</h3>
           
@@ -427,6 +390,44 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        <PromotionalBanners />
+
+        <FlashSaleSection products={flashSaleProducts} />
+
+        {/* Search Results Section */}
+        {searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
+         searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
+         searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000 ? (
+          <section className="mb-6 sm:mb-8">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-search-results-title">
+                🔍 Resultados de búsqueda
+              </h3>
+              <span className="text-sm text-muted-foreground" data-testid="text-search-results-count">
+                {displayedProducts.length} producto{displayedProducts.length !== 1 ? 's' : ''} encontrado{displayedProducts.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            {displayedProducts.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                {displayedProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground" data-testid="text-no-search-results">
+                <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">No se encontraron productos</h3>
+                <p className="mb-4">Intenta ajustar tus filtros de búsqueda</p>
+                <Button onClick={clearFilters} variant="outline" data-testid="button-clear-search-filters">
+                  Limpiar filtros
+                </Button>
+              </div>
+            )}
+          </section>
+        ) : null}
+
 
 
 
