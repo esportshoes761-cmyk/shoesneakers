@@ -720,34 +720,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fileTypeFromBuffer } = await import('file-type');
       const actualFileType = await fileTypeFromBuffer(buffer);
       
-      console.log('🔒 Tipo detectado por binario:', actualFileType?.mime || 'desconocido');
+      console.log('🔒 Tipo detectado por binario:', actualFileType?.mime || 'DETECCIÓN FALLÓ');
       console.log('🔒 Tipo declarado por cliente:', mimeType);
       
-      // BLOQUEAR HEIC/HEIF basado en detección binaria (no en lo que dice el cliente)
-      if (actualFileType?.mime === 'image/heic' || actualFileType?.mime === 'image/heif') {
+      // CRÍTICO: Si no se puede detectar el tipo, RECHAZAR (no confiar en cliente)
+      if (!actualFileType || !actualFileType.mime) {
         return res.status(415).json({ 
-          error: "Formato HEIC detectado en servidor", 
-          message: "Los archivos HEIC deben ser convertidos a JPEG en el cliente antes de la subida. El servidor detectó HEIC en el contenido binario.",
+          error: "Tipo de archivo no reconocido", 
+          message: "El servidor no pudo determinar el tipo de archivo. Solo se permiten imágenes JPEG, PNG, GIF y WebP válidas.",
+          reason: "binary_detection_failed"
+        });
+      }
+      
+      // CRÍTICO: Bloquear TODAS las variantes HEIC/HEIF (no solo image/heic)
+      const heicFormats = ['image/heic', 'image/heif'];
+      const heicExtensions = ['heic', 'heif'];
+      
+      const isHeicByMime = heicFormats.includes(actualFileType.mime);
+      const isHeicByExt = actualFileType.ext && heicExtensions.includes(actualFileType.ext);
+      
+      if (isHeicByMime || isHeicByExt) {
+        return res.status(415).json({ 
+          error: "Formato HEIC/HEIF detectado en servidor", 
+          message: "Tu imagen está en formato HEIC. La convertimos automáticamente en el navegador; si falla, convierte a JPG/PNG y vuelve a intentar.",
           detectedType: actualFileType.mime,
+          detectedExt: actualFileType.ext,
           declaredType: mimeType
         });
       }
       
-      // Validar que sea una imagen válida usando detección binaria
+      // CRÍTICO: Solo permitir tipos específicos detectados por binario (NUNCA confiar en cliente)
       const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      const actualMime = actualFileType?.mime || mimeType || 'application/octet-stream';
       
-      if (!actualMime.startsWith('image/') || !allowedMimes.includes(actualMime)) {
-        return res.status(400).json({ 
-          error: "Tipo de archivo no permitido", 
+      if (!allowedMimes.includes(actualFileType.mime)) {
+        return res.status(415).json({ 
+          error: "Tipo de archivo no soportado", 
           message: "Solo se permiten imágenes JPEG, PNG, GIF y WebP",
-          detectedType: actualMime,
-          declaredType: mimeType
+          detectedType: actualFileType.mime,
+          detectedExt: actualFileType.ext,
+          allowedTypes: allowedMimes
         });
       }
       
-      // Usar el tipo detectado por binario para almacenamiento
-      const finalMimeType = actualFileType?.mime || mimeType || 'image/jpeg';
+      // SEGURIDAD: Usar SOLO el tipo detectado por binario (ignorar completamente cliente)
+      const finalMimeType = actualFileType.mime;
 
       // SEGURIDAD: SIEMPRE calcular hash en servidor (nunca confiar en cliente)
       const crypto = await import('crypto');
@@ -766,14 +782,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // SEGURIDAD: Generar fileName seguro en servidor (ignorar cliente)
+      // SEGURIDAD: Generar fileName seguro en servidor usando extensión detectada
       const imageId = generateUniqueReference();
-      const extension = finalMimeType.split('/')[1] || 'jpg';
+      // Usar extensión detectada por file-type (más confiable que mime)
+      const extension = actualFileType.ext || finalMimeType.split('/')[1] || 'jpg';
       const finalFileName = `${imageId}.${extension}`;
       const filePath = path.join(uploadsDir, finalFileName);
       
       console.log("🔥 Saving to:", filePath);
       console.log("🔒 Usando tipo MIME validado:", finalMimeType);
+      console.log("🔒 Usando extensión detectada:", extension);
       
       // Guardar la imagen físicamente
       await fs.writeFile(filePath, buffer);
