@@ -33,23 +33,28 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const { items, getTotalPrice, getTotalSavings, clearCart, updateQuantity, removeItem, updateSize } = useCartStore();
+  const { items, getTotalSavings, clearCart, updateQuantity, removeItem, updateSize } = useCartStore();
   const { totalSaved, appliedDiscount, applyDiscount, clearAppliedDiscount, getMaxUsableDiscount, getAchievements } = useSavingsStore();
 
-  // Obtener productos del carrito
-  const { data: products = [] } = useQuery({
-    queryKey: ["/api/products"],
-    enabled: items.length > 0,
-  });
+  // Obtener productos del carrito (ya están en el store)
+  const cartItems = items.map(item => ({
+    ...item.product,
+    quantity: item.quantity,
+    cartItemId: item.product.id,
+    selectedSize: item.selectedSize
+  }));
 
-  const cartItems = items.map(item => {
-    const product = (products as any[]).find((p: any) => p.id === item.productId);
-    return product ? { ...product, quantity: item.quantity, cartItemId: item.id, selectedSize: item.size } : null;
-  }).filter(Boolean);
+  // Calcular precio total
+  const calculateTotalPrice = () => {
+    return items.reduce((total, item) => {
+      const price = parseFloat(item.product.price?.replace(/\./g, '') || '0');
+      return total + (price * item.quantity);
+    }, 0);
+  };
 
-  const subtotalPrice = getTotalPrice(products as any[]);
+  const subtotalPrice = calculateTotalPrice();
   const totalPrice = subtotalPrice - appliedDiscount;
-  const totalSavings = getTotalSavings(products as any[]);
+  const totalSavings = getTotalSavings();
   const maxUsableDiscount = getMaxUsableDiscount();
 
   const form = useForm<CheckoutFormData>({
@@ -67,6 +72,50 @@ export default function CheckoutPage() {
     setIsProcessing(true);
     
     try {
+      const customerId = getCustomerId();
+      
+      // 🚀 CREAR ÓRDENES EN BASE DE DATOS
+      const trackingNumber = `ZS${Date.now().toString().slice(-8)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      const ordersCreated = [];
+      
+      for (const item of cartItems) {
+        const orderData = {
+          customerId,
+          customerName: data.fullName,
+          customerEmail: '', // Por ahora no pedimos email
+          customerPhone: data.phone,
+          customerAddress: `${data.address}, ${data.city}`,
+          productId: item.id,
+          quantity: item.quantity,
+          totalAmount: (item.quantity * parseFloat(item.price || '0')).toString(),
+          status: 'confirmed',
+          notes: data.additionalInfo || '',
+          whatsappSent: true,
+          trackingNumber,
+          deliveryTime: '2-5 días hábiles'
+        };
+
+        try {
+          const orderResponse = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+          });
+
+          if (orderResponse.ok) {
+            const createdOrder = await orderResponse.json();
+            ordersCreated.push(createdOrder);
+            console.log('✅ Orden creada:', createdOrder.id);
+          } else {
+            console.error('❌ Error creando orden para producto:', item.name);
+          }
+        } catch (orderError) {
+          console.error('❌ Error al crear orden:', orderError);
+        }
+      }
+
       // Preparar mensaje para WhatsApp
       const itemsList = cartItems.map(item => {
         return `• ${item.name}\n  🔖 Referencia: ${item.reference || 'Sin referencia'}\n  📏 Talla: ${item.selectedSize}\n  🔢 Cantidad: ${item.quantity}${item.imageUrl ? `\n  📸 Imagen: ${item.imageUrl}` : ''}`;
@@ -74,6 +123,7 @@ export default function CheckoutPage() {
 
       const whatsappMessage = encodeURIComponent(
         `🛍️ *NUEVA ORDEN - FASTSNIKER*\n\n` +
+        `🎯 *Número de seguimiento:* ${trackingNumber}\n\n` +
         `👤 *Cliente:* ${data.fullName}\n` +
         `📱 *Teléfono:* ${data.phone}\n` +
         `🏙️ *Ciudad:* ${data.city}\n` +
@@ -85,8 +135,6 @@ export default function CheckoutPage() {
 
       // Actualizar información del cliente en el servidor
       try {
-        const customerId = getCustomerId();
-        
         // Actualizar datos del cliente con la información de la compra
         await fetch(`/api/customer-savings/${customerId}`, {
           method: 'PUT',
