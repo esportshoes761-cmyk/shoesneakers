@@ -10,8 +10,8 @@ import * as path from "path";
 
 // Helper functions
 function generateUniqueReference(): string {
-  // Caracteres permitidos: letras (mayúsculas y minúsculas), números y símbolos seguros
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?!';
+  // Caracteres seguros para nombres de archivo: letras, números y símbolos web-safe
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   let result = '';
   const randomValues = randomBytes(10); // Máximo 10 caracteres
   
