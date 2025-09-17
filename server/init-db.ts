@@ -208,6 +208,7 @@ export async function initializeDatabase() {
       { name: "Puma", logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png", description: "Forever Faster - Estilo deportivo innovador", catalogUrl: "https://puma.com/catalog" },
       { name: "Jordan", logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png", description: "Jumpman - Calzado de baloncesto premium", catalogUrl: "https://jordan.com/catalog" },
       { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog" },
+      { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null },
     ];
 
     for (const brand of defaultBrands) {

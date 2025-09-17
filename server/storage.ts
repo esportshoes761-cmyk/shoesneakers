@@ -2,7 +2,7 @@ import { type User, type InsertUser, type Product, type InsertProduct, type Cate
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from "@shared/schema";
-import { eq, and, gte, lte, ilike, inArray, desc, or, like } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -1080,25 +1080,61 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBrandsWithProducts(): Promise<BrandWithProducts[]> {
+    // Get all active brands
     const brandList = await db.select().from(brands).where(eq(brands.isActive, true));
-    const allProducts = await db.select().from(products);
-    const allCategories = await db.select().from(categories);
     
-    return brandList.map(brand => {
-      const brandProducts = allProducts
-        .filter(product => product.brandId === brand.id)
-        .map(product => ({
-          ...product,
-          category: product.categoryId ? allCategories.find(c => c.id === product.categoryId) : undefined,
-          brand: brand
-        } as ProductWithCategory));
+    // For each brand, get products and count using SQL queries for accuracy
+    const brandsWithProducts = await Promise.all(brandList.map(async (brand) => {
+      // Get exact count using SQL COUNT()
+      const countResult = await db.select({ count: sql<number>`CAST(count(*) AS INTEGER)` })
+        .from(products)
+        .where(eq(products.brandId, brand.id));
+      
+      const exactProductCount = Number(countResult[0]?.count || 0);
+      
+      // Get products with categories for this brand
+      const brandProducts = await db.select({
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        price: products.price,
+        originalPrice: products.originalPrice,
+        categoryId: products.categoryId,
+        brandId: products.brandId,
+        imageUrl: products.imageUrl,
+        images: products.images,
+        reference: products.reference,
+        sizes: products.sizes,
+        colors: products.colors,
+        isFlashSale: products.isFlashSale,
+        isFeatured: products.isFeatured,
+        discountPercentage: products.discountPercentage,
+        nameNormalized: products.nameNormalized,
+        category: {
+          id: categories.id,
+          name: categories.name,
+          description: categories.description
+        }
+      })
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(eq(products.brandId, brand.id));
+      
+      // Convert to expected format
+      const formattedProducts = brandProducts.map(product => ({
+        ...product,
+        category: product.category?.id ? product.category : undefined,
+        brand: brand
+      } as ProductWithCategory));
       
       return {
         ...brand,
-        products: brandProducts,
-        productCount: brandProducts.length
+        products: formattedProducts,
+        productCount: exactProductCount // Use the exact SQL count
       };
-    });
+    }));
+    
+    return brandsWithProducts;
   }
 
   async getBrand(id: string): Promise<Brand | undefined> {

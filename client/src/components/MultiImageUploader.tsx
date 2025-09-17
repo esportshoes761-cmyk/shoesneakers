@@ -184,6 +184,18 @@ export function MultiImageUploader({
         completedUploads++;
         setUploadProgress((completedUploads / files.length) * 100);
 
+        // 🔔 Notificación específica por cada imagen subida
+        console.log(`✅ Imagen cargada correctamente para producto: ${file.name}`);
+        
+        // Mostrar progreso detallado cada 5 imágenes o al final
+        if (completedUploads % 5 === 0 || completedUploads === files.length) {
+          toast({
+            title: "📸 Progreso de Subida",
+            description: `${completedUploads} de ${files.length} imágenes procesadas correctamente`,
+            duration: 2000,
+          });
+        }
+
         return imageUrl;
       } catch (error) {
         // Marcar como error
@@ -319,21 +331,44 @@ export function MultiImageUploader({
         </div>
       )}
 
-      {/* Indicador de estado */}
-      <div className="flex items-center gap-2 text-sm">
-        {isMinimumMet ? (
-          <>
-            <Check className="h-4 w-4 text-green-500" />
-            <span className="text-green-600">Suficientes imágenes para crear paquete</span>
-          </>
-        ) : (
-          <>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
-            <span className="text-orange-600">
-              Necesitas al menos {minImages - validImages.length} imágenes más
+      {/* Indicador de estado mejorado */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm">
+          {isMinimumMet ? (
+            <>
+              <Check className="h-4 w-4 text-green-500" />
+              <span className="text-green-600">✅ Suficientes imágenes para crear paquete</span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <span className="text-orange-600">
+                ⚠️ Necesitas al menos {minImages - validImages.length} imágenes más
+              </span>
+            </>
+          )}
+        </div>
+        
+        {/* Contador detallado de estado */}
+        <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-2 rounded">
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1">
+              <Check className="h-3 w-3 text-green-500" />
+              Subidas: <strong className="text-green-600">{validImages.length}</strong>
             </span>
-          </>
-        )}
+            <span className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 text-blue-500" />
+              Cargando: <strong className="text-blue-600">{images.filter(img => img.isUploading).length}</strong>
+            </span>
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3 text-red-500" />
+              Errores: <strong className="text-red-600">{images.filter(img => img.error).length}</strong>
+            </span>
+          </div>
+          <span className="text-gray-400">
+            Total: {images.length}/{maxImages}
+          </span>
+        </div>
       </div>
 
       {/* Grid de imágenes */}
