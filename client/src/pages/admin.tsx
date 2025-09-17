@@ -276,11 +276,15 @@ export default function AdminPanel() {
   // Consultas de datos
   const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
   
-  // Filtrar productos por referencia
-  const products = allProducts.filter(product => 
-    !searchReference || 
-    (product.reference && product.reference.toLowerCase().includes(searchReference.toLowerCase()))
-  );
+  // Filtrar productos por referencia - fixed to handle null/undefined references
+  const products = allProducts.filter(product => {
+    if (!searchReference || searchReference.trim() === '') {
+      return true; // Show all products when no search term
+    }
+    // Handle cases where product.reference might be null, undefined, or empty
+    const productRef = product.reference || '';
+    return productRef.toLowerCase().includes(searchReference.toLowerCase());
+  });
   const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
   const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });

@@ -1,7 +1,19 @@
 // Utilidades para manejo de moneda colombiana (COP)
 
 export function formatCurrency(amount: string | number): string {
-  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  // Handle null, undefined, or empty values
+  if (!amount || amount === '' || amount === '0' || amount === 0) {
+    return '$0';
+  }
+  
+  // Convert to number safely
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount.replace(/[^\d.-]/g, '')) : amount;
+  
+  // Check for invalid numbers
+  if (isNaN(numericAmount) || !isFinite(numericAmount)) {
+    console.warn('formatCurrency: Invalid amount received:', amount);
+    return '$0';
+  }
   
   // Formatear con separadores de miles usando punto
   const formatted = new Intl.NumberFormat('es-CO', {
