@@ -1523,6 +1523,30 @@ export default function AdminPanel() {
                             </Badge>
                           )}
                         </div>
+                        
+                        {/* Botones de acción */}
+                        <div className="flex gap-1 pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-xs"
+                            onClick={() => handleEditProduct(product)}
+                            data-testid={`button-edit-brand-product-${product.id}`}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Editar
+                          </Button>
+                          {product.imageUrl && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setImageZoomData({ product, isOpen: true })}
+                              data-testid={`button-zoom-brand-product-${product.id}`}
+                            >
+                              <ZoomIn className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
