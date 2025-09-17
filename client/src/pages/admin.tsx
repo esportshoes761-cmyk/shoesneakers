@@ -241,6 +241,23 @@ export default function AdminPanel() {
 
   // Función para manejar edición de producto
   const handleEditProduct = (product: Product) => {
+    console.log("🔥 handleEditProduct llamado para producto:", product.name);
+    
+    // Si estamos en el diálogo de productos de marca, cerrarlo primero
+    if (brandProductsDialogOpen) {
+      console.log("🔥 Cerrando diálogo de productos de marca antes de editar");
+      setBrandProductsDialogOpen(false);
+      // Esperar un momento para que se cierre el diálogo antes de abrir el de editar
+      setTimeout(() => {
+        openEditProductDialog(product);
+      }, 150);
+    } else {
+      openEditProductDialog(product);
+    }
+  };
+
+  const openEditProductDialog = (product: Product) => {
+    console.log("🔥 Abriendo diálogo de editar para producto:", product.name);
     setEditingProduct(product);
     setIsEditMode(true);
     
