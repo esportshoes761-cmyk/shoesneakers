@@ -436,7 +436,7 @@ export default function AdvancedSearch({
               En oferta
               <X 
                 className="w-3 h-3 cursor-pointer" 
-                onClick={() => updateLocalFilters({ onSale: false })}
+                onClick={() => updateFilters({ onSale: false })}
               />
             </Badge>
           )}

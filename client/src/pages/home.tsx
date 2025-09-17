@@ -47,8 +47,8 @@ export default function Home() {
   });
 
   const { data: featuredProducts = [] } = useQuery<ProductWithCategory[]>({
-    queryKey: ["/api/products", "all-featured"],
-    queryFn: () => fetch("/api/products").then(res => res.json()),
+    queryKey: ["/api/products", "featured"],
+    queryFn: () => fetch("/api/products?featured=true").then(res => res.json()),
   });
 
   // Build query parameters from search filters
@@ -63,7 +63,7 @@ export default function Home() {
     if (searchFilters.sizes.length > 0) params.set('sizes', searchFilters.sizes.join(','));
     if (searchFilters.colors.length > 0) params.set('colors', searchFilters.colors.join(','));
     if (searchFilters.onSale) params.set('onSale', 'true');
-    // Los productos son ilimitados, no verificamos stock
+    if (searchFilters.inStock) params.set('inStock', 'true');
     
     return params.toString();
   }, [searchFilters]);
@@ -140,7 +140,7 @@ export default function Home() {
   // Mostrar productos: aleatorios para pantalla principal, filtrados para búsquedas
   const hasActiveFilters = searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
                           searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
-                          searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000;
+                          searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000;
   
   const displayedProducts = hasActiveFilters ? allProducts : randomizedAllProducts;
 
@@ -299,14 +299,15 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Disponibilidad ilimitada */}
-                    <div className="text-xs text-green-600 font-medium mb-3" data-testid={`text-brand-product-stock-${product.id}`}>
-                      ✅ Disponible
+                    {/* Stock */}
+                    <div className="text-xs text-muted-foreground mb-3" data-testid={`text-brand-product-stock-${product.id}`}>
+                      {(product.stock || 0) > 0 ? `${product.stock} disponibles` : 'Sin stock'}
                     </div>
 
                     {/* Botón de Agregar al Carrito */}
                     <button 
-                      className="w-full bg-primary text-primary-foreground py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
+                      className="w-full bg-primary text-primary-foreground py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={(product.stock || 0) === 0}
                       onClick={() => {
                         addItem(product);
                         toast({
@@ -316,7 +317,7 @@ export default function Home() {
                       }}
                       data-testid={`button-add-to-cart-brand-${product.id}`}
                     >
-                      Agregar al Carrito
+                      {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar al Carrito'}
                     </button>
                   </div>
                 </div>
@@ -483,7 +484,7 @@ export default function Home() {
         {/* Search Results Section */}
         {searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
          searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
-         searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000 ? (
+         searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000 ? (
           <section className="mb-6 sm:mb-8">
             <div className="flex justify-between items-center mb-3 sm:mb-4">
               <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-search-results-title">
@@ -516,7 +517,7 @@ export default function Home() {
         {/* Todos los Productos - Solo se muestra cuando no hay filtros activos */}
         {!(searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
           searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
-          searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000) && (
+          searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000) && (
           <section className="mb-6 sm:mb-8">
             <div className="flex justify-between items-center mb-3 sm:mb-4">
               <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-all-products-title">

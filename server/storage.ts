@@ -861,82 +861,15 @@ export class MemStorage implements IStorage {
     return Array.from(this.orders.values())
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
   }
-
-  // Initialize default data for MemStorage
-  async initializeDefaultData() {
-    try {
-      // Initialize default categories
-      if (this.categories.size === 0) {
-        const defaultCategories = [
-          { id: "1", name: "Tacones", emoji: "👠", description: "Elegantes tacones para toda ocasión" },
-          { id: "2", name: "Deportivos", emoji: "👟", description: "Zapatos deportivos y cómodos" },
-          { id: "3", name: "Botas", emoji: "👢", description: "Botas para todas las temporadas" },
-          { id: "4", name: "Sandalias", emoji: "🩴", description: "Sandalias frescas y cómodas" },
-          { id: "5", name: "Casuales", emoji: "🥿", description: "Zapatos casuales para el día a día" },
-          { id: "6", name: "Formales", emoji: "👞", description: "Zapatos formales y elegantes" },
-        ];
-        
-        defaultCategories.forEach(cat => this.categories.set(cat.id, cat));
-      }
-
-      // Initialize default brands  
-      if (this.brands.size === 0) {
-        const defaultBrands = [
-          { 
-            id: "nike-001",
-            name: "Nike", 
-            logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png",
-            description: "Just Do It - Marca líder en deportivos",
-            catalogUrl: "https://nike.com/catalog",
-            isActive: true
-          },
-          { 
-            id: "adidas-001",
-            name: "Adidas", 
-            logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png",
-            description: "Impossible is Nothing - Deportivos de alta calidad",
-            catalogUrl: "https://adidas.com/catalog",
-            isActive: true
-          },
-          { 
-            id: "puma-001",
-            name: "Puma", 
-            logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png",
-            description: "Forever Faster - Estilo deportivo innovador",
-            catalogUrl: "https://puma.com/catalog",
-            isActive: true
-          }
-        ];
-        
-        defaultBrands.forEach(brand => this.brands.set(brand.id, brand));
-      }
-
-      // NO agregamos productos de muestra - solo mostraremos los productos originales del usuario
-
-      console.log('📦 MemStorage initialized with default data');
-    } catch (error) {
-      console.error('Error initializing MemStorage data:', error);
-    }
-  }
 }
 
 // DatabaseStorage implementation for persistent data
 export class DatabaseStorage implements IStorage {
   constructor() {
-    // No longer initialize in constructor to avoid blocking
+    this.initializeDefaultData();
   }
 
-  async healthCheck(): Promise<boolean> {
-    try {
-      await db.execute('SELECT 1');
-      return true;
-    } catch (error) {
-      console.log('🔄 Database health check failed:', error);
-      return false;
-    }
-  }
-
-  async initializeDefaultData() {
+  private async initializeDefaultData() {
     try {
       // Only initialize if no data exists
       const existingCategories = await db.select().from(categories).limit(1);
@@ -1682,43 +1615,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-// Storage factory with automatic fallback
-async function createStorage(): Promise<IStorage> {
-  if (!process.env.DATABASE_URL) {
-    console.log('📦 Using MemStorage: No DATABASE_URL found');
-    const memStorage = new MemStorage();
-    await memStorage.initializeDefaultData();
-    return memStorage;
-  }
-
-  const dbStorage = new DatabaseStorage();
-  const isHealthy = await dbStorage.healthCheck();
-  
-  if (isHealthy) {
-    console.log('🗄️ Using DatabaseStorage: Database connection successful');
-    // Initialize default data after confirming connection
-    await dbStorage.initializeDefaultData();
-    return dbStorage;
-  } else {
-    console.log('📦 Using MemStorage: Database connection failed, falling back to memory storage');
-    const memStorage = new MemStorage();
-    await memStorage.initializeDefaultData();
-    return memStorage;
-  }
-}
-
-// Create storage instance with fallback
-let storage: IStorage = new MemStorage(); // Temporary fallback
-
-// Initialize storage asynchronously
-createStorage().then(storageInstance => {
-  storage = storageInstance;
-  console.log('✅ Storage initialized successfully');
-}).catch(error => {
-  console.error('❌ Failed to initialize storage:', error);
-  const fallbackStorage = new MemStorage();
-  fallbackStorage.initializeDefaultData();
-  storage = fallbackStorage;
-});
-
-export { storage };
+export const storage = new DatabaseStorage();

@@ -101,11 +101,11 @@ export default function SellerDashboard() {
               
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Disponibles</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">En Stock</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-available-products">
-                    {products.length}
+                  <div className="text-2xl font-bold" data-testid="text-in-stock">
+                    {products.filter(p => (p.stock || 0) > 0).length}
                   </div>
                 </CardContent>
               </Card>
