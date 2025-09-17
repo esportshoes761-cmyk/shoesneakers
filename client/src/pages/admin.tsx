@@ -135,7 +135,7 @@ export default function AdminPanel() {
     defaultValues: {
       name: "",
       description: "",
-      price: "1",
+      price: "",
       originalPrice: null,
       imageUrl: "",
       reference: "",
@@ -279,12 +279,17 @@ export default function AdminPanel() {
   // Mutaciones
   const createProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
+      // Calcular descuento si hay precio original
+      const discountPercentage = data.originalPrice && data.price 
+        ? calculateDiscount(data.originalPrice.toString(), data.price)
+        : 0;
+      
       // Asegurar que las imágenes adicionales se incluyan en los datos
       const productData = {
         ...data,
-        price: "1", // Precio predeterminado, el precio real se da por WhatsApp
-        originalPrice: null,
-        discountPercentage: 0,
+        price: data.price || "1", // Usar precio del formulario, fallback a "1"
+        originalPrice: data.originalPrice || null,
+        discountPercentage,
         images: productImages.filter(img => img.trim() !== ""),
         sizes: productSizes,
         colors: productColors,
@@ -320,11 +325,16 @@ export default function AdminPanel() {
     mutationFn: (data: ProductFormData) => {
       if (!editingProduct) throw new Error("No hay producto para editar");
       
+      // Calcular descuento si hay precio original
+      const discountPercentage = data.originalPrice && data.price 
+        ? calculateDiscount(data.originalPrice.toString(), data.price)
+        : 0;
+      
       const productData = {
         ...data,
-        price: "1", // Precio predeterminado, el precio real se da por WhatsApp
-        originalPrice: null,
-        discountPercentage: 0,
+        price: data.price || "1", // Usar precio del formulario, fallback a "1"
+        originalPrice: data.originalPrice || null,
+        discountPercentage,
         images: productImages.filter(img => img.trim() !== ""),
         sizes: productSizes,
         colors: productColors,
@@ -675,8 +685,8 @@ export default function AdminPanel() {
                       )}
                     />
 
-                    {/* Stock */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                    {/* Stock y Precios */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
                       <FormField
                         control={productForm.control}
                         name="stock"
@@ -690,7 +700,68 @@ export default function AdminPanel() {
                           </FormItem>
                         )}
                       />
+                      
+                      <FormField
+                        control={productForm.control}
+                        name="price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Precio de Venta (COP) *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="Ej: 150.000"
+                                value={formatPrice(field.value || "")}
+                                onChange={(e) => {
+                                  const formattedValue = formatPrice(e.target.value);
+                                  field.onChange(parsePrice(formattedValue));
+                                }}
+                                data-testid="input-product-price" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={productForm.control}
+                        name="originalPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Precio Original (COP)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="Ej: 200.000 (opcional)"
+                                value={field.value ? formatPrice(field.value.toString()) : ""}
+                                onChange={(e) => {
+                                  const formattedValue = formatPrice(e.target.value);
+                                  field.onChange(formattedValue ? parsePrice(formattedValue) : null);
+                                }}
+                                data-testid="input-product-original-price" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
+                    
+                    {/* Mostrar descuento calculado */}
+                    {productForm.watch("price") && productForm.watch("originalPrice") && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-sm font-medium text-green-800">
+                          💰 Descuento: {calculateDiscount(
+                            productForm.watch("originalPrice")?.toString() || "0", 
+                            productForm.watch("price") || "0"
+                          )}% de descuento
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Los clientes verán: <span className="line-through">${formatPrice(productForm.watch("originalPrice")?.toString() || "0")}</span> → ${formatPrice(productForm.watch("price") || "0")}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Categoría y Marca */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCartStore } from "@/lib/cart-store";
 import { useLocation } from "wouter";
 import { SavingsAnimation, PulsingDiscount } from "./savings-animation";
+import { formatCurrency } from "@/lib/currency";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -310,6 +311,44 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
+      {/* Sección de Precios */}
+      <div className="mb-2 sm:mb-3">
+        {product.price && product.price !== "1" ? (
+          <div className="space-y-1">
+            {/* Mostrar precio original tachado si hay descuento */}
+            {product.originalPrice && product.originalPrice !== product.price && (
+              <div className="text-[10px] sm:text-xs text-muted-foreground line-through" data-testid={`text-original-price-${product.id}`}>
+                {formatCurrency(product.originalPrice)}
+              </div>
+            )}
+            
+            {/* Precio actual */}
+            <div className="text-sm sm:text-lg font-bold text-primary" data-testid={`text-price-${product.id}`}>
+              {formatCurrency(product.price)}
+              <span className="text-[10px] sm:text-xs text-muted-foreground ml-1">COP</span>
+            </div>
+            
+            {/* Badge de descuento si aplica */}
+            {product.originalPrice && product.originalPrice !== product.price && (() => {
+              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const savings = originalPrice - currentPrice;
+              const discountPercentage = Math.round((savings / originalPrice) * 100);
+              
+              return discountPercentage > 0 ? (
+                <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold">
+                  🎁 {discountPercentage}% OFF
+                </div>
+              ) : null;
+            })()}
+          </div>
+        ) : (
+          <div className="text-xs sm:text-sm text-muted-foreground font-medium" data-testid={`text-price-whatsapp-${product.id}`}>
+            💬 Precio disponible via WhatsApp
+          </div>
+        )}
+      </div>
+      
       {/* Botones de acción */}
       <div className="flex gap-2 mb-2 w-full">
         <Button 
@@ -392,9 +431,36 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                   Referencia: {product.reference}
                 </p>
               )}
-              <p className="text-sm text-muted-foreground mt-2">
-                El precio será cotizado via WhatsApp
-              </p>
+              
+              {/* Mostrar precio o mensaje de cotización */}
+              {product.price && product.price !== "1" ? (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  {product.originalPrice && product.originalPrice !== product.price && (
+                    <p className="text-sm text-muted-foreground line-through mb-1">
+                      Precio normal: {formatCurrency(product.originalPrice)}
+                    </p>
+                  )}
+                  <p className="text-lg font-bold text-green-700">
+                    💰 Precio: {formatCurrency(product.price)} COP
+                  </p>
+                  {product.originalPrice && product.originalPrice !== product.price && (() => {
+                    const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+                    const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+                    const savings = originalPrice - currentPrice;
+                    const discountPercentage = Math.round((savings / originalPrice) * 100);
+                    
+                    return discountPercentage > 0 ? (
+                      <p className="text-sm text-green-600 font-semibold">
+                        🎁 ¡Ahorras {formatCurrency(savings)} ({discountPercentage}% OFF)!
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-2">
+                  💬 El precio será cotizado via WhatsApp
+                </p>
+              )}
             </div>
             
             {/* Formulario de pedido */}
