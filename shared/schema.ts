@@ -1,174 +1,174 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   firstName: text("first_name"),
   lastName: text("last_name"),
   phone: text("phone"),
-  isSeller: boolean("is_seller").default(false),
-  isAdmin: boolean("is_admin").default(false),
-  credits: decimal("credits", { precision: 10, scale: 2 }).default("0"),
-  totalPurchases: decimal("total_purchases", { precision: 10, scale: 2 }).default("0"),
+  isSeller: integer("is_seller", { mode: "boolean" }).default(false),
+  isAdmin: integer("is_admin", { mode: "boolean" }).default(false),
+  credits: text("credits").default("0"),
+  totalPurchases: text("total_purchases").default("0"),
   loyaltyLevel: text("loyalty_level").default("bronze"), // bronze, silver, gold, platinum
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const categories = pgTable("categories", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const categories = sqliteTable("categories", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   emoji: text("emoji").notNull(),
   description: text("description"),
 });
 
-export const brands = pgTable("brands", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const brands = sqliteTable("brands", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   logo: text("logo").notNull(),
   description: text("description"),
   catalogUrl: text("catalog_url"),
-  isActive: boolean("is_active").default(true),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
 });
 
-export const promotions = pgTable("promotions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const promotions = sqliteTable("promotions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text("title").notNull(),
   description: text("description"),
   discountPercentage: integer("discount_percentage"),
-  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
+  discountAmount: text("discount_amount"),
   code: text("code").unique(),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  isActive: boolean("is_active").default(true),
-  minPurchase: decimal("min_purchase", { precision: 10, scale: 2 }),
+  startDate: integer("start_date", { mode: "timestamp" }).notNull(),
+  endDate: integer("end_date", { mode: "timestamp" }).notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  minPurchase: text("min_purchase"),
   maxUses: integer("max_uses"),
   currentUses: integer("current_uses").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const events = pgTable("events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const events = sqliteTable("events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text("title").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  isActive: boolean("is_active").default(true),
+  startDate: integer("start_date", { mode: "timestamp" }).notNull(),
+  endDate: integer("end_date", { mode: "timestamp" }).notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
   eventType: text("event_type").notNull(), // 'flash_sale', 'promotion', 'new_arrival', 'seasonal'
   priority: integer("priority").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // Tabla para imágenes con hash único
-export const images = pgTable("images", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const images = sqliteTable("images", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   fileName: text("file_name").notNull(),
   originalName: text("original_name").notNull(),
   path: text("path").notNull(),
   mimeType: text("mime_type").notNull(),
   size: integer("size").notNull(), // Tamaño en bytes
-  sha256: varchar("sha256", { length: 64 }).notNull().unique(), // Hash SHA-256 único
-  createdAt: timestamp("created_at").defaultNow(),
+  sha256: text("sha256", { length: 64 }).notNull().unique(), // Hash SHA-256 único
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const products = pgTable("products", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const products = sqliteTable("products", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   nameNormalized: text("name_normalized").notNull(), // Nombre normalizado solo para búsquedas, ya no unique
   description: text("description"),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  originalPrice: decimal("original_price", { precision: 10, scale: 2 }),
+  price: text("price").notNull(),
+  originalPrice: text("original_price"),
   discountPercentage: integer("discount_percentage").default(0),
-  categoryId: varchar("category_id").references(() => categories.id),
-  brandId: varchar("brand_id").references(() => brands.id),
-  sellerId: varchar("seller_id").references(() => users.id),
+  categoryId: text("category_id").references(() => categories.id),
+  brandId: text("brand_id").references(() => brands.id),
+  sellerId: text("seller_id").references(() => users.id),
   imageUrl: text("image_url"),
-  images: text("images").array().default(sql`'{}'::text[]`), // Hasta 9 imágenes
+  images: text("images", { mode: "json" }).$type<string[]>().default([]), // Hasta 9 imágenes
   reference: text("reference"), // Referencia del producto
-  sizes: text("sizes").array().default(sql`'{}'::text[]`), // Tallas disponibles
-  colors: text("colors").array().default(sql`'{}'::text[]`), // Colores disponibles
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  sizes: text("sizes", { mode: "json" }).$type<string[]>().default([]), // Tallas disponibles
+  colors: text("colors", { mode: "json" }).$type<string[]>().default([]), // Colores disponibles
+  rating: text("rating").default("0"),
   reviewCount: integer("review_count").default(0),
-  isFlashSale: boolean("is_flash_sale").default(false),
-  isFeatured: boolean("is_featured").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  isFlashSale: integer("is_flash_sale", { mode: "boolean" }).default(false),
+  isFeatured: integer("is_featured", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const cartItems = pgTable("cart_items", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
-  productId: varchar("product_id").references(() => products.id),
+export const cartItems = sqliteTable("cart_items", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id),
+  productId: text("product_id").references(() => products.id),
   quantity: integer("quantity").default(1),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // Tabla para transacciones de créditos
-export const creditTransactions = pgTable("credit_transactions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id).notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+export const creditTransactions = sqliteTable("credit_transactions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id).notNull(),
+  amount: text("amount").notNull(),
   type: text("type").notNull(), // 'earned', 'spent', 'bonus'
   description: text("description").notNull(),
-  orderId: varchar("order_id"), // Referencia a orden si aplica
-  createdAt: timestamp("created_at").defaultNow(),
+  orderId: text("order_id"), // Referencia a orden si aplica
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // Tabla para sesiones de usuario
-export const userSessions = pgTable("user_sessions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id).notNull(),
+export const userSessions = sqliteTable("user_sessions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id).notNull(),
   token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // Tabla para ahorros por cliente (sin necesidad de login)
-export const customerSavings = pgTable("customer_savings", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  customerId: varchar("customer_id").notNull().unique(), // UUID único por cliente
-  totalSaved: decimal("total_saved", { precision: 10, scale: 2 }).default("0"),
-  achievementsUnlocked: text("achievements_unlocked").array().default(sql`'{}'::text[]`),
-  lastPurchaseAmount: decimal("last_purchase_amount", { precision: 10, scale: 2 }).default("0"),
+export const customerSavings = sqliteTable("customer_savings", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  customerId: text("customer_id").notNull().unique(), // UUID único por cliente
+  totalSaved: text("total_saved").default("0"),
+  achievementsUnlocked: text("achievements_unlocked", { mode: "json" }).$type<string[]>().default([]),
+  lastPurchaseAmount: text("last_purchase_amount").default("0"),
   totalPurchases: integer("total_purchases").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const reviews = pgTable("reviews", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  productId: varchar("product_id").references(() => products.id).notNull(),
-  customerId: varchar("customer_id").notNull(),
+export const reviews = sqliteTable("reviews", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  productId: text("product_id").references(() => products.id).notNull(),
+  customerId: text("customer_id").notNull(),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email"),
   rating: integer("rating").notNull(), // 1-5 estrellas
   comment: text("comment"),
-  isVerified: boolean("is_verified").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  isVerified: integer("is_verified", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-export const orders = pgTable("orders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  customerId: varchar("customer_id").notNull(),
+export const orders = sqliteTable("orders", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  customerId: text("customer_id").notNull(),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerAddress: text("customer_address").notNull(),
-  productId: varchar("product_id").references(() => products.id).notNull(),
+  productId: text("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").default(1),
-  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }),
+  totalAmount: text("total_amount"),
   status: text("status").notNull().default("confirmed"), // 'confirmed', 'picked_up', 'in_transit', 'delivered'
   deliveryTime: text("delivery_time"),
   notes: text("notes"),
-  whatsappSent: boolean("whatsapp_sent").default(true),
+  whatsappSent: integer("whatsapp_sent", { mode: "boolean" }).default(true),
   trackingNumber: text("tracking_number"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

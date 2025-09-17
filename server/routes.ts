@@ -794,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log("🔥🔥🔥 UPLOAD ENDPOINT LLAMADO 🔥🔥🔥");
 
     try {
-      const { imageData, fileName, mimeType } = req.body || {};
+      const { imageData, fileName, mimeType, skipDuplicateCheck } = req.body || {};
       
       if (!imageData) {
         console.log("🔥 ERROR: Missing imageData");

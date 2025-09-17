@@ -873,7 +873,8 @@ export class MemStorage implements IStorage {
 // DatabaseStorage implementation for persistent data
 export class DatabaseStorage implements IStorage {
   constructor() {
-    this.initializeDefaultData();
+    // Remove auto-initialization to prevent conflicts
+    // Database is initialized separately in server startup
   }
 
   private async initializeDefaultData() {
@@ -1540,15 +1541,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCustomerSavings(customerSaving: InsertCustomerSavings): Promise<CustomerSavings> {
-    const [newCustomerSavings] = await db.insert(customerSavings).values(customerSaving).returning();
+    await db.insert(customerSavings).values(customerSaving);
+    // Get the created record by customerId since .returning() may not work consistently with SQLite
+    const [newCustomerSavings] = await db.select().from(customerSavings).where(eq(customerSavings.customerId, customerSaving.customerId));
     return newCustomerSavings;
   }
 
   async updateCustomerSavings(customerId: string, updateData: Partial<InsertCustomerSavings>): Promise<CustomerSavings | undefined> {
-    const [updatedCustomerSavings] = await db.update(customerSavings)
+    await db.update(customerSavings)
       .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(customerSavings.customerId, customerId))
-      .returning();
+      .where(eq(customerSavings.customerId, customerId));
+    // Get the updated record by customerId since .returning() may not work consistently with SQLite
+    const [updatedCustomerSavings] = await db.select().from(customerSavings).where(eq(customerSavings.customerId, customerId));
     return updatedCustomerSavings;
   }
 
@@ -1664,4 +1668,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

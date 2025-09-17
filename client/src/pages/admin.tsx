@@ -63,7 +63,6 @@ const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Selecciona una marca"),
   categoryId: z.string().min(1, "Selecciona una categoría"),
   size: z.string().min(1, "Selecciona una talla"),
-  pricePerProduct: z.string().min(1, "El precio por producto es requerido"),
   images: z.array(z.string()).min(10, "Se requieren mínimo 10 imágenes"),
 });
 
@@ -188,7 +187,6 @@ export default function AdminPanel() {
       brandId: "",
       categoryId: "",
       size: "",
-      pricePerProduct: "",
       images: [],
     },
   });
@@ -1880,25 +1878,6 @@ export default function AdminPanel() {
                                 <SelectItem value="45">45</SelectItem>
                               </SelectContent>
                             </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="pricePerProduct"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Precio por Producto (COP)</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                placeholder="Ej: 150000"
-                                value={formatPrice(field.value)}
-                                onChange={(e) => field.onChange(parsePrice(e.target.value))}
-                                data-testid="input-price-per-product"
-                              />
-                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
