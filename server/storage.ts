@@ -21,6 +21,8 @@ export interface IStorage {
   // Brand methods
   getBrands(): Promise<Brand[]>;
   getBrandsWithProducts(): Promise<BrandWithProducts[]>;
+  getBrandsByLocation(location: string): Promise<Brand[]>;
+  getBrandsWithProductsByLocation(location: string): Promise<BrandWithProducts[]>;
   getBrand(id: string): Promise<Brand | undefined>;
   createBrand(brand: InsertBrand): Promise<Brand>;
   updateBrand(id: string, brand: InsertBrand): Promise<Brand | undefined>;
@@ -213,7 +215,8 @@ export class MemStorage implements IStorage {
         id,
         description: brand.description,
         catalogUrl: brand.catalogUrl,
-        isActive: brand.isActive
+        isActive: brand.isActive,
+        displayLocation: "both" // Por defecto en ambos paneles
       });
     });
 
@@ -371,7 +374,8 @@ export class MemStorage implements IStorage {
       id,
       description: insertBrand.description ?? null,
       catalogUrl: insertBrand.catalogUrl ?? null,
-      isActive: insertBrand.isActive ?? true
+      isActive: insertBrand.isActive ?? true,
+      displayLocation: insertBrand.displayLocation ?? "both"
     };
     this.brands.set(id, brand);
     return brand;
@@ -387,7 +391,8 @@ export class MemStorage implements IStorage {
       id,
       description: insertBrand.description ?? null,
       catalogUrl: insertBrand.catalogUrl ?? null,
-      isActive: insertBrand.isActive ?? true
+      isActive: insertBrand.isActive ?? true,
+      displayLocation: insertBrand.displayLocation ?? existingBrand.displayLocation ?? "both"
     };
     this.brands.set(id, updatedBrand);
     return updatedBrand;
@@ -395,6 +400,32 @@ export class MemStorage implements IStorage {
 
   async deleteBrand(id: string): Promise<boolean> {
     return this.brands.delete(id);
+  }
+
+  async getBrandsByLocation(location: string): Promise<Brand[]> {
+    return Array.from(this.brands.values()).filter(brand => 
+      brand.isActive && 
+      (brand.displayLocation === location || brand.displayLocation === 'both')
+    );
+  }
+
+  async getBrandsWithProductsByLocation(location: string): Promise<BrandWithProducts[]> {
+    const brands = await this.getBrandsByLocation(location);
+    return brands.map(brand => {
+      const brandProducts = Array.from(this.products.values())
+        .filter(product => product.brandId === brand.id)
+        .map(product => ({
+          ...product,
+          category: product.categoryId ? this.categories.get(product.categoryId) : undefined,
+          brand: brand
+        }));
+      
+      return {
+        ...brand,
+        products: brandProducts,
+        productCount: brandProducts.length
+      };
+    });
   }
 
   // Promotion methods
@@ -1163,6 +1194,76 @@ export class DatabaseStorage implements IStorage {
       console.error('Error deleting brand:', error);
       return false;
     }
+  }
+
+  async getBrandsByLocation(location: string): Promise<Brand[]> {
+    return await db.select().from(brands).where(
+      and(
+        eq(brands.isActive, true),
+        or(
+          eq(brands.displayLocation, location),
+          eq(brands.displayLocation, 'both')
+        )
+      )
+    );
+  }
+
+  async getBrandsWithProductsByLocation(location: string): Promise<BrandWithProducts[]> {
+    // Get brands filtered by location
+    const brandList = await this.getBrandsByLocation(location);
+    
+    // For each brand, get products and count using SQL queries for accuracy
+    const brandsWithProducts = await Promise.all(brandList.map(async (brand) => {
+      // Get exact count using SQL COUNT()
+      const countResult = await db.select({ count: sql<number>`CAST(count(*) AS INTEGER)` })
+        .from(products)
+        .where(eq(products.brandId, brand.id));
+      
+      const exactProductCount = Number(countResult[0]?.count || 0);
+      
+      // Get products with categories for this brand
+      const brandProducts = await db.select({
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        price: products.price,
+        originalPrice: products.originalPrice,
+        categoryId: products.categoryId,
+        brandId: products.brandId,
+        imageUrl: products.imageUrl,
+        images: products.images,
+        reference: products.reference,
+        sizes: products.sizes,
+        colors: products.colors,
+        isFlashSale: products.isFlashSale,
+        isFeatured: products.isFeatured,
+        discountPercentage: products.discountPercentage,
+        nameNormalized: products.nameNormalized,
+        category: {
+          id: categories.id,
+          name: categories.name,
+          description: categories.description
+        }
+      })
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(eq(products.brandId, brand.id));
+      
+      // Convert to expected format
+      const formattedProducts = brandProducts.map(product => ({
+        ...product,
+        category: product.category?.id ? product.category : undefined,
+        brand: brand
+      } as ProductWithCategory));
+      
+      return {
+        ...brand,
+        products: formattedProducts,
+        productCount: exactProductCount // Use the exact SQL count
+      };
+    }));
+    
+    return brandsWithProducts;
   }
 
   // Product methods

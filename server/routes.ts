@@ -242,6 +242,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin brands (only brands with displayLocation 'admin' or 'both')
+  app.get("/api/brands/admin", async (req, res) => {
+    try {
+      const adminBrands = await storage.getBrandsByLocation('admin');
+      res.json(adminBrands);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching admin brands" });
+    }
+  });
+
+  // Client brands (only brands with displayLocation 'client' or 'both')
+  app.get("/api/brands/client", async (req, res) => {
+    try {
+      const clientBrands = await storage.getBrandsByLocation('client');
+      res.json(clientBrands);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching client brands" });
+    }
+  });
+
+  // Admin brands with products
+  app.get("/api/brands/admin/with-products", async (req, res) => {
+    try {
+      const adminBrandsWithProducts = await storage.getBrandsWithProductsByLocation('admin');
+      res.json(adminBrandsWithProducts);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching admin brands with products" });
+    }
+  });
+
+  // Client brands with products
+  app.get("/api/brands/client/with-products", async (req, res) => {
+    try {
+      const clientBrandsWithProducts = await storage.getBrandsWithProductsByLocation('client');
+      res.json(clientBrandsWithProducts);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching client brands with products" });
+    }
+  });
+
   // Product details with reviews
   app.get("/api/products/:id/details", async (req, res) => {
     try {
