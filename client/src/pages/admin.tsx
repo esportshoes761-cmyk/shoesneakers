@@ -243,14 +243,10 @@ export default function AdminPanel() {
 
   // Función para manejar edición de producto
   const handleEditProduct = (product: Product) => {
-    console.log("🔥 handleEditProduct llamado para producto:", product.name);
-    console.log("🔥 Estado actual del diálogo:", productDialogOpen);
-    console.log("🔥 Estado actual de brandProductsDialog:", brandProductsDialogOpen);
-    
     // Cerrar diálogo de productos de marca si está abierto
     setBrandProductsDialogOpen(false);
     
-    // Cambiar a la pestaña de productos para que el diálogo esté montado
+    // Cambiar a la pestaña de productos para mejor UX
     setActiveTab("products");
     
     // Configurar edición
@@ -279,16 +275,8 @@ export default function AdminPanel() {
     setProductSizes(product.sizes || []);
     setProductColors(product.colors || []);
     
-    // Usar setTimeout para asegurar que los cambios de estado se procesen completamente
-    setTimeout(() => {
-      console.log("🔥 Abriendo diálogo de editar producto...");
-      setProductDialogOpen(true);
-      
-      // Verificar después de un momento adicional
-      setTimeout(() => {
-        console.log("🔥 Estado final del diálogo después de abrir:", productDialogOpen);
-      }, 100);
-    }, 150);
+    // Abrir diálogo directamente (ya no hay problemas de montaje)
+    setProductDialogOpen(true);
   };
 
 
