@@ -328,10 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         products = products.filter(p => p.discountPercentage && p.discountPercentage > 0);
       }
       
-      // In stock filter
-      if (inStock === "true") {
-        products = products.filter(p => (p.stock || 0) > 0);
-      }
+      // Productos ilimitados - sin verificación de stock
       
       res.json(products);
     } catch (error) {
