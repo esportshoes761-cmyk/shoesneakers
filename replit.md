@@ -68,3 +68,11 @@ The application uses a relational database structure with the following entities
 - **date-fns**: Date utility library for time calculations in flash sale countdown
 - **class-variance-authority**: Utility for creating variant-based component APIs
 - **clsx**: Utility for conditional CSS class concatenation
+
+## Recent Changes
+
+### 2025-09-17
+- Fixed exact product counting per brand using SQL COUNT() optimization instead of in-memory filtering
+- Added "CATÁLOGO COMPLETO" brand with placeholder logo to system defaults
+- Enhanced MultiImageUploader with detailed image upload verification and progress notifications
+- Added new brands: "EUROPEO" (elegant European style) and "GUALLOS" (artisanal leather footwear)

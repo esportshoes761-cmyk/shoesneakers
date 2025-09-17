@@ -209,6 +209,8 @@ export async function initializeDatabase() {
       { name: "Jordan", logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png", description: "Jumpman - Calzado de baloncesto premium", catalogUrl: "https://jordan.com/catalog" },
       { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog" },
       { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null },
+      { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null },
+      { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null },
     ];
 
     for (const brand of defaultBrands) {
