@@ -91,6 +91,9 @@ export default function AdminPanel() {
   const [brandDialogOpen, setBrandDialogOpen] = useState(false);
   const [brandProductsDialogOpen, setBrandProductsDialogOpen] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  
+  // Estado para controlar las pestañas activas
+  const [activeTab, setActiveTab] = useState("products");
 
   // Check de autenticación
   useEffect(() => {
@@ -242,26 +245,13 @@ export default function AdminPanel() {
   const handleEditProduct = (product: Product) => {
     console.log("🔥 handleEditProduct llamado para producto:", product.name);
     
-    // Si estamos en el diálogo de productos de marca, cerrarlo primero
-    if (brandProductsDialogOpen) {
-      console.log("🔥 Cerrando diálogo de productos de marca antes de editar");
-      setBrandProductsDialogOpen(false);
-      // Esperar un momento para que se cierre el diálogo antes de abrir el de editar
-      setTimeout(() => {
-        console.log("🔥 Abriendo diálogo de editar para producto:", product.name);
-        openEditProductDialog(product);
-      }, 200);
-    } else {
-      openEditProductDialog(product);
-    }
-  };
-
-  const openEditProductDialog = (product: Product) => {
-    console.log("🔥 Abriendo diálogo de editar para producto:", product.name);
-    
-    // Asegurar que otros diálogos estén cerrados
+    // Cerrar diálogo de productos de marca si está abierto
     setBrandProductsDialogOpen(false);
     
+    // Cambiar a la pestaña de productos para que el diálogo esté montado
+    setActiveTab("products");
+    
+    // Configurar edición
     setEditingProduct(product);
     setIsEditMode(true);
     
@@ -287,12 +277,13 @@ export default function AdminPanel() {
     setProductSizes(product.sizes || []);
     setProductColors(product.colors || []);
     
-    // Forzar la apertura del diálogo de producto con un pequeño delay
-    setTimeout(() => {
+    // Abrir el diálogo inmediatamente usando requestAnimationFrame para asegurar que el DOM esté listo
+    requestAnimationFrame(() => {
       setProductDialogOpen(true);
       console.log("🔥 Diálogo de editar producto abierto!");
-    }, 50);
+    });
   };
+
 
   const handleCancelEdit = () => {
     setEditingProduct(null);
@@ -641,7 +632,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <Tabs defaultValue="products" className="space-y-2 sm:space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
         <TabsList className="grid w-full grid-cols-5 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -666,7 +657,7 @@ export default function AdminPanel() {
         </TabsList>
 
         {/* Panel de Productos */}
-        <TabsContent value="products" className="space-y-2 sm:space-y-4">
+        <TabsContent value="products" className="space-y-2 sm:space-y-4" forceMount>
           <div className="flex justify-between items-center mb-2 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Productos</h2>
             <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
