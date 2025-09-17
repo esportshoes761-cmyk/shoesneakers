@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import { MultiImageUploader } from "@/components/MultiImageUploader";
 import { formatCurrency } from "@/lib/currency";
 import { getBrandLogoType } from "@/lib/brand-utils";
 import AdminOrders from "@/components/admin-orders";
@@ -57,15 +58,13 @@ type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
 
-// Brand package schema for bulk product creation
+// Brand package schema for bulk product creation - SIMPLIFIED ✅
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Selecciona una marca"),
   categoryId: z.string().min(1, "Selecciona una categoría"),
-  price: z.string().min(1, "El precio es requerido"),
-  description: z.string().default("Hermosa y cómoda zapatillas para el mejor estilo"),
+  size: z.string().min(1, "Selecciona una talla"),
+  pricePerProduct: z.string().min(1, "El precio por producto es requerido"),
   images: z.array(z.string()).min(10, "Se requieren mínimo 10 imágenes"),
-  isFlashSale: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
 });
 
 type BrandPackageFormData = z.infer<typeof brandPackageSchema>;
@@ -188,11 +187,9 @@ export default function AdminPanel() {
     defaultValues: {
       brandId: "",
       categoryId: "",
-      price: "",
-      description: "Hermosa y cómoda zapatillas para el mejor estilo",
+      size: "",
+      pricePerProduct: "",
       images: [],
-      isFlashSale: false,
-      isFeatured: false,
     },
   });
 
@@ -255,12 +252,13 @@ export default function AdminPanel() {
       setBulkCreationProgress(prev => ({ ...prev, isProcessing: false, results: data }));
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       toast({
-        title: "Paquete creado exitosamente",
-        description: `Se crearon ${data.success} productos correctamente. ${data.failed > 0 ? `${data.failed} fallaron.` : ''}`,
+        title: "¡Paquete creado exitosamente! 🎉",
+        description: `Se crearon ${data.success} productos destacados. ${data.failed > 0 ? `${data.failed} fallaron.` : 'Todos aparecerán en la página principal.'}`,
         variant: data.failed > 0 ? "destructive" : "default",
       });
       brandPackageForm.reset();
       setBulkUploadImages([]);
+      setBrandPackageDialogOpen(false); // ✅ Close dialog
     },
     onError: async (error: Error) => {
       setBulkCreationProgress(prev => ({ ...prev, isProcessing: false }));
@@ -1802,8 +1800,8 @@ export default function AdminPanel() {
                 </DialogHeader>
                 <Form {...brandPackageForm}>
                   <form onSubmit={brandPackageForm.handleSubmit((data) => {
-                    const formData = { ...data, images: bulkUploadImages };
-                    bulkCreateProductsMutation.mutate(formData);
+                    console.log('🚀 Enviando paquete:', data);
+                    bulkCreateProductsMutation.mutate(data);
                   })} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
@@ -1855,118 +1853,80 @@ export default function AdminPanel() {
                         )}
                       />
                     </div>
-                    <FormField
-                      control={brandPackageForm.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Precio (COP) - Aplicará a todos los productos</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Ej: 150000"
-                              value={formatPrice(field.value)}
-                              onChange={(e) => field.onChange(parsePrice(e.target.value))}
-                              data-testid="input-price-package"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={brandPackageForm.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Descripción por defecto (opcional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="Descripción que se aplicará a todos los productos"
-                              className="min-h-[80px]"
-                              data-testid="textarea-description-package"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <div className="space-y-2">
-                      <FormLabel>Imágenes del Paquete (Mínimo 10)</FormLabel>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                        <ObjectUploader
-                          onComplete={(url: string) => {
-                            setBulkUploadImages(prev => [...prev, url]);
-                            brandPackageForm.setValue('images', [...bulkUploadImages, url]);
-                          }}
-                          buttonClassName="w-full"
-                        />
-                        {bulkUploadImages.length > 0 && (
-                          <div className="mt-4">
-                            <p className="text-sm font-medium mb-2">
-                              Imágenes cargadas: {bulkUploadImages.length} {bulkUploadImages.length < 10 && '(Mínimo 10 requeridas)'}
-                            </p>
-                            <div className="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto">
-                              {bulkUploadImages.map((image, index) => (
-                                <div key={index} className="relative group">
-                                  <img
-                                    src={`/api/images/${image}`}
-                                    alt={`Imagen ${index + 1}`}
-                                    className="w-full h-16 object-cover rounded border"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    className="absolute -top-2 -right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => {
-                                      const newImages = bulkUploadImages.filter((_, i) => i !== index);
-                                      setBulkUploadImages(newImages);
-                                      brandPackageForm.setValue('images', newImages);
-                                    }}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={brandPackageForm.control}
-                        name="isFlashSale"
+                        name="size"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Oferta Flash</FormLabel>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-flash-sale-package" />
-                            </FormControl>
+                          <FormItem>
+                            <FormLabel>Talla</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-package">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona la talla" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="35">35</SelectItem>
+                                <SelectItem value="36">36</SelectItem>
+                                <SelectItem value="37">37</SelectItem>
+                                <SelectItem value="38">38</SelectItem>
+                                <SelectItem value="39">39</SelectItem>
+                                <SelectItem value="40">40</SelectItem>
+                                <SelectItem value="41">41</SelectItem>
+                                <SelectItem value="42">42</SelectItem>
+                                <SelectItem value="43">43</SelectItem>
+                                <SelectItem value="44">44</SelectItem>
+                                <SelectItem value="45">45</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={brandPackageForm.control}
-                        name="isFeatured"
+                        name="pricePerProduct"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Producto Destacado</FormLabel>
-                            </div>
+                          <FormItem>
+                            <FormLabel>Precio por Producto (COP)</FormLabel>
                             <FormControl>
-                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-featured-package" />
+                              <Input
+                                {...field}
+                                placeholder="Ej: 150000"
+                                value={formatPrice(field.value)}
+                                onChange={(e) => field.onChange(parsePrice(e.target.value))}
+                                data-testid="input-price-per-product"
+                              />
                             </FormControl>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
+                    
+                    <FormField
+                      control={brandPackageForm.control}
+                      name="images"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Imágenes del Paquete (Mínimo 10)</FormLabel>
+                          <FormControl>
+                            <MultiImageUploader
+                              onImagesChange={(imageUrls) => {
+                                field.onChange(imageUrls);
+                                setBulkUploadImages(imageUrls);
+                              }}
+                              minImages={10}
+                              maxImages={50}
+                              initialImages={field.value || []}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
 
                     {/* Progress indicator */}
                     {bulkCreationProgress.isProcessing && (
@@ -2026,12 +1986,12 @@ export default function AdminPanel() {
                       </Button>
                       <Button 
                         type="submit" 
-                        disabled={bulkCreateProductsMutation.isPending || bulkUploadImages.length < 10}
+                        disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 10}
                         data-testid="button-submit-brand-package"
                       >
                         {bulkCreateProductsMutation.isPending 
-                          ? "Creando..." 
-                          : `Crear ${bulkUploadImages.length} Productos`
+                          ? "Creando productos destacados..." 
+                          : `Crear ${(brandPackageForm.watch('images')?.length || 0)} Productos Destacados`
                         }
                       </Button>
                     </div>

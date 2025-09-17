@@ -299,15 +299,15 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Stock */}
-                    <div className="text-xs text-muted-foreground mb-3" data-testid={`text-brand-product-stock-${product.id}`}>
-                      {(product.stock || 0) > 0 ? `${product.stock} disponibles` : 'Sin stock'}
+                    {/* Disponibilidad */}
+                    <div className="text-xs text-muted-foreground mb-3" data-testid={`text-brand-product-availability-${product.id}`}>
+                      Disponible
                     </div>
 
                     {/* Botón de Agregar al Carrito */}
                     <button 
                       className="w-full bg-primary text-primary-foreground py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={(product.stock || 0) === 0}
+                      disabled={false}
                       onClick={() => {
                         addItem(product);
                         toast({
@@ -317,7 +317,7 @@ export default function Home() {
                       }}
                       data-testid={`button-add-to-cart-brand-${product.id}`}
                     >
-                      {(product.stock || 0) === 0 ? 'Sin Stock' : 'Agregar al Carrito'}
+                      Agregar al Carrito
                     </button>
                   </div>
                 </div>

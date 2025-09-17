@@ -43,15 +43,13 @@ async function generateUniqueReferenceForProduct(): Promise<string> {
   throw new Error('No se pudo generar una referencia única después de múltiples intentos');
 }
 
-// Brand package schema for bulk creation
+// Brand package schema for bulk creation - SIMPLIFIED
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Brand ID is required"),
   categoryId: z.string().min(1, "Category ID is required"),
-  price: z.string().min(1, "Price is required"),
-  description: z.string().default("Hermosa y cómoda zapatillas para el mejor estilo"),
+  size: z.string().min(1, "Size is required"), // Talla
+  pricePerProduct: z.string().min(1, "Price per product is required"), // Precio individual
   images: z.array(z.string()).min(10, "Minimum 10 images required"),
-  isFlashSale: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -286,24 +284,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const results = { success: 0, failed: 0, errors: [] as string[] };
       const createdProducts = [];
       
-      // Create products for each image
+      // Create products for each image - SIMPLIFIED & FEATURED
       for (let i = 0; i < packageData.images.length; i++) {
         try {
           // Generate unique reference for this product
           const reference = await generateUniqueReferenceForProduct();
           
           const productData = {
-            name: brand.name, // Use brand name as product name
-            description: packageData.description,
-            price: packageData.price,
+            name: `${brand.name} Talla ${packageData.size}`, // Brand + Size
+            description: "Hermosa y cómoda zapatillas para el mejor estilo", // Auto-generated
+            price: packageData.pricePerProduct, // Individual price
             imageUrl: packageData.images[i],
             reference: reference,
             categoryId: packageData.categoryId,
             brandId: packageData.brandId,
-            isFlashSale: packageData.isFlashSale,
-            isFeatured: packageData.isFeatured,
+            isFlashSale: false, // Not flash sale by default
+            isFeatured: true, // ✅ ALWAYS FEATURED - aparecer en destacados
             images: [packageData.images[i]], // Single image per product
-            sizes: [],
+            sizes: [packageData.size], // Use package size
             colors: [],
           };
           
@@ -873,17 +871,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const crypto = await import('crypto');
       const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-      // CRÍTICO: Verificar duplicados ANTES de escribir archivo
-      const existingImage = await storage.getImageByHash(imageHash);
-      if (existingImage) {
-        console.log("🔥 DUPLICATE IMAGE DETECTED:", imageHash);
-        return res.status(409).json({
-          error: "La imagen ya existe",
-          exists: true,
-          imageUrl: `/api/images/${existingImage.fileName}`,
-          message: "Esta imagen ya fue subida anteriormente",
-          hash: imageHash
-        });
+      // CRÍTICO: Verificar duplicados ANTES de escribir archivo (SALTAR para packages)
+      if (!skipDuplicateCheck) {
+        const existingImage = await storage.getImageByHash(imageHash);
+        if (existingImage) {
+          console.log("🔥 DUPLICATE IMAGE DETECTED:", imageHash);
+          return res.status(409).json({
+            error: "La imagen ya existe",
+            exists: true,
+            imageUrl: `/api/images/${existingImage.fileName}`,
+            message: "Esta imagen ya fue subida anteriormente",
+            hash: imageHash
+          });
+        }
+      } else {
+        console.log("🔄 SALTANDO verificación de duplicados para package upload");
       }
 
       // SEGURIDAD: Generar fileName seguro en servidor usando extensión detectada
