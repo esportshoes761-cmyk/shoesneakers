@@ -883,6 +883,45 @@ export default function AdminPanel() {
                       {product.reference && (
                         <p className="text-sm font-medium text-primary">Ref: {product.reference}</p>
                       )}
+                      
+                      {/* PRECIO - CRÍTICO para admin */}
+                      <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+                        {(product.price !== null && product.price !== undefined && String(product.price) !== "1") ? (
+                          <div className="space-y-1">
+                            {/* Mostrar precio original tachado si hay descuento */}
+                            {product.originalPrice && product.originalPrice !== product.price && (
+                              <div className="text-xs text-muted-foreground line-through">
+                                Antes: {formatCurrency(product.originalPrice)}
+                              </div>
+                            )}
+                            
+                            {/* Precio actual */}
+                            <div className="text-lg font-bold text-blue-800">
+                              {formatCurrency(product.price)}
+                              <span className="text-xs text-muted-foreground ml-1">COP</span>
+                            </div>
+                            
+                            {/* Badge de descuento si aplica */}
+                            {product.originalPrice && product.originalPrice !== product.price && (() => {
+                              const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+                              const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
+                              const savings = originalPrice - currentPrice;
+                              const discountPercentage = Math.round((savings / originalPrice) * 100);
+                              
+                              return discountPercentage > 0 ? (
+                                <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold">
+                                  🎁 {discountPercentage}% OFF
+                                </div>
+                              ) : null;
+                            })()}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground font-medium">
+                            💬 Precio disponible via WhatsApp
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="flex gap-2">
                         {product.isFlashSale && <Badge variant="destructive">Oferta Flash</Badge>}
                         {product.isFeatured && <Badge>Destacado</Badge>}
