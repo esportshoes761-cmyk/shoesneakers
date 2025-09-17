@@ -58,12 +58,11 @@ type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
 
-// Brand package schema for bulk product creation - SIMPLIFIED ✅
+// Brand package schema for bulk product creation - ULTRA-SIMPLIFIED ⚡
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Selecciona una marca"),
   categoryId: z.string().min(1, "Selecciona una categoría"),
-  size: z.string().min(1, "Selecciona una talla"),
-  images: z.array(z.string()).min(10, "Se requieren mínimo 10 imágenes"),
+  images: z.array(z.string()).min(1, "Se requiere al menos 1 imagen"), // ✅ Only 1 image minimum
 });
 
 type BrandPackageFormData = z.infer<typeof brandPackageSchema>;
@@ -186,7 +185,6 @@ export default function AdminPanel() {
     defaultValues: {
       brandId: "",
       categoryId: "",
-      size: "",
       images: [],
     },
   });
@@ -1791,9 +1789,9 @@ export default function AdminPanel() {
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
                 <DialogHeader>
-                  <DialogTitle>Crear Paquete de Productos por Marca</DialogTitle>
+                  <DialogTitle>⚡ Paquete Ultra-Rápido por Marca</DialogTitle>
                   <DialogDescription>
-                    Crea múltiples productos de una marca de una sola vez. Mínimo 10 imágenes requeridas.
+                    Publicación ultra-simplificada: solo elige marca, categoría y fotos. Todo lo demás se auto-genera (precio, talla, descripción). ¡Cada foto = 1 producto destacado!
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...brandPackageForm}>
@@ -1851,52 +1849,20 @@ export default function AdminPanel() {
                         )}
                       />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="size"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Talla</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-package">
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona la talla" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="35">35</SelectItem>
-                                <SelectItem value="36">36</SelectItem>
-                                <SelectItem value="37">37</SelectItem>
-                                <SelectItem value="38">38</SelectItem>
-                                <SelectItem value="39">39</SelectItem>
-                                <SelectItem value="40">40</SelectItem>
-                                <SelectItem value="41">41</SelectItem>
-                                <SelectItem value="42">42</SelectItem>
-                                <SelectItem value="43">43</SelectItem>
-                                <SelectItem value="44">44</SelectItem>
-                                <SelectItem value="45">45</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
                     
                     <FormField
                       control={brandPackageForm.control}
                       name="images"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Imágenes del Paquete (Mínimo 10)</FormLabel>
+                          <FormLabel>Fotografías ⚡ (Mínimo 1)</FormLabel>
                           <FormControl>
                             <MultiImageUploader
                               onImagesChange={(imageUrls) => {
                                 field.onChange(imageUrls);
                                 setBulkUploadImages(imageUrls);
                               }}
-                              minImages={10}
+                              minImages={1}
                               maxImages={50}
                               initialImages={field.value || []}
                             />

@@ -43,13 +43,75 @@ async function generateUniqueReferenceForProduct(): Promise<string> {
   throw new Error('No se pudo generar una referencia única después de múltiples intentos');
 }
 
-// Brand package schema for bulk creation - SIMPLIFIED
+// Admin authorization middleware for POST/PUT routes (credentials in body)
+async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { adminUsername, adminPassword } = req.body;
+    
+    if (!adminUsername || !adminPassword) {
+      return res.status(401).json({ 
+        message: "Credenciales de administrador requeridas",
+        details: "Se requiere adminUsername y adminPassword en el cuerpo de la petición" 
+      });
+    }
+    
+    const user = await storage.authenticateUser(adminUsername, adminPassword);
+    if (!user) {
+      return res.status(401).json({ message: "Credenciales de administrador incorrectas" });
+    }
+    
+    if (!user.isAdmin) {
+      return res.status(403).json({ message: "Acceso denegado: Se requieren permisos de administrador" });
+    }
+    
+    // Store authenticated admin user for use in the route handler
+    (req as any).adminUser = user;
+    next();
+  } catch (error) {
+    console.error("Error in admin authentication:", error);
+    res.status(500).json({ message: "Error en la autenticación de administrador" });
+  }
+}
+
+// Admin authorization middleware for GET routes (credentials in headers)
+async function requireAdminAuthHeaders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const adminUsername = req.headers['x-admin-username'] as string;
+    const adminPassword = req.headers['x-admin-password'] as string;
+    
+    if (!adminUsername || !adminPassword) {
+      return res.status(401).json({ 
+        message: "Credenciales de administrador requeridas",
+        details: "Se requieren headers X-Admin-Username y X-Admin-Password" 
+      });
+    }
+    
+    const user = await storage.authenticateUser(adminUsername, adminPassword);
+    if (!user) {
+      return res.status(401).json({ message: "Credenciales de administrador incorrectas" });
+    }
+    
+    if (!user.isAdmin) {
+      return res.status(403).json({ message: "Acceso denegado: Se requieren permisos de administrador" });
+    }
+    
+    // Store authenticated admin user for use in the route handler
+    (req as any).adminUser = user;
+    next();
+  } catch (error) {
+    console.error("Error in admin authentication:", error);
+    res.status(500).json({ message: "Error en la autenticación de administrador" });
+  }
+}
+
+// Brand package schema for bulk creation - ULTRA-SIMPLIFIED ⚡
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Brand ID is required"),
   categoryId: z.string().min(1, "Category ID is required"),
-  size: z.string().min(1, "Size is required"), // Talla
-  pricePerProduct: z.string().min(1, "Price per product is required"), // Precio individual
-  images: z.array(z.string()).min(10, "Minimum 10 images required"),
+  images: z.array(z.string()).min(1, "At least 1 image required"), // Minimum 1 image, not 10
+  // Admin credentials for authorization
+  adminUsername: z.string().min(1, "Admin username is required"),
+  adminPassword: z.string().min(1, "Admin password is required"),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -127,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Brand management routes (Admin only)
-  app.post("/api/brands", async (req, res) => {
+  app.post("/api/brands", requireAdminAuth, async (req, res) => {
     try {
       const brandData = insertBrandSchema.parse(req.body);
       const brand = await storage.createBrand(brandData);
@@ -140,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/brands/:id", async (req, res) => {
+  app.put("/api/brands/:id", requireAdminAuth, async (req, res) => {
     try {
       const brandData = insertBrandSchema.parse(req.body);
       const brand = await storage.updateBrand(req.params.id, brandData);
@@ -270,8 +332,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk product creation endpoint
-  app.post("/api/products/bulk", async (req, res) => {
+  // Bulk product creation endpoint - ADMIN ONLY
+  app.post("/api/products/bulk", requireAdminAuth, async (req, res) => {
     try {
       const packageData = brandPackageSchema.parse(req.body);
       
@@ -284,24 +346,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const results = { success: 0, failed: 0, errors: [] as string[] };
       const createdProducts = [];
       
-      // Create products for each image - SIMPLIFIED & FEATURED
+      // ⚡ AUTO-GENERATE DEFAULTS FOR ULTRA-FAST PUBLISHING ⚡
+      const DEFAULT_PRICE = "89000"; // $89,000 COP - editable later in admin
+      const DEFAULT_SIZE = "Talla Única"; // Default size - configurable
+      const AUTO_DESCRIPTION = "Producto de calidad premium con estilo único y comodidad excepcional.";
+      
+      // Create products for each image - ULTRA-SIMPLIFIED & AUTO-GENERATED
       for (let i = 0; i < packageData.images.length; i++) {
         try {
           // Generate unique reference for this product
           const reference = await generateUniqueReferenceForProduct();
           
           const productData = {
-            name: `${brand.name} Talla ${packageData.size}`, // Brand + Size
-            description: "Hermosa y cómoda zapatillas para el mejor estilo", // Auto-generated
-            price: packageData.pricePerProduct, // Individual price
+            name: brand.name, // ✅ Simple: Just brand name (no size)
+            description: AUTO_DESCRIPTION, // ✅ Auto-generated description
+            price: DEFAULT_PRICE, // ✅ Default price - editable later
             imageUrl: packageData.images[i],
             reference: reference,
             categoryId: packageData.categoryId,
             brandId: packageData.brandId,
             isFlashSale: false, // Not flash sale by default
-            isFeatured: true, // ✅ ALWAYS FEATURED - aparecer en destacados
+            isFeatured: true, // ✅ ALWAYS FEATURED - appears on homepage
             images: [packageData.images[i]], // Single image per product
-            sizes: [packageData.size], // Use package size
+            sizes: [DEFAULT_SIZE], // ✅ Default size - editable later
             colors: [],
           };
           
@@ -972,7 +1039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API para actualizar estado de pedido (solo para admin)
-  app.put("/api/orders/:orderId/status", async (req, res) => {
+  app.put("/api/orders/:orderId/status", requireAdminAuth, async (req, res) => {
     try {
       const { orderId } = req.params;
       const { status, deliveryTime, notes } = req.body;
@@ -992,7 +1059,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API para obtener todos los pedidos (para admin)
-  app.get("/api/orders/admin/all", async (req, res) => {
+  app.get("/api/orders/admin/all", requireAdminAuthHeaders, async (req, res) => {
     try {
       const orders = await storage.getAllOrders();
       res.json(orders);
