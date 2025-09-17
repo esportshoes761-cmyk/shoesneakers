@@ -95,48 +95,22 @@ export default function AdminPanel() {
   // Estado para controlar las pestañas activas
   const [activeTab, setActiveTab] = useState("products");
 
-  // Check de autenticación
-  useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !user?.isAdmin)) {
-      setLocation("/admin-login");
-    }
-  }, [isLoading, isAuthenticated, user, setLocation]);
+  // Estados para edición
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
+  const [isBrandEditMode, setIsBrandEditMode] = useState(false);
+  const [pendingProductToEdit, setPendingProductToEdit] = useState<Product | null>(null);
 
   // Estados para manejar múltiples campos
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
   
-  // Estados para edición
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
-  const [isBrandEditMode, setIsBrandEditMode] = useState(false);
-  
   // Estado para búsqueda por referencia
   const [searchReference, setSearchReference] = useState("");
 
-  // Consultas de datos
-  const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
-  
-  // Filtrar productos por referencia
-  const products = allProducts.filter(product => 
-    !searchReference || 
-    (product.reference && product.reference.toLowerCase().includes(searchReference.toLowerCase()))
-  );
-  const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
-  const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
-  const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/with-products"] });
-  
-  // Query para productos de una marca específica
-  const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products", "brands", selectedBrandId],
-    queryFn: () => fetch(`/api/products?brands=${selectedBrandId}`).then(res => res.json()),
-    enabled: !!selectedBrandId && brandProductsDialogOpen,
-  });
-
-  // Formularios
+  // Formularios - MOVED BEFORE useEffect to fix initialization order
   const productForm = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
@@ -193,6 +167,72 @@ export default function AdminPanel() {
     },
   });
 
+  // Check de autenticación
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !user?.isAdmin)) {
+      setLocation("/admin-login");
+    }
+  }, [isLoading, isAuthenticated, user, setLocation]);
+
+  // Efecto para manejar secuenciado de diálogos de edición de productos
+  useEffect(() => {
+    if (!brandProductsDialogOpen && pendingProductToEdit) {
+      // Configurar edición
+      setEditingProduct(pendingProductToEdit);
+      setIsEditMode(true);
+      
+      // Poblar el formulario con los datos del producto
+      productForm.reset({
+        name: pendingProductToEdit.name,
+        description: pendingProductToEdit.description,
+        price: pendingProductToEdit.price.toString(),
+        originalPrice: pendingProductToEdit.originalPrice?.toString() || undefined,
+        imageUrl: pendingProductToEdit.imageUrl || undefined,
+        reference: pendingProductToEdit.reference || "",
+        categoryId: pendingProductToEdit.categoryId || undefined,
+        brandId: pendingProductToEdit.brandId || undefined,
+        isFlashSale: pendingProductToEdit.isFlashSale || false,
+        isFeatured: pendingProductToEdit.isFeatured || false,
+        images: pendingProductToEdit.images || [],
+        sizes: pendingProductToEdit.sizes || [],
+        colors: pendingProductToEdit.colors || [],
+      });
+      
+      // Poblar estados auxiliares
+      setProductImages(pendingProductToEdit.images || []);
+      setProductSizes(pendingProductToEdit.sizes || []);
+      setProductColors(pendingProductToEdit.colors || []);
+      
+      // Usar requestAnimationFrame para diferir la apertura del diálogo
+      requestAnimationFrame(() => {
+        setProductDialogOpen(true);
+      });
+      
+      // Limpiar el estado pendiente
+      setPendingProductToEdit(null);
+    }
+  }, [brandProductsDialogOpen, pendingProductToEdit, productForm]);
+
+  // Consultas de datos
+  const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
+  
+  // Filtrar productos por referencia
+  const products = allProducts.filter(product => 
+    !searchReference || 
+    (product.reference && product.reference.toLowerCase().includes(searchReference.toLowerCase()))
+  );
+  const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
+  const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
+  const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/with-products"] });
+  
+  // Query para productos de una marca específica
+  const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products", "brands", selectedBrandId],
+    queryFn: () => fetch(`/api/products?brands=${selectedBrandId}`).then(res => res.json()),
+    enabled: !!selectedBrandId && brandProductsDialogOpen,
+  });
+
   // Funciones para manejar múltiples campos
   const addProductImage = () => {
     if (productImages.length < 9) {
@@ -243,40 +283,46 @@ export default function AdminPanel() {
 
   // Función para manejar edición de producto
   const handleEditProduct = (product: Product) => {
-    // Cerrar diálogo de productos de marca si está abierto
-    setBrandProductsDialogOpen(false);
-    
     // Cambiar a la pestaña de productos para mejor UX
     setActiveTab("products");
     
-    // Configurar edición
-    setEditingProduct(product);
-    setIsEditMode(true);
-    
-    // Poblar el formulario con los datos del producto
-    productForm.reset({
-      name: product.name,
-      description: product.description,
-      price: product.price.toString(),
-      originalPrice: product.originalPrice?.toString() || undefined,
-      imageUrl: product.imageUrl || undefined,
-      reference: product.reference || "",
-      categoryId: product.categoryId || undefined,
-      brandId: product.brandId || undefined,
-      isFlashSale: product.isFlashSale || false,
-      isFeatured: product.isFeatured || false,
-      images: product.images || [],
-      sizes: product.sizes || [],
-      colors: product.colors || [],
-    });
-    
-    // Poblar estados auxiliares
-    setProductImages(product.images || []);
-    setProductSizes(product.sizes || []);
-    setProductColors(product.colors || []);
-    
-    // Abrir diálogo directamente (ya no hay problemas de montaje)
-    setProductDialogOpen(true);
+    // Si el diálogo de productos de marca está abierto, usar secuenciado
+    if (brandProductsDialogOpen) {
+      // Guardar el producto a editar para procesarlo cuando se cierre el diálogo
+      setPendingProductToEdit(product);
+      
+      // Cerrar diálogo de productos de marca (el useEffect se encargará del resto)
+      setBrandProductsDialogOpen(false);
+    } else {
+      // Si no hay diálogo de marca abierto, proceder directamente
+      setEditingProduct(product);
+      setIsEditMode(true);
+      
+      // Poblar el formulario con los datos del producto
+      productForm.reset({
+        name: product.name,
+        description: product.description,
+        price: product.price.toString(),
+        originalPrice: product.originalPrice?.toString() || undefined,
+        imageUrl: product.imageUrl || undefined,
+        reference: product.reference || "",
+        categoryId: product.categoryId || undefined,
+        brandId: product.brandId || undefined,
+        isFlashSale: product.isFlashSale || false,
+        isFeatured: product.isFeatured || false,
+        images: product.images || [],
+        sizes: product.sizes || [],
+        colors: product.colors || [],
+      });
+      
+      // Poblar estados auxiliares
+      setProductImages(product.images || []);
+      setProductSizes(product.sizes || []);
+      setProductColors(product.colors || []);
+      
+      // Abrir diálogo directamente
+      setProductDialogOpen(true);
+    }
   };
 
 
