@@ -107,6 +107,8 @@ export default function AdminPanel() {
   // Estados para edición
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
+  const [isBrandEditMode, setIsBrandEditMode] = useState(false);
   
   // Estado para búsqueda por referencia
   const [searchReference, setSearchReference] = useState("");
@@ -276,6 +278,30 @@ export default function AdminPanel() {
     setProductSizes([]);
     setProductColors([]);
     setProductDialogOpen(false);
+  };
+
+  // Función para manejar edición de marca
+  const handleEditBrand = (brand: BrandWithProducts) => {
+    setEditingBrand(brand);
+    setIsBrandEditMode(true);
+    
+    // Poblar el formulario con los datos de la marca
+    brandForm.reset({
+      name: brand.name,
+      logo: brand.logo,
+      description: brand.description || "",
+      catalogUrl: brand.catalogUrl || "",
+      isActive: brand.isActive ?? true,
+    });
+    
+    setBrandDialogOpen(true);
+  };
+
+  const handleCancelBrandEdit = () => {
+    setEditingBrand(null);
+    setIsBrandEditMode(false);
+    brandForm.reset();
+    setBrandDialogOpen(false);
   };
 
   // Mutaciones
@@ -452,15 +478,30 @@ export default function AdminPanel() {
   });
 
   const createBrandMutation = useMutation({
-    mutationFn: (data: BrandFormData) => apiRequest("POST", "/api/brands", data),
+    mutationFn: (data: BrandFormData) => {
+      if (isBrandEditMode && editingBrand) {
+        return apiRequest("PUT", `/api/brands/${editingBrand.id}`, data);
+      }
+      return apiRequest("POST", "/api/brands", data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/with-products"] });
       setBrandDialogOpen(false);
+      setEditingBrand(null);
+      setIsBrandEditMode(false);
       brandForm.reset();
-      toast({ title: "Éxito", description: "Marca creada exitosamente" });
+      toast({ 
+        title: "Éxito", 
+        description: isBrandEditMode ? "Marca actualizada exitosamente" : "Marca creada exitosamente" 
+      });
     },
     onError: () => {
-      toast({ title: "Error", description: "No se pudo crear la marca", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: isBrandEditMode ? "No se pudo actualizar la marca" : "No se pudo crear la marca", 
+        variant: "destructive" 
+      });
     },
   });
 
@@ -1244,9 +1285,9 @@ export default function AdminPanel() {
               </DialogTrigger>
               <DialogContent className="max-w-2xl mx-2 sm:mx-auto">
                 <DialogHeader>
-                  <DialogTitle>Agregar Nueva Marca</DialogTitle>
+                  <DialogTitle>{isBrandEditMode ? "Editar Marca" : "Agregar Nueva Marca"}</DialogTitle>
                   <DialogDescription>
-                    Crea una nueva marca para organizar los productos
+                    {isBrandEditMode ? "Modifica la información de la marca" : "Crea una nueva marca para organizar los productos"}
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...brandForm}>
@@ -1345,12 +1386,15 @@ export default function AdminPanel() {
                         disabled={createBrandMutation.isPending}
                         data-testid="button-submit-brand"
                       >
-                        {createBrandMutation.isPending ? "Creando..." : "Crear Marca"}
+                        {createBrandMutation.isPending 
+                          ? (isBrandEditMode ? "Actualizando..." : "Creando...") 
+                          : (isBrandEditMode ? "Actualizar Marca" : "Crear Marca")
+                        }
                       </Button>
                       <Button 
                         type="button" 
                         variant="outline" 
-                        onClick={() => setBrandDialogOpen(false)}
+                        onClick={handleCancelBrandEdit}
                         data-testid="button-cancel-brand"
                       >
                         Cancelar
@@ -1416,22 +1460,34 @@ export default function AdminPanel() {
                     </span>
                   </div>
                   
-                  {/* Botón para ver productos */}
-                  {(brand.productCount || 0) > 0 && (
+                  {/* Botones de acción */}
+                  <div className="flex gap-2 mt-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full mt-2 text-xs"
-                      onClick={() => {
-                        setSelectedBrandId(brand.id);
-                        setBrandProductsDialogOpen(true);
-                      }}
-                      data-testid={`button-view-brand-products-${brand.id}`}
+                      className="flex-1 text-xs"
+                      onClick={() => handleEditBrand(brand)}
+                      data-testid={`button-edit-brand-${brand.id}`}
                     >
-                      <Eye className="w-3 h-3 mr-1" />
-                      Ver Productos
+                      <Edit className="w-3 h-3 mr-1" />
+                      Editar
                     </Button>
-                  )}
+                    {(brand.productCount || 0) > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => {
+                          setSelectedBrandId(brand.id);
+                          setBrandProductsDialogOpen(true);
+                        }}
+                        data-testid={`button-view-brand-products-${brand.id}`}
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        Ver Productos
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}

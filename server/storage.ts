@@ -22,6 +22,7 @@ export interface IStorage {
   getBrandsWithProducts(): Promise<BrandWithProducts[]>;
   getBrand(id: string): Promise<Brand | undefined>;
   createBrand(brand: InsertBrand): Promise<Brand>;
+  updateBrand(id: string, brand: InsertBrand): Promise<Brand | undefined>;
 
   // Product methods
   getProducts(): Promise<ProductWithCategory[]>;
@@ -366,6 +367,22 @@ export class MemStorage implements IStorage {
     };
     this.brands.set(id, brand);
     return brand;
+  }
+
+  async updateBrand(id: string, insertBrand: InsertBrand): Promise<Brand | undefined> {
+    const existingBrand = this.brands.get(id);
+    if (!existingBrand) return undefined;
+
+    const updatedBrand: Brand = {
+      ...existingBrand,
+      ...insertBrand,
+      id,
+      description: insertBrand.description ?? null,
+      catalogUrl: insertBrand.catalogUrl ?? null,
+      isActive: insertBrand.isActive ?? true
+    };
+    this.brands.set(id, updatedBrand);
+    return updatedBrand;
   }
 
   // Promotion methods
@@ -1052,6 +1069,14 @@ export class DatabaseStorage implements IStorage {
   async createBrand(brand: InsertBrand): Promise<Brand> {
     const [newBrand] = await db.insert(brands).values(brand).returning();
     return newBrand;
+  }
+
+  async updateBrand(id: string, brand: InsertBrand): Promise<Brand | undefined> {
+    const [updatedBrand] = await db.update(brands)
+      .set(brand)
+      .where(eq(brands.id, id))
+      .returning();
+    return updatedBrand;
   }
 
   // Product methods

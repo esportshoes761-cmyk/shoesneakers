@@ -109,6 +109,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/brands/:id", async (req, res) => {
+    try {
+      const brandData = insertBrandSchema.parse(req.body);
+      const brand = await storage.updateBrand(req.params.id, brandData);
+      if (!brand) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json(brand);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid brand data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Error updating brand" });
+    }
+  });
+
   // Categories routes
   app.get("/api/categories", async (req, res) => {
     try {
