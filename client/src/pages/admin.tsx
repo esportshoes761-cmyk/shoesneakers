@@ -276,43 +276,53 @@ export default function AdminPanel() {
 
   // Función para manejar edición de producto
   const handleEditProduct = (product: Product) => {
+    console.log("🔥 INICIANDO EDICIÓN DE PRODUCTO:", product.name, product.id);
+    
     // Cambiar a la pestaña de productos para mejor UX
     setActiveTab("products");
     
+    // SIEMPRE configurar el producto a editar primero
+    setEditingProduct(product);
+    setIsEditMode(true);
+    
+    // Poblar el formulario con los datos del producto
+    productForm.reset({
+      name: product.name,
+      description: product.description,
+      price: product.price.toString(),
+      originalPrice: product.originalPrice?.toString() || undefined,
+      imageUrl: product.imageUrl || undefined,
+      reference: product.reference || "",
+      categoryId: product.categoryId || undefined,
+      brandId: product.brandId || undefined,
+      isFlashSale: product.isFlashSale || false,
+      isFeatured: product.isFeatured || false,
+      images: product.images || [],
+      sizes: product.sizes || [],
+      colors: product.colors || [],
+    });
+    
+    // Poblar estados auxiliares
+    setProductImages(product.images || []);
+    setProductSizes(product.sizes || []);
+    setProductColors(product.colors || []);
+    
     // Si el diálogo de productos de marca está abierto, usar secuenciado
     if (brandProductsDialogOpen) {
+      console.log("🔥 CERRANDO DIÁLOGO DE MARCA Y PREPARANDO EDICIÓN");
       // Guardar el producto a editar para procesarlo cuando se cierre el diálogo
       setPendingProductToEdit(product);
       
-      // Cerrar diálogo de productos de marca (el useEffect se encargará del resto)
+      // Cerrar diálogo de productos de marca
       setBrandProductsDialogOpen(false);
+      
+      // Usar setTimeout para asegurar que el diálogo se abra después del cierre
+      setTimeout(() => {
+        console.log("🔥 ABRIENDO DIÁLOGO DE EDICIÓN DESPUÉS DEL TIMEOUT");
+        setProductDialogOpen(true);
+      }, 100);
     } else {
-      // Si no hay diálogo de marca abierto, proceder directamente
-      setEditingProduct(product);
-      setIsEditMode(true);
-      
-      // Poblar el formulario con los datos del producto
-      productForm.reset({
-        name: product.name,
-        description: product.description,
-        price: product.price.toString(),
-        originalPrice: product.originalPrice?.toString() || undefined,
-        imageUrl: product.imageUrl || undefined,
-        reference: product.reference || "",
-        categoryId: product.categoryId || undefined,
-        brandId: product.brandId || undefined,
-        isFlashSale: product.isFlashSale || false,
-        isFeatured: product.isFeatured || false,
-        images: product.images || [],
-        sizes: product.sizes || [],
-        colors: product.colors || [],
-      });
-      
-      // Poblar estados auxiliares
-      setProductImages(product.images || []);
-      setProductSizes(product.sizes || []);
-      setProductColors(product.colors || []);
-      
+      console.log("🔥 ABRIENDO DIÁLOGO DE EDICIÓN DIRECTAMENTE");
       // Abrir diálogo directamente
       setProductDialogOpen(true);
     }
