@@ -244,6 +244,8 @@ export default function AdminPanel() {
   // Función para manejar edición de producto
   const handleEditProduct = (product: Product) => {
     console.log("🔥 handleEditProduct llamado para producto:", product.name);
+    console.log("🔥 Estado actual del diálogo:", productDialogOpen);
+    console.log("🔥 Estado actual de brandProductsDialog:", brandProductsDialogOpen);
     
     // Cerrar diálogo de productos de marca si está abierto
     setBrandProductsDialogOpen(false);
@@ -277,11 +279,16 @@ export default function AdminPanel() {
     setProductSizes(product.sizes || []);
     setProductColors(product.colors || []);
     
-    // Abrir el diálogo inmediatamente usando requestAnimationFrame para asegurar que el DOM esté listo
-    requestAnimationFrame(() => {
+    // Usar setTimeout para asegurar que los cambios de estado se procesen completamente
+    setTimeout(() => {
+      console.log("🔥 Abriendo diálogo de editar producto...");
       setProductDialogOpen(true);
-      console.log("🔥 Diálogo de editar producto abierto!");
-    });
+      
+      // Verificar después de un momento adicional
+      setTimeout(() => {
+        console.log("🔥 Estado final del diálogo después de abrir:", productDialogOpen);
+      }, 100);
+    }, 150);
   };
 
 
@@ -660,466 +667,16 @@ export default function AdminPanel() {
         <TabsContent value="products" className="space-y-2 sm:space-y-4" forceMount>
           <div className="flex justify-between items-center mb-2 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Productos</h2>
-            <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="h-8 sm:h-10 text-xs sm:text-sm" data-testid="button-add-product">
-                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Agregar Producto</span>
-                  <span className="sm:hidden">Nuevo</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
-                <DialogHeader>
-                  <DialogTitle>{isEditMode ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
-                  <DialogDescription>
-                    {isEditMode 
-                      ? "Modifica los detalles del producto que desees actualizar"
-                      : "Completa todos los detalles del producto incluyendo imágenes, tallas y colores"
-                    }
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...productForm}>
-                  <form onSubmit={productForm.handleSubmit((data) => {
-                    if (isEditMode) {
-                      updateProductMutation.mutate(data);
-                    } else {
-                      createProductMutation.mutate(data);
-                    }
-                  })} className="space-y-6">
-                    {/* Información Básica */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-                      <FormField
-                        control={productForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre del Producto *</FormLabel>
-                            <div className="flex gap-2">
-                              <FormControl>
-                                <Input {...field} data-testid="input-product-name" />
-                              </FormControl>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={applySuggestions}
-                                disabled={!field.value || field.value.length < 3}
-                                data-testid="button-apply-suggestions"
-                              >
-                                <Lightbulb className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline">Sugerir</span>
-                              </Button>
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={productForm.control}
-                        name="reference"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Referencia</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} data-testid="input-product-reference" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <FormField
-                      control={productForm.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Descripción</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} value={field.value || ""} data-testid="input-product-description" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Stock y Precios */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-                      
-                      <FormField
-                        control={productForm.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Precio de Venta (COP) *</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Ej: 150.000"
-                                value={formatPrice(field.value || "")}
-                                onChange={(e) => {
-                                  const formattedValue = formatPrice(e.target.value);
-                                  field.onChange(parsePrice(formattedValue));
-                                }}
-                                data-testid="input-product-price" 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={productForm.control}
-                        name="originalPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Precio Original (COP)</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Ej: 200.000 (opcional)"
-                                value={field.value ? formatPrice(field.value.toString()) : ""}
-                                onChange={(e) => {
-                                  const formattedValue = formatPrice(e.target.value);
-                                  field.onChange(formattedValue ? parsePrice(formattedValue) : null);
-                                }}
-                                data-testid="input-product-original-price" 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    {/* Mostrar descuento calculado */}
-                    {productForm.watch("price") && productForm.watch("originalPrice") && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-green-800">
-                          💰 Descuento: {calculateDiscount(
-                            productForm.watch("originalPrice")?.toString() || "0", 
-                            productForm.watch("price") || "0"
-                          )}% de descuento
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">
-                          Los clientes verán: <span className="line-through">${formatPrice(productForm.watch("originalPrice")?.toString() || "0")}</span> → ${formatPrice(productForm.watch("price") || "0")}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Categoría y Marca */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-                      <FormField
-                        control={productForm.control}
-                        name="categoryId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Categoría *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid="select-product-category">
-                                  <SelectValue placeholder="Selecciona una categoría" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {categories.map((category) => (
-                                  <SelectItem key={category.id} value={category.id}>
-                                    {category.emoji} {category.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={productForm.control}
-                        name="brandId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Marca *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid="select-product-brand">
-                                  <SelectValue placeholder="Selecciona una marca" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {brands.map((brand) => (
-                                  <SelectItem key={brand.id} value={brand.id}>
-                                    {brand.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    {/* Imagen Principal */}
-                    <FormField
-                      control={productForm.control}
-                      name="imageUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Imagen Principal *</FormLabel>
-                          <FormControl>
-                            <ObjectUploader
-                              onComplete={(imageUrl) => {
-                                console.log("🔥 IMAGEN PRINCIPAL RECIBIDA:", imageUrl);
-                                console.log("🔥 Actualizando campo con field.onChange");
-                                field.onChange(imageUrl);
-                                
-                                // Forzar actualización del formulario
-                                productForm.setValue("imageUrl", imageUrl, { 
-                                  shouldValidate: true, 
-                                  shouldDirty: true,
-                                  shouldTouch: true 
-                                });
-                                
-                                console.log("🔥 Valor actual del campo:", productForm.getValues("imageUrl"));
-                                console.log("🔥 Todos los valores del form:", productForm.getValues());
-                                
-                                toast({
-                                  title: "¡Imagen principal cargada!",
-                                  description: `URL: ${imageUrl}`,
-                                });
-                              }}
-                              data-testid="uploader-product-image"
-                            >
-                              Subir imagen principal
-                            </ObjectUploader>
-                          </FormControl>
-                          {field.value && (
-                            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                              <p className="text-sm text-green-700 font-medium">✅ Imagen subida:</p>
-                              <p className="text-xs text-green-600 break-all">{field.value}</p>
-                              <img 
-                                src={field.value} 
-                                alt="Preview" 
-                                className="mt-2 w-20 h-20 object-cover rounded border"
-                                onError={(e) => {
-                                  console.error("Error loading preview image:", field.value);
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            </div>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Imágenes Adicionales */}
-                    <div>
-                      <FormLabel>Más Imágenes del Producto 📸</FormLabel>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Agrega hasta 9 imágenes para mostrar diferentes ángulos, colores o detalles
-                      </p>
-                      <div className="space-y-2">
-                        {/* Siempre mostrar al menos un uploader si no hay imágenes */}
-                        {productImages.length === 0 && (
-                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
-                            <ObjectUploader
-                              onComplete={(imageUrl) => {
-                                console.log("Imagen adicional subida:", imageUrl); // Debug
-                                const newImages = [...productImages, imageUrl];
-                                setProductImages(newImages);
-                                toast({
-                                  title: "¡Imagen adicional cargada!",
-                                  description: "La imagen se guardará cuando publiques el producto",
-                                });
-                              }}
-                              data-testid="uploader-product-extra-image-0"
-                            >
-                              <div className="flex flex-col items-center gap-2">
-                                <ImagePlus className="h-8 w-8 text-muted-foreground" />
-                                <span>Agregar primera imagen adicional</span>
-                              </div>
-                            </ObjectUploader>
-                          </div>
-                        )}
-                        
-                        {/* Mostrar imágenes ya agregadas */}
-                        {productImages.map((image, index) => (
-                          <div key={index} className="flex gap-2 items-center p-3 border rounded-lg bg-muted/20">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium">Imagen {index + 1}</p>
-                              <p className="text-xs text-muted-foreground truncate">{image}</p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeProductImage(index)}
-                              data-testid={`button-remove-image-${index}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        
-                        {/* Botón para agregar más imágenes */}
-                        {productImages.length > 0 && productImages.length < 9 && (
-                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-3 text-center">
-                            <ObjectUploader
-                              onComplete={(imageUrl) => {
-                                const newImages = [...productImages, imageUrl];
-                                setProductImages(newImages);
-                              }}
-                              data-testid={`uploader-product-extra-image-${productImages.length}`}
-                            >
-                              <div className="flex items-center justify-center gap-2">
-                                <ImagePlus className="h-4 w-4" />
-                                <span>Agregar otra imagen ({productImages.length}/9)</span>
-                              </div>
-                            </ObjectUploader>
-                          </div>
-                        )}
-                        
-                        {productImages.length >= 9 && (
-                          <p className="text-xs text-muted-foreground text-center py-2">
-                            Has alcanzado el límite máximo de 9 imágenes adicionales
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tallas */}
-                    <div>
-                      <FormLabel>Tallas Disponibles</FormLabel>
-                      <div className="space-y-2 mt-2">
-                        <div className="flex gap-2 flex-wrap">
-                          {productSizes.map((size) => (
-                            <Badge key={size} variant="secondary" className="cursor-pointer" onClick={() => removeProductSize(size)}>
-                              {size} <X className="h-3 w-3 ml-1" />
-                            </Badge>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Agregar talla (ej: 40, XL, M)"
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                addProductSize(e.currentTarget.value);
-                                e.currentTarget.value = '';
-                              }
-                            }}
-                            data-testid="input-product-size"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={(e) => {
-                              const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                              addProductSize(input.value);
-                              input.value = '';
-                            }}
-                            data-testid="button-add-size"
-                          >
-                            Agregar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Colores */}
-                    <div>
-                      <FormLabel>Colores Disponibles</FormLabel>
-                      <div className="space-y-2 mt-2">
-                        <div className="flex gap-2 flex-wrap">
-                          {productColors.map((color) => (
-                            <Badge key={color} variant="secondary" className="cursor-pointer" onClick={() => removeProductColor(color)}>
-                              {color} <X className="h-3 w-3 ml-1" />
-                            </Badge>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Agregar color (ej: Negro, Blanco, Azul marino)"
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                addProductColor(e.currentTarget.value);
-                                e.currentTarget.value = '';
-                              }
-                            }}
-                            data-testid="input-product-color"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={(e) => {
-                              const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                              addProductColor(input.value);
-                              input.value = '';
-                            }}
-                            data-testid="button-add-color"
-                          >
-                            Agregar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Configuraciones Especiales */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={productForm.control}
-                        name="isFlashSale"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Oferta Flash</FormLabel>
-                              <div className="text-sm text-muted-foreground">Destacar como oferta por tiempo limitado</div>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-product-flash-sale" />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={productForm.control}
-                        name="isFeatured"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                            <div className="space-y-0.5">
-                              <FormLabel>Producto Destacado</FormLabel>
-                              <div className="text-sm text-muted-foreground">Mostrar en la sección destacados</div>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-product-featured" />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={isEditMode ? handleCancelEdit : () => setProductDialogOpen(false)}>
-                        Cancelar
-                      </Button>
-                      <Button 
-                        type="submit" 
-                        disabled={isEditMode ? updateProductMutation.isPending : createProductMutation.isPending} 
-                        data-testid="button-submit-product"
-                      >
-                        {isEditMode 
-                          ? (updateProductMutation.isPending ? "Actualizando..." : "Actualizar Producto")
-                          : (createProductMutation.isPending ? "Creando..." : "Crear Producto")
-                        }
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button 
+              size="sm" 
+              className="h-8 sm:h-10 text-xs sm:text-sm" 
+              data-testid="button-add-product"
+              onClick={() => setProductDialogOpen(true)}
+            >
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Agregar Producto</span>
+              <span className="sm:hidden">Nuevo</span>
+            </Button>
           </div>
           
           {/* Búsqueda por referencia */}
@@ -2121,6 +1678,461 @@ export default function AdminPanel() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Diálogo de productos movido fuera de TabsContent para resolver problemas de z-index */}
+      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle>{isEditMode ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
+            <DialogDescription>
+              {isEditMode 
+                ? "Modifica los detalles del producto que desees actualizar"
+                : "Completa todos los detalles del producto incluyendo imágenes, tallas y colores"
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...productForm}>
+            <form onSubmit={productForm.handleSubmit((data) => {
+              if (isEditMode) {
+                updateProductMutation.mutate(data);
+              } else {
+                createProductMutation.mutate(data);
+              }
+            })} className="space-y-6">
+              {/* Información Básica */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
+                <FormField
+                  control={productForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre del Producto *</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input {...field} data-testid="input-product-name" />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={applySuggestions}
+                          disabled={!field.value || field.value.length < 3}
+                          data-testid="button-apply-suggestions"
+                        >
+                          <Lightbulb className="h-4 w-4 mr-1" />
+                          <span className="hidden sm:inline">Sugerir</span>
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={productForm.control}
+                  name="reference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Referencia</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ""} data-testid="input-product-reference" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={productForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descripción</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} value={field.value || ""} data-testid="input-product-description" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Stock y Precios */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
+                
+                <FormField
+                  control={productForm.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio de Venta (COP) *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="Ej: 150.000"
+                          value={formatPrice(field.value || "")}
+                          onChange={(e) => {
+                            const formattedValue = formatPrice(e.target.value);
+                            field.onChange(parsePrice(formattedValue));
+                          }}
+                          data-testid="input-product-price" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={productForm.control}
+                  name="originalPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio Original (COP)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="Ej: 200.000 (opcional)"
+                          value={field.value ? formatPrice(field.value.toString()) : ""}
+                          onChange={(e) => {
+                            const formattedValue = formatPrice(e.target.value);
+                            field.onChange(formattedValue ? parsePrice(formattedValue) : null);
+                          }}
+                          data-testid="input-product-original-price" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              {/* Mostrar descuento calculado */}
+              {productForm.watch("price") && productForm.watch("originalPrice") && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-sm font-medium text-green-800">
+                    💰 Descuento: {calculateDiscount(
+                      productForm.watch("originalPrice")?.toString() || "0", 
+                      productForm.watch("price") || "0"
+                    )}% de descuento
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Los clientes verán: <span className="line-through">${formatPrice(productForm.watch("originalPrice")?.toString() || "0")}</span> → ${formatPrice(productForm.watch("price") || "0")}
+                  </p>
+                </div>
+              )}
+
+              {/* Categoría y Marca */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
+                <FormField
+                  control={productForm.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Categoría *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-product-category">
+                            <SelectValue placeholder="Selecciona una categoría" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.emoji} {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={productForm.control}
+                  name="brandId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Marca *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-product-brand">
+                            <SelectValue placeholder="Selecciona una marca" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {brands.map((brand) => (
+                            <SelectItem key={brand.id} value={brand.id}>
+                              {brand.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Imagen Principal */}
+              <FormField
+                control={productForm.control}
+                name="imageUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Imagen Principal *</FormLabel>
+                    <FormControl>
+                      <ObjectUploader
+                        onComplete={(imageUrl) => {
+                          console.log("🔥 IMAGEN PRINCIPAL RECIBIDA:", imageUrl);
+                          console.log("🔥 Actualizando campo con field.onChange");
+                          field.onChange(imageUrl);
+                          
+                          // Forzar actualización del formulario
+                          productForm.setValue("imageUrl", imageUrl, { 
+                            shouldValidate: true, 
+                            shouldDirty: true,
+                            shouldTouch: true 
+                          });
+                          
+                          console.log("🔥 Valor actual del campo:", productForm.getValues("imageUrl"));
+                          console.log("🔥 Todos los valores del form:", productForm.getValues());
+                          
+                          toast({
+                            title: "¡Imagen principal cargada!",
+                            description: `URL: ${imageUrl}`,
+                          });
+                        }}
+                        data-testid="uploader-product-image"
+                      >
+                        Subir imagen principal
+                      </ObjectUploader>
+                    </FormControl>
+                    {field.value && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <p className="text-sm text-green-700 font-medium">✅ Imagen subida:</p>
+                        <p className="text-xs text-green-600 break-all">{field.value}</p>
+                        <img 
+                          src={field.value} 
+                          alt="Preview" 
+                          className="mt-2 w-20 h-20 object-cover rounded border"
+                          onError={(e) => {
+                            console.error("Error loading preview image:", field.value);
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Imágenes Adicionales */}
+              <div>
+                <FormLabel>Más Imágenes del Producto 📸</FormLabel>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Agrega hasta 9 imágenes para mostrar diferentes ángulos, colores o detalles
+                </p>
+                <div className="space-y-2">
+                  {/* Siempre mostrar al menos un uploader si no hay imágenes */}
+                  {productImages.length === 0 && (
+                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
+                      <ObjectUploader
+                        onComplete={(imageUrl) => {
+                          console.log("Imagen adicional subida:", imageUrl); // Debug
+                          const newImages = [...productImages, imageUrl];
+                          setProductImages(newImages);
+                          toast({
+                            title: "¡Imagen adicional cargada!",
+                            description: "La imagen se guardará cuando publiques el producto",
+                          });
+                        }}
+                        data-testid="uploader-product-extra-image-0"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                          <span>Agregar primera imagen adicional</span>
+                        </div>
+                      </ObjectUploader>
+                    </div>
+                  )}
+                  
+                  {/* Mostrar imágenes ya agregadas */}
+                  {productImages.map((image, index) => (
+                    <div key={index} className="flex gap-2 items-center p-3 border rounded-lg bg-muted/20">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Imagen {index + 1}</p>
+                        <p className="text-xs text-muted-foreground truncate">{image}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeProductImage(index)}
+                        data-testid={`button-remove-image-${index}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  
+                  {/* Botón para agregar más imágenes */}
+                  {productImages.length > 0 && productImages.length < 9 && (
+                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-3 text-center">
+                      <ObjectUploader
+                        onComplete={(imageUrl) => {
+                          const newImages = [...productImages, imageUrl];
+                          setProductImages(newImages);
+                        }}
+                        data-testid={`uploader-product-extra-image-${productImages.length}`}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <ImagePlus className="h-4 w-4" />
+                          <span>Agregar otra imagen ({productImages.length}/9)</span>
+                        </div>
+                      </ObjectUploader>
+                    </div>
+                  )}
+                  
+                  {productImages.length >= 9 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Has alcanzado el límite máximo de 9 imágenes adicionales
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Tallas */}
+              <div>
+                <FormLabel>Tallas Disponibles</FormLabel>
+                <div className="space-y-2 mt-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {productSizes.map((size) => (
+                      <Badge key={size} variant="secondary" className="cursor-pointer" onClick={() => removeProductSize(size)}>
+                        {size} <X className="h-3 w-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Agregar talla (ej: 40, XL, M)"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addProductSize(e.currentTarget.value);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                      data-testid="input-product-size"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => {
+                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                        addProductSize(input.value);
+                        input.value = '';
+                      }}
+                      data-testid="button-add-size"
+                    >
+                      Agregar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Colores */}
+              <div>
+                <FormLabel>Colores Disponibles</FormLabel>
+                <div className="space-y-2 mt-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {productColors.map((color) => (
+                      <Badge key={color} variant="secondary" className="cursor-pointer" onClick={() => removeProductColor(color)}>
+                        {color} <X className="h-3 w-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Agregar color (ej: Negro, Blanco, Azul marino)"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addProductColor(e.currentTarget.value);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                      data-testid="input-product-color"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => {
+                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                        addProductColor(input.value);
+                        input.value = '';
+                      }}
+                      data-testid="button-add-color"
+                    >
+                      Agregar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Configuraciones Especiales */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={productForm.control}
+                  name="isFlashSale"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Oferta Flash</FormLabel>
+                        <div className="text-sm text-muted-foreground">Destacar como oferta por tiempo limitado</div>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-product-flash-sale" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={productForm.control}
+                  name="isFeatured"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Producto Destacado</FormLabel>
+                        <div className="text-sm text-muted-foreground">Mostrar en la sección destacados</div>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-product-featured" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={isEditMode ? handleCancelEdit : () => setProductDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isEditMode ? updateProductMutation.isPending : createProductMutation.isPending} 
+                  data-testid="button-submit-product"
+                >
+                  {isEditMode 
+                    ? (updateProductMutation.isPending ? "Actualizando..." : "Actualizar Producto")
+                    : (createProductMutation.isPending ? "Creando..." : "Crear Producto")
+                  }
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de zoom para imágenes de productos en admin */}
       {imageZoomData && (
