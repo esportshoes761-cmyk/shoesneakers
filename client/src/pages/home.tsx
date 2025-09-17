@@ -244,6 +244,24 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Precio */}
+                    {product.price && product.price !== "1" ? (
+                      <div className="mb-2">
+                        {product.originalPrice && product.originalPrice !== product.price && (
+                          <div className="text-xs text-muted-foreground line-through mb-1">
+                            {formatCurrency(product.originalPrice)}
+                          </div>
+                        )}
+                        <div className="text-sm font-bold text-primary" data-testid={`text-brand-product-price-${product.id}`}>
+                          {formatCurrency(product.price)} COP
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground mb-2" data-testid={`text-brand-product-price-whatsapp-${product.id}`}>
+                        💬 Precio via WhatsApp
+                      </div>
+                    )}
+
                     {/* Stock */}
                     <div className="text-xs text-muted-foreground mb-3" data-testid={`text-brand-product-stock-${product.id}`}>
                       {(product.stock || 0) > 0 ? `${product.stock} disponibles` : 'Sin stock'}

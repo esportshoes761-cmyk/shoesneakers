@@ -1511,6 +1511,35 @@ export default function AdminPanel() {
                           </div>
                         )}
                         
+                        {/* Tallas disponibles */}
+                        {product.sizes && product.sizes.length > 0 && (
+                          <div className="text-xs">
+                            <span className="font-medium">Tallas:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {product.sizes.slice(0, 4).map((size, index) => (
+                                <span 
+                                  key={index}
+                                  className="bg-muted text-muted-foreground px-1 py-0.5 rounded text-xs"
+                                >
+                                  {size}
+                                </span>
+                              ))}
+                              {product.sizes.length > 4 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{product.sizes.length - 4}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Precio del producto */}
+                        {product.price && product.price !== "1" && (
+                          <div className="text-xs">
+                            <span className="font-medium">Precio:</span> {formatCurrency(product.price)} COP
+                          </div>
+                        )}
+                        
                         <div className="flex items-center gap-2">
                           {product.isFlashSale && (
                             <Badge variant="destructive" className="text-xs">

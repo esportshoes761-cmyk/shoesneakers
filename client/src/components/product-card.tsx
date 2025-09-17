@@ -311,6 +311,30 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
       
+      {/* Tallas disponibles */}
+      {product.sizes && product.sizes.length > 0 && (
+        <div className="mb-2" data-testid={`text-sizes-${product.id}`}>
+          <div className="text-[10px] sm:text-xs text-muted-foreground mb-1">
+            Tallas disponibles:
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {product.sizes.slice(0, 6).map((size, index) => (
+              <span 
+                key={index}
+                className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium"
+              >
+                {size}
+              </span>
+            ))}
+            {product.sizes.length > 6 && (
+              <span className="text-[10px] sm:text-xs text-muted-foreground">
+                +{product.sizes.length - 6} más
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      
       {/* Sección de Precios */}
       <div className="mb-2 sm:mb-3">
         {product.price && product.price !== "1" ? (
