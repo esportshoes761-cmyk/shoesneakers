@@ -10,11 +10,12 @@ import * as path from "path";
 
 // Helper functions
 function generateUniqueReference(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  // Caracteres permitidos: letras (mayúsculas y minúsculas), números y símbolos seguros
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?!';
   let result = '';
-  const randomValues = randomBytes(20);
+  const randomValues = randomBytes(10); // Máximo 10 caracteres
   
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     result += chars[randomValues[i] % chars.length];
   }
   
