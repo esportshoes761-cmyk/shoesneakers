@@ -861,15 +861,145 @@ export class MemStorage implements IStorage {
     return Array.from(this.orders.values())
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
   }
+
+  // Initialize default data for MemStorage
+  async initializeDefaultData() {
+    try {
+      // Initialize default categories
+      if (this.categories.size === 0) {
+        const defaultCategories = [
+          { id: "1", name: "Tacones", emoji: "👠", description: "Elegantes tacones para toda ocasión" },
+          { id: "2", name: "Deportivos", emoji: "👟", description: "Zapatos deportivos y cómodos" },
+          { id: "3", name: "Botas", emoji: "👢", description: "Botas para todas las temporadas" },
+          { id: "4", name: "Sandalias", emoji: "🩴", description: "Sandalias frescas y cómodas" },
+          { id: "5", name: "Casuales", emoji: "🥿", description: "Zapatos casuales para el día a día" },
+          { id: "6", name: "Formales", emoji: "👞", description: "Zapatos formales y elegantes" },
+        ];
+        
+        defaultCategories.forEach(cat => this.categories.set(cat.id, cat));
+      }
+
+      // Initialize default brands  
+      if (this.brands.size === 0) {
+        const defaultBrands = [
+          { 
+            id: "nike-001",
+            name: "Nike", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png",
+            description: "Just Do It - Marca líder en deportivos",
+            catalogUrl: "https://nike.com/catalog",
+            isActive: true
+          },
+          { 
+            id: "adidas-001",
+            name: "Adidas", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png",
+            description: "Impossible is Nothing - Deportivos de alta calidad",
+            catalogUrl: "https://adidas.com/catalog",
+            isActive: true
+          },
+          { 
+            id: "puma-001",
+            name: "Puma", 
+            logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png",
+            description: "Forever Faster - Estilo deportivo innovador",
+            catalogUrl: "https://puma.com/catalog",
+            isActive: true
+          }
+        ];
+        
+        defaultBrands.forEach(brand => this.brands.set(brand.id, brand));
+      }
+
+      // Initialize sample products
+      if (this.products.size === 0) {
+        const sampleProducts = [
+          {
+            id: "nike-air-001",
+            name: "Nike Air Max 90",
+            nameNormalized: "nike air max 90",
+            description: "Clásicos deportivos Nike con amortiguación Air Max",
+            price: "150000",
+            originalPrice: "180000",
+            discountPercentage: 17,
+            categoryId: "2",
+            brandId: "nike-001", 
+            images: ["https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400"],
+            sizes: ["38", "39", "40", "41", "42"],
+            colors: ["Blanco", "Negro"],
+            rating: 4.5,
+            isFlashSale: true,
+            isFeatured: true,
+            flashSaleEndTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date()
+          },
+          {
+            id: "adidas-ultra-001", 
+            name: "Adidas Ultraboost 22",
+            nameNormalized: "adidas ultraboost 22",
+            description: "Máximo confort y rendimiento para running",
+            price: "200000",
+            originalPrice: null,
+            discountPercentage: null,
+            categoryId: "2",
+            brandId: "adidas-001",
+            images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400"],
+            sizes: ["39", "40", "41", "42", "43"],
+            colors: ["Negro", "Azul"],
+            rating: 4.8,
+            isFlashSale: false,
+            isFeatured: true,
+            flashSaleEndTime: null,
+            createdAt: new Date()
+          },
+          {
+            id: "puma-rs-001",
+            name: "Puma RS-X",
+            nameNormalized: "puma rs-x", 
+            description: "Estilo retro futurista con máxima comodidad",
+            price: "120000",
+            originalPrice: "140000",
+            discountPercentage: 14,
+            categoryId: "2",
+            brandId: "puma-001",
+            images: ["https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=400"],
+            sizes: ["37", "38", "39", "40", "41"],
+            colors: ["Gris", "Blanco"],
+            rating: 4.3,
+            isFlashSale: false,
+            isFeatured: false,
+            flashSaleEndTime: null,
+            createdAt: new Date()
+          }
+        ];
+        
+        sampleProducts.forEach(product => this.products.set(product.id, product));
+      }
+
+      console.log('📦 MemStorage initialized with default data');
+    } catch (error) {
+      console.error('Error initializing MemStorage data:', error);
+    }
+  }
 }
 
 // DatabaseStorage implementation for persistent data
 export class DatabaseStorage implements IStorage {
   constructor() {
-    this.initializeDefaultData();
+    // No longer initialize in constructor to avoid blocking
   }
 
-  private async initializeDefaultData() {
+  async healthCheck(): Promise<boolean> {
+    try {
+      await db.execute('SELECT 1');
+      return true;
+    } catch (error) {
+      console.log('🔄 Database health check failed:', error);
+      return false;
+    }
+  }
+
+  async initializeDefaultData() {
     try {
       // Only initialize if no data exists
       const existingCategories = await db.select().from(categories).limit(1);
@@ -1615,4 +1745,43 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Storage factory with automatic fallback
+async function createStorage(): Promise<IStorage> {
+  if (!process.env.DATABASE_URL) {
+    console.log('📦 Using MemStorage: No DATABASE_URL found');
+    const memStorage = new MemStorage();
+    await memStorage.initializeDefaultData();
+    return memStorage;
+  }
+
+  const dbStorage = new DatabaseStorage();
+  const isHealthy = await dbStorage.healthCheck();
+  
+  if (isHealthy) {
+    console.log('🗄️ Using DatabaseStorage: Database connection successful');
+    // Initialize default data after confirming connection
+    await dbStorage.initializeDefaultData();
+    return dbStorage;
+  } else {
+    console.log('📦 Using MemStorage: Database connection failed, falling back to memory storage');
+    const memStorage = new MemStorage();
+    await memStorage.initializeDefaultData();
+    return memStorage;
+  }
+}
+
+// Create storage instance with fallback
+let storage: IStorage = new MemStorage(); // Temporary fallback
+
+// Initialize storage asynchronously
+createStorage().then(storageInstance => {
+  storage = storageInstance;
+  console.log('✅ Storage initialized successfully');
+}).catch(error => {
+  console.error('❌ Failed to initialize storage:', error);
+  const fallbackStorage = new MemStorage();
+  fallbackStorage.initializeDefaultData();
+  storage = fallbackStorage;
+});
+
+export { storage };
