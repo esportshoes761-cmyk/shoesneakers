@@ -116,6 +116,7 @@ export class MemStorage implements IStorage {
     this.images = new Map();
     this.orders = new Map();
     this.initializeData();
+    this.normalizeBrandData();
   }
 
   private initializeData() {
@@ -208,7 +209,11 @@ export class MemStorage implements IStorage {
       }
     ];
 
-    realBrands.forEach(brand => {
+    // Split brands between admin and client - NO DUPLICATION
+    const adminBrands = realBrands.slice(0, Math.ceil(realBrands.length / 2));
+    const clientBrands = realBrands.slice(Math.ceil(realBrands.length / 2));
+    
+    adminBrands.forEach(brand => {
       const id = randomUUID();
       this.brands.set(id, { 
         ...brand, 
@@ -216,7 +221,19 @@ export class MemStorage implements IStorage {
         description: brand.description,
         catalogUrl: brand.catalogUrl,
         isActive: brand.isActive,
-        displayLocation: "both" // Por defecto en ambos paneles
+        displayLocation: "admin" // ADMIN ONLY
+      });
+    });
+    
+    clientBrands.forEach(brand => {
+      const id = randomUUID();
+      this.brands.set(id, { 
+        ...brand, 
+        id,
+        description: brand.description,
+        catalogUrl: brand.catalogUrl,
+        isActive: brand.isActive,
+        displayLocation: "client" // CLIENT ONLY
       });
     });
 
@@ -256,6 +273,17 @@ export class MemStorage implements IStorage {
       loyaltyLevel: "silver",
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+  }
+
+  // Normalize existing brand data to ensure strict separation
+  private normalizeBrandData(): void {
+    this.brands.forEach((brand, id) => {
+      // Convert any 'both', null, or undefined displayLocation to 'client'
+      if (!brand.displayLocation || brand.displayLocation === 'both' || brand.displayLocation === null) {
+        brand.displayLocation = 'client';
+        this.brands.set(id, brand);
+      }
     });
   }
 
@@ -375,7 +403,7 @@ export class MemStorage implements IStorage {
       description: insertBrand.description ?? null,
       catalogUrl: insertBrand.catalogUrl ?? null,
       isActive: insertBrand.isActive ?? true,
-      displayLocation: insertBrand.displayLocation ?? "both"
+      displayLocation: insertBrand.displayLocation ?? "client"
     };
     this.brands.set(id, brand);
     return brand;
@@ -392,7 +420,7 @@ export class MemStorage implements IStorage {
       description: insertBrand.description ?? null,
       catalogUrl: insertBrand.catalogUrl ?? null,
       isActive: insertBrand.isActive ?? true,
-      displayLocation: insertBrand.displayLocation ?? existingBrand.displayLocation ?? "both"
+      displayLocation: insertBrand.displayLocation ?? existingBrand.displayLocation ?? "client"
     };
     this.brands.set(id, updatedBrand);
     return updatedBrand;
@@ -405,7 +433,7 @@ export class MemStorage implements IStorage {
   async getBrandsByLocation(location: string): Promise<Brand[]> {
     return Array.from(this.brands.values()).filter(brand => 
       brand.isActive && 
-      (brand.displayLocation === location || brand.displayLocation === 'both')
+      brand.displayLocation === location // STRICT EQUALITY - NO DUPLICATES
     );
   }
 
@@ -425,7 +453,7 @@ export class MemStorage implements IStorage {
         products: brandProducts,
         productCount: brandProducts.length
       };
-    });
+    }).filter(brand => brand.productCount > 0); // ONLY BRANDS WITH PRODUCTS
   }
 
   // Promotion methods

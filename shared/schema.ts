@@ -34,7 +34,7 @@ export const brands = sqliteTable("brands", {
   description: text("description"),
   catalogUrl: text("catalog_url"),
   isActive: integer("is_active", { mode: "boolean" }).default(true),
-  displayLocation: text("display_location").default("both"), // 'admin', 'client', 'both'
+  displayLocation: text("display_location").default("client"), // 'admin', 'client' - STRICT SEPARATION
 });
 
 export const promotions = sqliteTable("promotions", {
@@ -203,7 +203,7 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 export const insertBrandSchema = createInsertSchema(brands).omit({
   id: true,
 }).extend({
-  displayLocation: z.enum(["admin", "client", "both"]).optional(),
+  displayLocation: z.enum(["admin", "client"]).optional(),
 });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({

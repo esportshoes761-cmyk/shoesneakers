@@ -725,8 +725,7 @@ export default function AdminPanel() {
       return apiRequest("POST", "/api/brands", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/brands/with-products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
       setBrandDialogOpen(false);
       setEditingBrand(null);
       setIsBrandEditMode(false);
@@ -748,8 +747,7 @@ export default function AdminPanel() {
   const deleteBrandMutation = useMutation({
     mutationFn: (brandId: string) => apiRequest("DELETE", `/api/brands/${brandId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/brands/with-products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
       toast({ 
         title: "¡Éxito!", 
         description: "Marca eliminada correctamente" 

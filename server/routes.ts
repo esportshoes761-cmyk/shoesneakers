@@ -242,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin brands (only brands with displayLocation 'admin' or 'both')
+  // Admin brands (STRICT: only brands with displayLocation 'admin')
   app.get("/api/brands/admin", async (req, res) => {
     try {
       const adminBrands = await storage.getBrandsByLocation('admin');
@@ -252,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Client brands (only brands with displayLocation 'client' or 'both')
+  // Client brands (STRICT: only brands with displayLocation 'client')
   app.get("/api/brands/client", async (req, res) => {
     try {
       const clientBrands = await storage.getBrandsByLocation('client');
@@ -279,6 +279,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(clientBrandsWithProducts);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands with products" });
+    }
+  });
+
+  // Cleanup orphaned brands (Admin only) - Remove brands without products
+  app.delete("/api/brands/cleanup-orphans", requireAdminAuth, async (req, res) => {
+    try {
+      const allBrands = await storage.getBrands();
+      const brandsToDelete = [];
+      let deletedCount = 0;
+
+      for (const brand of allBrands) {
+        const products = await storage.getProductsByBrand(brand.id);
+        if (products.length === 0) {
+          const success = await storage.deleteBrand(brand.id);
+          if (success) {
+            brandsToDelete.push({
+              id: brand.id,
+              name: brand.name,
+              displayLocation: brand.displayLocation
+            });
+            deletedCount++;
+          }
+        }
+      }
+
+      res.json({
+        message: `Cleanup completed: ${deletedCount} orphaned brands removed`,
+        deletedBrands: brandsToDelete,
+        deletedCount
+      });
+    } catch (error) {
+      console.error("Error during brand cleanup:", error);
+      res.status(500).json({ message: "Error during brand cleanup" });
     }
   });
 
