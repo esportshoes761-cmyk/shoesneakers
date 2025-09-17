@@ -177,7 +177,7 @@ export async function initializeDatabase() {
         path TEXT NOT NULL,
         mime_type TEXT NOT NULL,
         size INTEGER NOT NULL,
-        sha256 TEXT NOT NULL UNIQUE,
+        sha256 TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);

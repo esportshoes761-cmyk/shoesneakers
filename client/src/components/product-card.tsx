@@ -86,8 +86,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         
         // Si hay precio original diferente, mostrar descuento
         if (product.originalPrice && product.originalPrice !== product.price) {
-          const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-          const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+          const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+          const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
           const savings = originalPrice - currentPrice;
           const discountPercentage = Math.round((savings / originalPrice) * 100);
           
@@ -95,7 +95,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           priceText += `\n🎁 *Descuento:* ${discountPercentage}% OFF (Ahorras ${formatCurrency(savings)} COP)`;
         }
         
-        const totalAmount = parseFloat(product.price.replace(/\./g, '')) * orderForm.quantity;
+        const totalAmount = parseFloat(String(product.price).replace(/\./g, '')) * orderForm.quantity;
         priceText += `\n💵 *Total estimado:* ${formatCurrency(totalAmount.toString())} COP x ${orderForm.quantity} unidad${orderForm.quantity > 1 ? 'es' : ''}`;
         
         return priceText;
@@ -217,8 +217,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         {product.isFlashSale && product.originalPrice && product.price && (
           <div className="relative">
             {(() => {
-              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+              const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
               const savings = originalPrice - currentPrice;
               const discountPercentage = Math.round((savings / originalPrice) * 100);
               
@@ -374,8 +374,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             
             {/* Badge de descuento si aplica */}
             {product.originalPrice && product.originalPrice !== product.price && (() => {
-              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+              const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
               const savings = originalPrice - currentPrice;
               const discountPercentage = Math.round((savings / originalPrice) * 100);
               
@@ -406,8 +406,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             // Calcular ahorro si hay descuento
             let savingsMessage = "";
             if (product.originalPrice && product.price) {
-              const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-              const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+              const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+              const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
               const savings = originalPrice - currentPrice;
               if (savings > 0) {
                 savingsMessage = ` ¡Ahorras $${Math.round(savings).toLocaleString('es-CO')} COP!`;
@@ -488,8 +488,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                     💰 Precio: {formatCurrency(product.price)} COP
                   </p>
                   {product.originalPrice && product.originalPrice !== product.price && (() => {
-                    const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-                    const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+                    const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+                    const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
                     const savings = originalPrice - currentPrice;
                     const discountPercentage = Math.round((savings / originalPrice) * 100);
                     
@@ -590,8 +590,8 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                         <span className="font-medium">{orderForm.quantity} unidad{orderForm.quantity > 1 ? 'es' : ''}</span>
                       </div>
                       {product.originalPrice && product.originalPrice !== product.price && (() => {
-                        const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
-                        const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+                        const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+                        const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
                         const savings = originalPrice - currentPrice;
                         const totalSavings = savings * orderForm.quantity;
                         const discountPercentage = Math.round((savings / originalPrice) * 100);
@@ -606,7 +606,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                       <hr className="border-blue-200" />
                       <div className="flex justify-between text-lg font-bold text-blue-900">
                         <span>Total estimado:</span>
-                        <span>{formatCurrency((parseFloat(product.price.replace(/\./g, '')) * orderForm.quantity).toString())} COP</span>
+                        <span>{formatCurrency((parseFloat(String(product.price).replace(/\./g, '')) * orderForm.quantity).toString())} COP</span>
                       </div>
                     </div>
                     <p className="text-xs text-blue-700 mt-3 bg-blue-100 p-2 rounded">

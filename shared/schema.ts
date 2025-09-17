@@ -73,7 +73,7 @@ export const images = sqliteTable("images", {
   path: text("path").notNull(),
   mimeType: text("mime_type").notNull(),
   size: integer("size").notNull(), // Tamaño en bytes
-  sha256: text("sha256", { length: 64 }).notNull().unique(), // Hash SHA-256 único
+  sha256: text("sha256", { length: 64 }).notNull(), // Hash SHA-256 (duplicates allowed)
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
