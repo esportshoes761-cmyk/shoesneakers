@@ -110,6 +110,8 @@ export default function AdminPanel() {
   const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
   const [isBrandEditMode, setIsBrandEditMode] = useState(false);
   const [pendingProductToEdit, setPendingProductToEdit] = useState<Product | null>(null);
+  const [brandToDelete, setBrandToDelete] = useState<BrandWithProducts | null>(null);
+  const [deleteBrandDialogOpen, setDeleteBrandDialogOpen] = useState(false);
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
@@ -568,6 +570,25 @@ export default function AdminPanel() {
     }
   };
 
+  // Funciones para eliminar marca
+  const handleDeleteBrand = (brand: BrandWithProducts) => {
+    setBrandToDelete(brand);
+    setDeleteBrandDialogOpen(true);
+  };
+
+  const handleCancelDeleteBrand = () => {
+    setBrandToDelete(null);
+    setDeleteBrandDialogOpen(false);
+  };
+
+  const handleConfirmDeleteBrand = () => {
+    if (brandToDelete) {
+      deleteBrandMutation.mutate(brandToDelete.id);
+      setBrandToDelete(null);
+      setDeleteBrandDialogOpen(false);
+    }
+  };
+
   const updateProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
       if (!editingProduct) throw new Error("No hay producto para editar");
@@ -719,6 +740,25 @@ export default function AdminPanel() {
       toast({ 
         title: "Error", 
         description: isBrandEditMode ? "No se pudo actualizar la marca" : "No se pudo crear la marca", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const deleteBrandMutation = useMutation({
+    mutationFn: (brandId: string) => apiRequest("DELETE", `/api/brands/${brandId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/with-products"] });
+      toast({ 
+        title: "¡Éxito!", 
+        description: "Marca eliminada correctamente" 
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: "Error", 
+        description: "No se pudo eliminar la marca", 
         variant: "destructive" 
       });
     },
@@ -1279,6 +1319,20 @@ export default function AdminPanel() {
                     >
                       <Edit className="w-3 h-3 mr-1" />
                       Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBrand(brand);
+                      }}
+                      data-testid={`button-delete-brand-${brand.id}`}
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" />
+                      Eliminar
                     </Button>
                     {(brand.productCount || 0) > 0 && (
                       <Button
@@ -2751,6 +2805,83 @@ export default function AdminPanel() {
                 </div>
               ) : (
                 <>✅ Continuar de todos modos</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar marca */}
+      <Dialog open={deleteBrandDialogOpen} onOpenChange={setDeleteBrandDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              Eliminar Marca
+            </DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer. ¿Estás seguro de que quieres eliminar esta marca?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {brandToDelete && (
+            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white rounded-lg border flex items-center justify-center">
+                  {brandToDelete.logo ? (
+                    <img 
+                      src={brandToDelete.logo} 
+                      alt={brandToDelete.name}
+                      className="w-8 h-8 object-contain"
+                    />
+                  ) : (
+                    <Package className="w-6 h-6 text-gray-400" />
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-red-800">{brandToDelete.name}</h4>
+                  <p className="text-sm text-red-600">
+                    {brandToDelete.productCount || 0} productos asociados
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <p className="text-sm text-amber-700">
+              ⚠️ <strong>Advertencia:</strong> Los productos asociados a esta marca no se eliminarán, pero quedarán sin marca asignada.
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCancelDeleteBrand}
+              className="flex-1"
+              data-testid="button-cancel-delete-brand"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteBrand}
+              disabled={deleteBrandMutation.isPending}
+              className="flex-1"
+              data-testid="button-confirm-delete-brand"
+            >
+              {deleteBrandMutation.isPending ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Eliminando...
+                </div>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar Marca
+                </>
               )}
             </Button>
           </div>

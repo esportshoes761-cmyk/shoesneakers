@@ -198,6 +198,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/brands/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const success = await storage.deleteBrand(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      res.json({ message: "Brand deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting brand:", error);
+      res.status(500).json({ message: "Error deleting brand" });
+    }
+  });
+
   // Categories routes
   app.get("/api/categories", async (req, res) => {
     try {

@@ -24,6 +24,7 @@ export interface IStorage {
   getBrand(id: string): Promise<Brand | undefined>;
   createBrand(brand: InsertBrand): Promise<Brand>;
   updateBrand(id: string, brand: InsertBrand): Promise<Brand | undefined>;
+  deleteBrand(id: string): Promise<boolean>;
 
   // Product methods
   getProducts(): Promise<ProductWithCategory[]>;
@@ -390,6 +391,10 @@ export class MemStorage implements IStorage {
     };
     this.brands.set(id, updatedBrand);
     return updatedBrand;
+  }
+
+  async deleteBrand(id: string): Promise<boolean> {
+    return this.brands.delete(id);
   }
 
   // Promotion methods
@@ -1112,6 +1117,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(brands.id, id))
       .returning();
     return updatedBrand;
+  }
+
+  async deleteBrand(id: string): Promise<boolean> {
+    try {
+      await db.delete(brands).where(eq(brands.id, id));
+      return true; // Si no hay error, significa que se ejecutó exitosamente
+    } catch (error) {
+      console.error('Error deleting brand:', error);
+      return false;
+    }
   }
 
   // Product methods
