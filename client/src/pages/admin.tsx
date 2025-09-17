@@ -295,7 +295,7 @@ export default function AdminPanel() {
   const { data: promotions = [] } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
   const { data: events = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/with-products"] });
+  const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/admin/with-products"] });
   
   // Query para productos de una marca específica
   const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({

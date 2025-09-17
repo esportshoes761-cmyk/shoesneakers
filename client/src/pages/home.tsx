@@ -38,7 +38,7 @@ export default function Home() {
   });
 
   const { data: brands = [], isLoading: brandsLoading } = useQuery<BrandWithProducts[]>({
-    queryKey: ["/api/brands/with-products"],
+    queryKey: ["/api/brands/client/with-products"],
   });
 
   const { data: flashSaleProducts = [] } = useQuery<ProductWithCategory[]>({
