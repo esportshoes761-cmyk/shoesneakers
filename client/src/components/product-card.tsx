@@ -79,6 +79,30 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       return imageUrl;
     };
 
+    // Preparar información de precio para el mensaje
+    const getPriceInfo = () => {
+      if (product.price && product.price !== "1") {
+        let priceText = `💰 *Precio mostrado:* ${formatCurrency(product.price)} COP`;
+        
+        // Si hay precio original diferente, mostrar descuento
+        if (product.originalPrice && product.originalPrice !== product.price) {
+          const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+          const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+          const savings = originalPrice - currentPrice;
+          const discountPercentage = Math.round((savings / originalPrice) * 100);
+          
+          priceText += `\n🔥 *Precio normal:* ${formatCurrency(product.originalPrice)} COP`;
+          priceText += `\n🎁 *Descuento:* ${discountPercentage}% OFF (Ahorras ${formatCurrency(savings)} COP)`;
+        }
+        
+        const totalAmount = parseFloat(product.price.replace(/\./g, '')) * orderForm.quantity;
+        priceText += `\n💵 *Total estimado:* ${formatCurrency(totalAmount.toString())} COP x ${orderForm.quantity} unidad${orderForm.quantity > 1 ? 'es' : ''}`;
+        
+        return priceText;
+      }
+      return `💬 *Precio:* A cotizar via WhatsApp`;
+    };
+
     // Preparar mensaje completo para WhatsApp
     const whatsappMessage = encodeURIComponent(
       `👋 ¡Hola! Quiero hacer un pedido de FastSneaker:\n\n` +
@@ -86,14 +110,15 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       `👟 *Producto:* ${product.name}\n` +
       `🔖 *Referencia:* ${product.reference || 'Sin referencia'}\n` +
       `📏 *Talla:* ${orderForm.size}\n` +
-      `🔢 *Cantidad:* ${orderForm.quantity}\n\n` +
+      `🔢 *Cantidad:* ${orderForm.quantity}\n` +
+      `${getPriceInfo()}\n\n` +
       `📍 *DATOS DE ENTREGA*\n` +
       `👤 *Nombre:* ${orderForm.fullName}\n` +
       `🏠 *Dirección:* ${orderForm.address}\n` +
       `🌆 *Ciudad:* ${orderForm.city}\n` +
       `⏰ *Horario de entrega:* ${orderForm.deliveryTime}\n\n` +
       `📸 *IMAGEN DEL PRODUCTO:*\n${getProductImageUrl()}\n\n` +
-      `Por favor confirma disponibilidad y envía cotización. ¡Gracias!`
+      `Por favor confirma disponibilidad ${product.price && product.price !== "1" ? 'y procede con el pago' : 'y envía cotización final'}. ¡Gracias!`
     );
     
     // Abrir WhatsApp
@@ -553,6 +578,47 @@ export default function ProductCard({ product, showManageButton = false }: Produ
                     />
                   </div>
                 </div>
+                
+                {/* Resumen del pedido con precio total */}
+                {product.price && product.price !== "1" && orderForm.quantity > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
+                      🧾 Resumen del Pedido
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Precio unitario:</span>
+                        <span className="font-medium">{formatCurrency(product.price)} COP</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Cantidad:</span>
+                        <span className="font-medium">{orderForm.quantity} unidad{orderForm.quantity > 1 ? 'es' : ''}</span>
+                      </div>
+                      {product.originalPrice && product.originalPrice !== product.price && (() => {
+                        const originalPrice = parseFloat(product.originalPrice.replace(/\./g, ''));
+                        const currentPrice = parseFloat(product.price.replace(/\./g, ''));
+                        const savings = originalPrice - currentPrice;
+                        const totalSavings = savings * orderForm.quantity;
+                        const discountPercentage = Math.round((savings / originalPrice) * 100);
+                        
+                        return (
+                          <div className="flex justify-between text-green-600">
+                            <span>Descuento ({discountPercentage}% OFF):</span>
+                            <span className="font-medium">-{formatCurrency(totalSavings.toString())} COP</span>
+                          </div>
+                        );
+                      })()}
+                      <hr className="border-blue-200" />
+                      <div className="flex justify-between text-lg font-bold text-blue-900">
+                        <span>Total estimado:</span>
+                        <span>{formatCurrency((parseFloat(product.price.replace(/\./g, '')) * orderForm.quantity).toString())} COP</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-3 bg-blue-100 p-2 rounded">
+                      💡 Este total será confirmado al contactarnos por WhatsApp
+                    </p>
+                  </div>
+                )}
                 
                 <div>
                   <Label htmlFor="deliveryTime">Horario de entrega preferido *</Label>
