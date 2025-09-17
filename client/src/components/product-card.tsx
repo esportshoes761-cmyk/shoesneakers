@@ -357,7 +357,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       
       {/* Sección de Precios */}
       <div className="mb-2 sm:mb-3">
-        {product.price && product.price !== "1" ? (
+        {(product.price !== null && product.price !== undefined && product.price !== 1 && product.price !== "1") ? (
           <div className="space-y-1">
             {/* Mostrar precio original tachado si hay descuento */}
             {product.originalPrice && product.originalPrice !== product.price && (
