@@ -919,9 +919,7 @@ export default function AdminPanel() {
                             <ObjectUploader
                               onComplete={(imageUrl) => field.onChange(imageUrl)}
                               data-testid="uploader-brand-logo"
-                            >
-                              Subir logo de la marca
-                            </ObjectUploader>
+                            />
                           </FormControl>
                           {field.value && (
                             <div className="mt-2">
@@ -1638,9 +1636,7 @@ export default function AdminPanel() {
                             <ObjectUploader
                               onComplete={(imageUrl) => field.onChange(imageUrl)}
                               data-testid="uploader-event-image"
-                            >
-                              Subir imagen del evento
-                            </ObjectUploader>
+                            />
                           </FormControl>
                           {field.value && (
                             <div className="mt-2">
@@ -1940,9 +1936,7 @@ export default function AdminPanel() {
                           });
                         }}
                         data-testid="uploader-product-image"
-                      >
-                        Subir imagen principal
-                      </ObjectUploader>
+                      />
                     </FormControl>
                     {field.value && (
                       <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
@@ -1985,12 +1979,11 @@ export default function AdminPanel() {
                           });
                         }}
                         data-testid="uploader-product-extra-image-0"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <ImagePlus className="h-8 w-8 text-muted-foreground" />
-                          <span>Agregar primera imagen adicional</span>
-                        </div>
-                      </ObjectUploader>
+                      />
+                      <div className="flex flex-col items-center gap-2 mt-2">
+                        <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                        <span>Agregar primera imagen adicional</span>
+                      </div>
                     </div>
                   )}
                   
@@ -2022,12 +2015,11 @@ export default function AdminPanel() {
                           setProductImages(newImages);
                         }}
                         data-testid={`uploader-product-extra-image-${productImages.length}`}
-                      >
-                        <div className="flex items-center justify-center gap-2">
-                          <ImagePlus className="h-4 w-4" />
-                          <span>Agregar otra imagen ({productImages.length}/9)</span>
-                        </div>
-                      </ObjectUploader>
+                      />
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <ImagePlus className="h-4 w-4" />
+                        <span>Agregar otra imagen ({productImages.length}/9)</span>
+                      </div>
                     </div>
                   )}
                   
