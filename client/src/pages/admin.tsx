@@ -1151,17 +1151,25 @@ export default function AdminPanel() {
                     <CardTitle className="text-lg">{product.name}</CardTitle>
                     <div className="flex gap-1">
                       <Button
+                        type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEditProduct(product)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditProduct(product);
+                        }}
                         data-testid={`button-edit-product-${product.id}`}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteProductMutation.mutate(product.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteProductMutation.mutate(product.id);
+                        }}
                         data-testid={`button-delete-product-${product.id}`}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1463,10 +1471,14 @@ export default function AdminPanel() {
                   {/* Botones de acción */}
                   <div className="flex gap-2 mt-2">
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       className="flex-1 text-xs"
-                      onClick={() => handleEditBrand(brand)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditBrand(brand);
+                      }}
                       data-testid={`button-edit-brand-${brand.id}`}
                     >
                       <Edit className="w-3 h-3 mr-1" />
@@ -1474,10 +1486,12 @@ export default function AdminPanel() {
                     </Button>
                     {(brand.productCount || 0) > 0 && (
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="flex-1 text-xs"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedBrandId(brand.id);
                           setBrandProductsDialogOpen(true);
                         }}
@@ -1612,10 +1626,14 @@ export default function AdminPanel() {
                         {/* Botones de acción */}
                         <div className="flex gap-1 pt-2">
                           <Button
+                            type="button"
                             variant="outline"
                             size="sm"
                             className="flex-1 text-xs"
-                            onClick={() => handleEditProduct(product)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditProduct(product);
+                            }}
                             data-testid={`button-edit-brand-product-${product.id}`}
                           >
                             <Edit className="h-3 w-3 mr-1" />
