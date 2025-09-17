@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Package, ZoomIn } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { getBrandLogoType } from "@/lib/brand-utils";
 import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
 import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
@@ -127,12 +128,28 @@ export default function Home() {
             </Button>
             
             <div className="flex items-center mb-4">
-              <img 
-                src={selectedBrand.logo} 
-                alt={selectedBrand.name}
-                className="w-12 h-12 sm:w-20 sm:h-20 object-contain mr-4"
-                data-testid={`img-catalog-brand-logo-${selectedBrand.id}`}
-              />
+              {getBrandLogoType(selectedBrand.logo) === 'emoji' ? (
+                <div 
+                  className="w-12 h-12 sm:w-20 sm:h-20 flex items-center justify-center text-3xl sm:text-5xl mr-4"
+                  data-testid={`emoji-catalog-brand-logo-${selectedBrand.id}`}
+                >
+                  {selectedBrand.logo}
+                </div>
+              ) : getBrandLogoType(selectedBrand.logo) === 'image' ? (
+                <img 
+                  src={selectedBrand.logo} 
+                  alt={selectedBrand.name}
+                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain mr-4"
+                  data-testid={`img-catalog-brand-logo-${selectedBrand.id}`}
+                />
+              ) : (
+                <div 
+                  className="w-12 h-12 sm:w-20 sm:h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xl sm:text-3xl font-bold mr-4"
+                  data-testid={`placeholder-catalog-brand-logo-${selectedBrand.id}`}
+                >
+                  {selectedBrand.name.charAt(0)}
+                </div>
+              )}
               <div>
                 <h1 className="text-xl sm:text-3xl font-bold" data-testid={`text-catalog-brand-name-${selectedBrand.id}`}>
                   Catálogo {selectedBrand.name}
@@ -349,12 +366,28 @@ export default function Home() {
                   
                   {/* Logo centrado */}
                   <div className="flex justify-center mb-2 sm:mb-3">
-                    <img 
-                      src={brand.logo} 
-                      alt={brand.name}
-                      className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
-                      data-testid={`img-brand-logo-${brand.id}`}
-                    />
+                    {getBrandLogoType(brand.logo) === 'emoji' ? (
+                      <div 
+                        className="w-12 h-12 sm:w-20 sm:h-20 flex items-center justify-center text-3xl sm:text-5xl"
+                        data-testid={`emoji-brand-logo-${brand.id}`}
+                      >
+                        {brand.logo}
+                      </div>
+                    ) : getBrandLogoType(brand.logo) === 'image' ? (
+                      <img 
+                        src={brand.logo} 
+                        alt={brand.name}
+                        className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
+                        data-testid={`img-brand-logo-${brand.id}`}
+                      />
+                    ) : (
+                      <div 
+                        className="w-12 h-12 sm:w-20 sm:h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xl sm:text-3xl font-bold"
+                        data-testid={`placeholder-brand-logo-${brand.id}`}
+                      >
+                        {brand.name.charAt(0)}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Cantidad de productos */}

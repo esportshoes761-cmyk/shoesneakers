@@ -25,6 +25,7 @@ import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { formatCurrency } from "@/lib/currency";
+import { getBrandLogoType } from "@/lib/brand-utils";
 import AdminOrders from "@/components/admin-orders";
 import { parseApiError } from "@/lib/parse-api-error";
 
@@ -1366,14 +1367,31 @@ export default function AdminPanel() {
               <Card key={brand.id} className="relative">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
-                    <img 
-                      src={brand.logo} 
-                      alt={brand.name}
-                      className="w-8 h-8 sm:w-12 sm:h-12 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+                    {getBrandLogoType(brand.logo) === 'emoji' ? (
+                      <div 
+                        className="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl"
+                        data-testid={`emoji-admin-brand-logo-${brand.id}`}
+                      >
+                        {brand.logo}
+                      </div>
+                    ) : getBrandLogoType(brand.logo) === 'image' ? (
+                      <img 
+                        src={brand.logo} 
+                        alt={brand.name}
+                        className="w-8 h-8 sm:w-12 sm:h-12 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                        data-testid={`img-admin-brand-logo-${brand.id}`}
+                      />
+                    ) : (
+                      <div 
+                        className="w-8 h-8 sm:w-12 sm:h-12 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-sm font-bold"
+                        data-testid={`placeholder-admin-brand-logo-${brand.id}`}
+                      >
+                        {brand.name.charAt(0)}
+                      </div>
+                    )}
                     <div>
                       <CardTitle className="text-sm sm:text-lg">{brand.name}</CardTitle>
                       <div className="flex gap-1 mt-1">

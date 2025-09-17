@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Search, Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { getBrandLogoType } from "@/lib/brand-utils";
 import { type Category, type BrandWithProducts } from "@shared/schema";
 
 export interface SearchFilters {
@@ -216,7 +217,17 @@ export default function AdvancedSearch({
                         data-testid={`checkbox-brand-${brand.id}`}
                       />
                       <Label htmlFor={`brand-${brand.id}`} className="text-sm flex items-center gap-2">
-                        <img src={brand.logo} alt={brand.name} className="w-4 h-4 object-contain" />
+                        {getBrandLogoType(brand.logo) === 'emoji' ? (
+                          <span className="w-4 h-4 flex items-center justify-center text-sm">
+                            {brand.logo}
+                          </span>
+                        ) : getBrandLogoType(brand.logo) === 'image' ? (
+                          <img src={brand.logo} alt={brand.name} className="w-4 h-4 object-contain" />
+                        ) : (
+                          <span className="w-4 h-4 bg-muted rounded flex items-center justify-center text-xs font-bold">
+                            {brand.name.charAt(0)}
+                          </span>
+                        )}
                         {brand.name}
                       </Label>
                     </div>
@@ -335,7 +346,17 @@ export default function AdvancedSearch({
             const brand = brands.find(b => b.id === brandId);
             return brand ? (
               <Badge key={brandId} variant="secondary" className="flex items-center gap-1">
-                <img src={brand.logo} alt={brand.name} className="w-3 h-3 object-contain" />
+                {getBrandLogoType(brand.logo) === 'emoji' ? (
+                  <span className="w-3 h-3 flex items-center justify-center text-xs">
+                    {brand.logo}
+                  </span>
+                ) : getBrandLogoType(brand.logo) === 'image' ? (
+                  <img src={brand.logo} alt={brand.name} className="w-3 h-3 object-contain" />
+                ) : (
+                  <span className="w-3 h-3 bg-muted rounded flex items-center justify-center text-xs font-bold">
+                    {brand.name.charAt(0)}
+                  </span>
+                )}
                 {brand.name}
                 <X 
                   className="w-3 h-3 cursor-pointer" 
