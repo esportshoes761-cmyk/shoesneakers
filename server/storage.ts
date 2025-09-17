@@ -911,70 +911,7 @@ export class MemStorage implements IStorage {
         defaultBrands.forEach(brand => this.brands.set(brand.id, brand));
       }
 
-      // Initialize sample products
-      if (this.products.size === 0) {
-        const sampleProducts = [
-          {
-            id: "nike-air-001",
-            name: "Nike Air Max 90",
-            nameNormalized: "nike air max 90",
-            description: "Clásicos deportivos Nike con amortiguación Air Max",
-            price: "150000",
-            originalPrice: "180000",
-            discountPercentage: 17,
-            categoryId: "2",
-            brandId: "nike-001", 
-            images: ["https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400"],
-            sizes: ["38", "39", "40", "41", "42"],
-            colors: ["Blanco", "Negro"],
-            rating: 4.5,
-            isFlashSale: true,
-            isFeatured: true,
-            flashSaleEndTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            createdAt: new Date()
-          },
-          {
-            id: "adidas-ultra-001", 
-            name: "Adidas Ultraboost 22",
-            nameNormalized: "adidas ultraboost 22",
-            description: "Máximo confort y rendimiento para running",
-            price: "200000",
-            originalPrice: null,
-            discountPercentage: null,
-            categoryId: "2",
-            brandId: "adidas-001",
-            images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400"],
-            sizes: ["39", "40", "41", "42", "43"],
-            colors: ["Negro", "Azul"],
-            rating: 4.8,
-            isFlashSale: false,
-            isFeatured: true,
-            flashSaleEndTime: null,
-            createdAt: new Date()
-          },
-          {
-            id: "puma-rs-001",
-            name: "Puma RS-X",
-            nameNormalized: "puma rs-x", 
-            description: "Estilo retro futurista con máxima comodidad",
-            price: "120000",
-            originalPrice: "140000",
-            discountPercentage: 14,
-            categoryId: "2",
-            brandId: "puma-001",
-            images: ["https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=400"],
-            sizes: ["37", "38", "39", "40", "41"],
-            colors: ["Gris", "Blanco"],
-            rating: 4.3,
-            isFlashSale: false,
-            isFeatured: false,
-            flashSaleEndTime: null,
-            createdAt: new Date()
-          }
-        ];
-        
-        sampleProducts.forEach(product => this.products.set(product.id, product));
-      }
+      // NO agregamos productos de muestra - solo mostraremos los productos originales del usuario
 
       console.log('📦 MemStorage initialized with default data');
     } catch (error) {
