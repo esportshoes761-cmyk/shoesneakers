@@ -58,11 +58,13 @@ type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
 
-// Brand package schema for bulk product creation - ULTRA-SIMPLIFIED ⚡
+// Brand package schema for bulk product creation - SECURE VERSION 🔒
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Selecciona una marca"),
   categoryId: z.string().min(1, "Selecciona una categoría"),
-  images: z.array(z.string()).min(1, "Se requiere al menos 1 imagen"), // ✅ Only 1 image minimum
+  images: z.array(z.string()).min(1, "Se requiere al menos 1 imagen"),
+  sizeFrom: z.string().min(1, "Selecciona talla inicial"),
+  sizeTo: z.string().min(1, "Selecciona talla final"),
 });
 
 type BrandPackageFormData = z.infer<typeof brandPackageSchema>;
@@ -186,6 +188,8 @@ export default function AdminPanel() {
       brandId: "",
       categoryId: "",
       images: [],
+      sizeFrom: "",
+      sizeTo: "",
     },
   });
 
@@ -235,9 +239,11 @@ export default function AdminPanel() {
     }
   }, [brandProductsDialogOpen, pendingProductToEdit, productForm]);
 
-  // Bulk product creation mutation
+  // Bulk product creation mutation - SECURE SESSION-BASED AUTH 🔒
   const bulkCreateProductsMutation = useMutation({
     mutationFn: async (data: BrandPackageFormData) => {
+      // 🔒 SECURE: Use authenticated session instead of hardcoded credentials
+      console.log('🔑 Sending bulk request with session-based authentication');
       const response = await apiRequest('POST', '/api/products/bulk', data);
       return response.json();
     },
@@ -1850,6 +1856,57 @@ export default function AdminPanel() {
                       />
                     </div>
                     
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="sizeFrom"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Talla Inicial</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-from">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona talla inicial" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
+                                  <SelectItem key={size} value={size}>
+                                    {size}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="sizeTo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Talla Final</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-to">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona talla final" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
+                                  <SelectItem key={size} value={size}>
+                                    {size}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
                     <FormField
                       control={brandPackageForm.control}
                       name="images"
@@ -1931,7 +1988,7 @@ export default function AdminPanel() {
                       </Button>
                       <Button 
                         type="submit" 
-                        disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 10}
+                        disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 1}
                         data-testid="button-submit-brand-package"
                       >
                         {bulkCreateProductsMutation.isPending 

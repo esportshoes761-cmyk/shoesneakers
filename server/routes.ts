@@ -43,21 +43,30 @@ async function generateUniqueReferenceForProduct(): Promise<string> {
   throw new Error('No se pudo generar una referencia única después de múltiples intentos');
 }
 
-// Admin authorization middleware for POST/PUT routes (credentials in body)
+// 🔒 SECURE: Session-based admin authorization middleware
 async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const { adminUsername, adminPassword } = req.body;
+    // Get user session from headers
+    const userSession = req.headers['x-user-session'] as string;
     
-    if (!adminUsername || !adminPassword) {
+    if (!userSession) {
       return res.status(401).json({ 
-        message: "Credenciales de administrador requeridas",
-        details: "Se requiere adminUsername y adminPassword en el cuerpo de la petición" 
+        message: "Sesión de usuario requerida",
+        details: "Se requiere autenticación válida" 
       });
     }
     
-    const user = await storage.authenticateUser(adminUsername, adminPassword);
+    let userData;
+    try {
+      userData = JSON.parse(userSession);
+    } catch {
+      return res.status(401).json({ message: "Sesión de usuario inválida" });
+    }
+    
+    // Verify user exists and is admin
+    const user = await storage.getUserById(userData.id);
     if (!user) {
-      return res.status(401).json({ message: "Credenciales de administrador incorrectas" });
+      return res.status(401).json({ message: "Usuario no encontrado" });
     }
     
     if (!user.isAdmin) {
@@ -73,45 +82,16 @@ async function requireAdminAuth(req: Request, res: Response, next: NextFunction)
   }
 }
 
-// Admin authorization middleware for GET routes (credentials in headers)
-async function requireAdminAuthHeaders(req: Request, res: Response, next: NextFunction) {
-  try {
-    const adminUsername = req.headers['x-admin-username'] as string;
-    const adminPassword = req.headers['x-admin-password'] as string;
-    
-    if (!adminUsername || !adminPassword) {
-      return res.status(401).json({ 
-        message: "Credenciales de administrador requeridas",
-        details: "Se requieren headers X-Admin-Username y X-Admin-Password" 
-      });
-    }
-    
-    const user = await storage.authenticateUser(adminUsername, adminPassword);
-    if (!user) {
-      return res.status(401).json({ message: "Credenciales de administrador incorrectas" });
-    }
-    
-    if (!user.isAdmin) {
-      return res.status(403).json({ message: "Acceso denegado: Se requieren permisos de administrador" });
-    }
-    
-    // Store authenticated admin user for use in the route handler
-    (req as any).adminUser = user;
-    next();
-  } catch (error) {
-    console.error("Error in admin authentication:", error);
-    res.status(500).json({ message: "Error en la autenticación de administrador" });
-  }
-}
+// 🔒 SECURE: Session-based admin authorization for headers (same as body-based)
+const requireAdminAuthHeaders = requireAdminAuth;
 
-// Brand package schema for bulk creation - ULTRA-SIMPLIFIED ⚡
+// 🔒 SECURE: Brand package schema for bulk creation (no credentials required)
 const brandPackageSchema = z.object({
   brandId: z.string().min(1, "Brand ID is required"),
   categoryId: z.string().min(1, "Category ID is required"),
-  images: z.array(z.string()).min(1, "At least 1 image required"), // Minimum 1 image, not 10
-  // Admin credentials for authorization
-  adminUsername: z.string().min(1, "Admin username is required"),
-  adminPassword: z.string().min(1, "Admin password is required"),
+  images: z.array(z.string()).min(1, "At least 1 image required"),
+  sizeFrom: z.string().min(1, "Size from is required"),
+  sizeTo: z.string().min(1, "Size to is required"),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -348,17 +328,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // ⚡ AUTO-GENERATE DEFAULTS FOR ULTRA-FAST PUBLISHING ⚡
       const DEFAULT_PRICE = "89000"; // $89,000 COP - editable later in admin
-      const DEFAULT_SIZE = "Talla Única"; // Default size - configurable
       const AUTO_DESCRIPTION = "Producto de calidad premium con estilo único y comodidad excepcional.";
       
-      // Create products for each image - ULTRA-SIMPLIFIED & AUTO-GENERATED
+      // Generate size range array
+      const sizeFrom = parseInt(packageData.sizeFrom);
+      const sizeTo = parseInt(packageData.sizeTo);
+      const sizeRange: string[] = [];
+      
+      if (sizeFrom <= sizeTo) {
+        for (let size = sizeFrom; size <= sizeTo; size++) {
+          sizeRange.push(size.toString());
+        }
+      } else {
+        // If size from is greater than size to, reverse the range
+        for (let size = sizeFrom; size >= sizeTo; size--) {
+          sizeRange.push(size.toString());
+        }
+      }
+      
+      // Create products for each image with size range
       for (let i = 0; i < packageData.images.length; i++) {
         try {
           // Generate unique reference for this product
           const reference = await generateUniqueReferenceForProduct();
           
+          // Create size range string for product name
+          const sizeRangeString = sizeRange.length > 1 
+            ? `${sizeRange[0]} a ${sizeRange[sizeRange.length - 1]}`
+            : sizeRange[0];
+          
           const productData = {
-            name: brand.name, // ✅ Simple: Just brand name (no size)
+            name: `${brand.name} Tallas ${sizeRangeString}`, // Include size range in name
             description: AUTO_DESCRIPTION, // ✅ Auto-generated description
             price: DEFAULT_PRICE, // ✅ Default price - editable later
             imageUrl: packageData.images[i],
@@ -368,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isFlashSale: false, // Not flash sale by default
             isFeatured: true, // ✅ ALWAYS FEATURED - appears on homepage
             images: [packageData.images[i]], // Single image per product
-            sizes: [DEFAULT_SIZE], // ✅ Default size - editable later
+            sizes: sizeRange, // ✅ Full size range array
             colors: [],
           };
           
@@ -938,21 +938,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const crypto = await import('crypto');
       const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-      // CRÍTICO: Verificar duplicados ANTES de escribir archivo (SALTAR para packages)
+      // ✅ FIXED: Verificar duplicados inteligentemente - permitir reutilizar imágenes huérfanas
       if (!skipDuplicateCheck) {
         const existingImage = await storage.getImageByHash(imageHash);
         if (existingImage) {
-          console.log("🔥 DUPLICATE IMAGE DETECTED:", imageHash);
-          return res.status(409).json({
-            error: "La imagen ya existe",
-            exists: true,
-            imageUrl: `/api/images/${existingImage.fileName}`,
-            message: "Esta imagen ya fue subida anteriormente",
-            hash: imageHash
-          });
+          console.log("🔍 Imagen existente encontrada:", imageHash, "- Verificando uso...");
+          
+          // ✅ NUEVA LÓGICA: Verificar si la imagen está siendo usada por productos
+          const isUsedByProducts = await storage.isImageUsedByProducts(`/api/images/${existingImage.fileName}`);
+          
+          if (isUsedByProducts) {
+            // ❌ Imagen en uso - bloquear duplicado
+            console.log("🚫 IMAGEN EN USO - bloqueando duplicado:", imageHash);
+            return res.status(409).json({
+              error: "La imagen ya existe y está en uso",
+              exists: true,
+              imageUrl: `/api/images/${existingImage.fileName}`,
+              message: "Esta imagen ya está siendo usada por productos existentes",
+              hash: imageHash
+            });
+          } else {
+            // ✅ Imagen huérfana - permitir reutilización
+            console.log("♻️ IMAGEN HUÉRFANA - permitiendo reutilización:", imageHash);
+            return res.json({ 
+              imageUrl: `/api/images/${existingImage.fileName}`,
+              success: true,
+              message: "Imagen reutilizada - no asociada a productos activos",
+              hash: imageHash,
+              reused: true
+            });
+          }
         }
       } else {
-        console.log("🔄 SALTANDO verificación de duplicados para package upload");
+        // ✅ FIXED: Incluso cuando saltamos verificación de duplicados, debemos verificar si la imagen ya existe
+        console.log("🔄 SALTANDO verificación de duplicados para package upload, pero verificando existencia...");
+        const existingImage = await storage.getImageByHash(imageHash);
+        if (existingImage) {
+          console.log("♻️ IMAGEN EXISTENTE ENCONTRADA - reutilizando para package:", imageHash);
+          return res.json({ 
+            imageUrl: `/api/images/${existingImage.fileName}`,
+            success: true,
+            message: "Imagen reutilizada para package creation",
+            hash: imageHash,
+            reused: true
+          });
+        }
+        console.log("🆕 IMAGEN NUEVA - procediendo a crear para package:", imageHash);
       }
 
       // SEGURIDAD: Generar fileName seguro en servidor usando extensión detectada

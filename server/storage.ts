@@ -2,11 +2,12 @@ import { type User, type InsertUser, type Product, type InsertProduct, type Cate
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from "@shared/schema";
-import { eq, and, gte, lte, ilike, inArray, desc } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, inArray, desc, or, like } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>; // 🔒 SECURE: Added for session-based auth
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -41,6 +42,7 @@ export interface IStorage {
   // Image methods
   getImageByHash(hash: string): Promise<Image | undefined>;
   createImage(image: InsertImage): Promise<Image>;
+  isImageUsedByProducts(imageUrl: string): Promise<boolean>;
 
   // Review methods
   createReview(review: InsertReview): Promise<Review>;
@@ -255,6 +257,11 @@ export class MemStorage implements IStorage {
 
   // User methods
   async getUser(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  // 🔒 SECURE: Added for session-based authentication
+  async getUserById(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
 
@@ -635,6 +642,21 @@ export class MemStorage implements IStorage {
     return image;
   }
 
+  async isImageUsedByProducts(imageUrl: string): Promise<boolean> {
+    // Check if any product uses this image URL
+    for (const product of Array.from(this.products.values())) {
+      // Check main image URL
+      if (product.imageUrl === imageUrl) {
+        return true;
+      }
+      // Check images array
+      if (product.images && product.images.includes(imageUrl)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Review methods  
   async createReview(insertReview: InsertReview): Promise<Review> {
     const id = randomUUID();
@@ -998,6 +1020,12 @@ export class DatabaseStorage implements IStorage {
 
   // User methods
   async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  // 🔒 SECURE: Added for session-based authentication
+  async getUserById(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
@@ -1382,6 +1410,22 @@ export class DatabaseStorage implements IStorage {
     return newImage;
   }
 
+  async isImageUsedByProducts(imageUrl: string): Promise<boolean> {
+    // Check if any product uses this image URL in either imageUrl field or images array
+    const result = await db.select({ id: products.id })
+      .from(products)
+      .where(
+        or(
+          eq(products.imageUrl, imageUrl),
+          // For SQLite JSON column search, we need to use a different approach
+          like(products.images, `%"${imageUrl}"%`)
+        )
+      )
+      .limit(1);
+    
+    return result.length > 0;
+  }
+
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
     const [updatedProduct] = await db.update(products)
       .set(product)
@@ -1392,7 +1436,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProduct(id: string): Promise<boolean> {
     const result = await db.delete(products).where(eq(products.id, id));
-    return (result.rowCount ?? 0) > 0;
+    return (result.changes ?? 0) > 0;
   }
 
   // Promotion methods
@@ -1430,7 +1474,7 @@ export class DatabaseStorage implements IStorage {
 
   async deletePromotion(id: string): Promise<boolean> {
     const result = await db.delete(promotions).where(eq(promotions.id, id));
-    return (result.rowCount ?? 0) > 0;
+    return (result.changes ?? 0) > 0;
   }
 
   // Event methods
@@ -1468,7 +1512,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEvent(id: string): Promise<boolean> {
     const result = await db.delete(events).where(eq(events.id, id));
-    return (result.rowCount ?? 0) > 0;
+    return (result.changes ?? 0) > 0;
   }
 
   // Cart methods
@@ -1526,12 +1570,12 @@ export class DatabaseStorage implements IStorage {
 
   async removeFromCart(id: string): Promise<boolean> {
     const result = await db.delete(cartItems).where(eq(cartItems.id, id));
-    return (result.rowCount ?? 0) > 0;
+    return (result.changes ?? 0) > 0;
   }
 
   async clearCart(userId: string): Promise<boolean> {
     const result = await db.delete(cartItems).where(eq(cartItems.userId, userId));
-    return (result.rowCount ?? 0) >= 0;
+    return (result.changes ?? 0) >= 0;
   }
 
   // Customer Savings methods

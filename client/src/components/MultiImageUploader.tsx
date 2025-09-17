@@ -87,7 +87,9 @@ export function MultiImageUploader({
     const base64 = btoa(binaryString);
     const fileData = `data:${processedFile.type};base64,${base64}`;
 
-    // Subir al servidor (RELAJAR la verificación de duplicados para packages)
+    // Subir al servidor con mejor logging para debug
+    console.log('📤 Uploading image:', processedFile.name, 'Size:', processedFile.size);
+    
     const response = await fetch('/api/objects/upload-direct', {
       method: 'POST',
       headers: {
@@ -101,13 +103,38 @@ export function MultiImageUploader({
       }),
     });
 
+    console.log('📡 Response status:', response.status, 'OK:', response.ok);
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error del servidor: ${response.status}`);
+      let errorData;
+      let errorMessage;
+      
+      try {
+        errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || `Error HTTP ${response.status}: ${response.statusText}`;
+        console.error('❌ Server error response:', errorData);
+      } catch (parseError) {
+        errorMessage = `Error HTTP ${response.status}: ${response.statusText} (No se pudo parsear respuesta del servidor)`;
+        console.error('❌ Failed to parse error response:', parseError);
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    const { imageUrl } = await response.json();
-    return imageUrl;
+    let result;
+    try {
+      result = await response.json();
+      console.log('✅ Upload success:', result);
+    } catch (parseError) {
+      console.error('❌ Failed to parse success response:', parseError);
+      throw new Error('Error al procesar respuesta del servidor');
+    }
+    
+    if (!result.imageUrl) {
+      throw new Error('El servidor no devolvió una URL de imagen válida');
+    }
+    
+    return result.imageUrl;
   };
 
   // Manejar selección de múltiples archivos
@@ -169,7 +196,14 @@ export function MultiImageUploader({
         completedUploads++;
         setUploadProgress((completedUploads / files.length) * 100);
         
-        console.error(`Error uploading ${file.name}:`, error);
+        // Log detallado del error para debugging
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error uploading ${file.name}:`, {
+          error: errorMsg,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type
+        });
         return null;
       }
     });
