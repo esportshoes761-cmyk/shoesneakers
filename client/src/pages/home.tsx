@@ -131,8 +131,12 @@ export default function Home() {
     }
   }, [allProducts]);
 
-  // Mostrar todos los productos (para búsquedas)
-  const displayedProducts = allProducts;
+  // Mostrar productos: aleatorios para pantalla principal, filtrados para búsquedas
+  const hasActiveFilters = searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
+                          searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
+                          searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000;
+  
+  const displayedProducts = hasActiveFilters ? allProducts : randomizedAllProducts;
 
   // Si se seleccionó una marca, mostrar su catálogo
   if (selectedBrand) {
