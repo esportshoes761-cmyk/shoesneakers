@@ -599,12 +599,13 @@ export class MemStorage implements IStorage {
     if (!product) return undefined;
 
     // CRÍTICO: Si se actualiza el nombre, actualizar también nameNormalized
-    const finalUpdateData = { ...updateData };
-    if (updateData.name) {
-      finalUpdateData.nameNormalized = this.normalizeProductName(updateData.name);
-    }
-
-    const updatedProduct = { ...product, ...finalUpdateData };
+    const nameNormalized = updateData.name ? this.normalizeProductName(updateData.name) : undefined;
+    
+    const updatedProduct = { 
+      ...product, 
+      ...updateData,
+      ...(nameNormalized && { nameNormalized })
+    };
     this.products.set(id, updatedProduct);
     return updatedProduct;
   }
@@ -638,13 +639,15 @@ export class MemStorage implements IStorage {
   async createReview(insertReview: InsertReview): Promise<Review> {
     const id = randomUUID();
     const review: Review = {
-      ...insertReview,
       id,
       createdAt: new Date(),
       productId: insertReview.productId ?? null,
       customerId: insertReview.customerId ?? null,
+      customerName: insertReview.customerName,
+      customerEmail: insertReview.customerEmail ?? null,
       rating: insertReview.rating ?? 5,
-      comment: insertReview.comment ?? null
+      comment: insertReview.comment ?? null,
+      isVerified: insertReview.isVerified ?? false
     };
     this.reviews.set(id, review);
     return review;
@@ -810,18 +813,22 @@ export class MemStorage implements IStorage {
   async createOrder(insertOrder: InsertOrder): Promise<Order> {
     const id = randomUUID();
     const order: Order = {
-      ...insertOrder,
       id,
       createdAt: new Date(),
       updatedAt: new Date(),
-      customerId: insertOrder.customerId ?? null,
-      productId: insertOrder.productId ?? null,
+      customerId: insertOrder.customerId,
+      customerName: insertOrder.customerName,
+      customerEmail: insertOrder.customerEmail,
+      customerPhone: insertOrder.customerPhone,
+      customerAddress: insertOrder.customerAddress,
+      productId: insertOrder.productId,
       quantity: insertOrder.quantity ?? 1,
-      totalAmount: insertOrder.totalAmount ?? "0",
-      status: insertOrder.status ?? "pending",
-      trackingNumber: insertOrder.trackingNumber ?? null,
+      totalAmount: insertOrder.totalAmount ?? null,
+      status: insertOrder.status ?? "confirmed",
       deliveryTime: insertOrder.deliveryTime ?? null,
-      notes: insertOrder.notes ?? null
+      notes: insertOrder.notes ?? null,
+      whatsappSent: insertOrder.whatsappSent ?? true,
+      trackingNumber: insertOrder.trackingNumber ?? null
     };
     this.orders.set(id, order);
     return order;
@@ -1123,7 +1130,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProductsByCategory(categoryId: string): Promise<ProductWithCategory[]> {
-    return await db.select({
+    const result = await db.select({
       id: products.id,
       name: products.name,
       nameNormalized: products.nameNormalized,
@@ -1145,20 +1152,28 @@ export class DatabaseStorage implements IStorage {
       isFlashSale: products.isFlashSale,
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
-      category: {
-        id: categories.id,
-        name: categories.name,
-        emoji: categories.emoji,
-        description: categories.description
-      }
+      categoryId2: categories.id,
+      categoryName: categories.name,
+      categoryEmoji: categories.emoji,
+      categoryDescription: categories.description
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.categoryId, categoryId));
+    
+    return result.map(item => ({
+      ...item,
+      category: item.categoryId2 ? {
+        id: item.categoryId2,
+        name: item.categoryName!,
+        emoji: item.categoryEmoji!,
+        description: item.categoryDescription
+      } : undefined
+    }));
   }
 
   async getProductsByBrand(brandId: string): Promise<ProductWithCategory[]> {
-    return await db.select({
+    const result = await db.select({
       id: products.id,
       name: products.name,
       nameNormalized: products.nameNormalized,
@@ -1180,20 +1195,28 @@ export class DatabaseStorage implements IStorage {
       isFlashSale: products.isFlashSale,
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
-      category: {
-        id: categories.id,
-        name: categories.name,
-        emoji: categories.emoji,
-        description: categories.description
-      }
+      categoryId2: categories.id,
+      categoryName: categories.name,
+      categoryEmoji: categories.emoji,
+      categoryDescription: categories.description
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.brandId, brandId));
+    
+    return result.map(item => ({
+      ...item,
+      category: item.categoryId2 ? {
+        id: item.categoryId2,
+        name: item.categoryName!,
+        emoji: item.categoryEmoji!,
+        description: item.categoryDescription
+      } : undefined
+    }));
   }
 
   async getFlashSaleProducts(): Promise<ProductWithCategory[]> {
-    return await db.select({
+    const result = await db.select({
       id: products.id,
       name: products.name,
       nameNormalized: products.nameNormalized,
@@ -1215,20 +1238,28 @@ export class DatabaseStorage implements IStorage {
       isFlashSale: products.isFlashSale,
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
-      category: {
-        id: categories.id,
-        name: categories.name,
-        emoji: categories.emoji,
-        description: categories.description
-      }
+      categoryId2: categories.id,
+      categoryName: categories.name,
+      categoryEmoji: categories.emoji,
+      categoryDescription: categories.description
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.isFlashSale, true));
+    
+    return result.map(item => ({
+      ...item,
+      category: item.categoryId2 ? {
+        id: item.categoryId2,
+        name: item.categoryName!,
+        emoji: item.categoryEmoji!,
+        description: item.categoryDescription
+      } : undefined
+    }));
   }
 
   async getFeaturedProducts(): Promise<ProductWithCategory[]> {
-    return await db.select({
+    const result = await db.select({
       id: products.id,
       name: products.name,
       nameNormalized: products.nameNormalized,
@@ -1250,16 +1281,24 @@ export class DatabaseStorage implements IStorage {
       isFlashSale: products.isFlashSale,
       isFeatured: products.isFeatured,
       createdAt: products.createdAt,
-      category: {
-        id: categories.id,
-        name: categories.name,
-        emoji: categories.emoji,
-        description: categories.description
-      }
+      categoryId2: categories.id,
+      categoryName: categories.name,
+      categoryEmoji: categories.emoji,
+      categoryDescription: categories.description
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.isFeatured, true));
+    
+    return result.map(item => ({
+      ...item,
+      category: item.categoryId2 ? {
+        id: item.categoryId2,
+        name: item.categoryName!,
+        emoji: item.categoryEmoji!,
+        description: item.categoryDescription
+      } : undefined
+    }));
   }
 
   async getProduct(id: string): Promise<ProductWithCategory | undefined> {
@@ -1297,7 +1336,14 @@ export class DatabaseStorage implements IStorage {
     .where(eq(products.id, id))
     .limit(1);
     
-    return result[0];
+    const item = result[0];
+    if (!item) return undefined;
+    
+    // Convert null category to undefined to match type expectations
+    return {
+      ...item,
+      category: item.category?.id ? item.category : undefined
+    };
   }
 
   async getProductByReference(reference: string): Promise<Product | undefined> {
@@ -1426,7 +1472,7 @@ export class DatabaseStorage implements IStorage {
 
   // Cart methods
   async getCartItems(userId: string): Promise<CartItemWithProduct[]> {
-    return await db.select({
+    const result = await db.select({
       id: cartItems.id,
       userId: cartItems.userId,
       productId: cartItems.productId,
@@ -1459,6 +1505,9 @@ export class DatabaseStorage implements IStorage {
     .from(cartItems)
     .leftJoin(products, eq(cartItems.productId, products.id))
     .where(eq(cartItems.userId, userId));
+    
+    // Filter out cart items where the product no longer exists
+    return result.filter(item => item.product?.id) as CartItemWithProduct[];
   }
 
   async addToCart(cartItem: InsertCartItem): Promise<CartItem> {
