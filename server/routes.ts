@@ -22,6 +22,38 @@ function generateUniqueReference(): string {
   return result;
 }
 
+// Generate unique reference ensuring no duplicates in database
+async function generateUniqueReferenceForProduct(): Promise<string> {
+  let reference: string;
+  let attempts = 0;
+  const maxAttempts = 100; // Prevent infinite loops
+  
+  do {
+    reference = generateUniqueReference();
+    attempts++;
+    
+    // Check if reference already exists in database
+    const existingProduct = await storage.getProductByReference(reference);
+    if (!existingProduct) {
+      return reference;
+    }
+  } while (attempts < maxAttempts);
+  
+  // If we couldn't generate a unique reference after max attempts, throw error
+  throw new Error('No se pudo generar una referencia única después de múltiples intentos');
+}
+
+// Brand package schema for bulk creation
+const brandPackageSchema = z.object({
+  brandId: z.string().min(1, "Brand ID is required"),
+  categoryId: z.string().min(1, "Category ID is required"),
+  price: z.string().min(1, "Price is required"),
+  description: z.string().default("Hermosa y cómoda zapatillas para el mejor estilo"),
+  images: z.array(z.string()).min(10, "Minimum 10 images required"),
+  isFlashSale: z.boolean().default(false),
+  isFeatured: z.boolean().default(false),
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Crear directorio para las imágenes si no existe
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -240,6 +272,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk product creation endpoint
+  app.post("/api/products/bulk", async (req, res) => {
+    try {
+      const packageData = brandPackageSchema.parse(req.body);
+      
+      // Get brand information for product names
+      const brand = await storage.getBrand(packageData.brandId);
+      if (!brand) {
+        return res.status(404).json({ message: "Marca no encontrada" });
+      }
+      
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+      const createdProducts = [];
+      
+      // Create products for each image
+      for (let i = 0; i < packageData.images.length; i++) {
+        try {
+          // Generate unique reference for this product
+          const reference = await generateUniqueReferenceForProduct();
+          
+          const productData = {
+            name: brand.name, // Use brand name as product name
+            description: packageData.description,
+            price: packageData.price,
+            imageUrl: packageData.images[i],
+            reference: reference,
+            categoryId: packageData.categoryId,
+            brandId: packageData.brandId,
+            isFlashSale: packageData.isFlashSale,
+            isFeatured: packageData.isFeatured,
+            images: [packageData.images[i]], // Single image per product
+            sizes: [],
+            colors: [],
+          };
+          
+          const product = await storage.createProduct(productData);
+          createdProducts.push(product);
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`Imagen ${i + 1}: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        }
+      }
+      
+      res.status(201).json(results);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Datos del paquete inválidos", errors: error.errors });
+      }
+      console.error("Error creating bulk products:", error);
+      res.status(500).json({ message: "Error al crear paquete de productos" });
+    }
+  });
+
   // Products routes with advanced search and filtering
   app.get("/api/products", async (req, res) => {
     try {
@@ -328,9 +414,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         products = products.filter(p => p.discountPercentage && p.discountPercentage > 0);
       }
       
-      // In stock filter
+      // In stock filter - products don't have stock field, so we'll consider all products as in stock
       if (inStock === "true") {
-        products = products.filter(p => (p.stock || 0) > 0);
+        // Since we don't track stock in the current schema, we'll just return all products
+        // In the future, a stock field can be added to the products table
       }
       
       res.json(products);

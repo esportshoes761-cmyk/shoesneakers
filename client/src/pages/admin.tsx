@@ -18,7 +18,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -56,6 +56,19 @@ type ProductFormData = z.infer<typeof productFormSchema>;
 type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
+
+// Brand package schema for bulk product creation
+const brandPackageSchema = z.object({
+  brandId: z.string().min(1, "Selecciona una marca"),
+  categoryId: z.string().min(1, "Selecciona una categoría"),
+  price: z.string().min(1, "El precio es requerido"),
+  description: z.string().default("Hermosa y cómoda zapatillas para el mejor estilo"),
+  images: z.array(z.string()).min(10, "Se requieren mínimo 10 imágenes"),
+  isFlashSale: z.boolean().default(false),
+  isFeatured: z.boolean().default(false),
+});
+
+type BrandPackageFormData = z.infer<typeof brandPackageSchema>;
 
 // Utilidades para formateo de precios colombianos
 const formatPrice = (value: string) => {
@@ -102,6 +115,16 @@ export default function AdminPanel() {
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
   const [searchReference, setSearchReference] = useState("");
+  
+  // Brand package states
+  const [brandPackageDialogOpen, setBrandPackageDialogOpen] = useState(false);
+  const [bulkUploadImages, setBulkUploadImages] = useState<string[]>([]);
+  const [bulkCreationProgress, setBulkCreationProgress] = useState<{
+    isProcessing: boolean;
+    currentIndex: number;
+    total: number;
+    results: { success: number; failed: number; errors: string[] };
+  }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
 
   // Forms initialization after all states
   const productForm = useForm<ProductFormData>({
@@ -160,6 +183,19 @@ export default function AdminPanel() {
     },
   });
 
+  const brandPackageForm = useForm<BrandPackageFormData>({
+    resolver: zodResolver(brandPackageSchema),
+    defaultValues: {
+      brandId: "",
+      categoryId: "",
+      price: "",
+      description: "Hermosa y cómoda zapatillas para el mejor estilo",
+      images: [],
+      isFlashSale: false,
+      isFeatured: false,
+    },
+  });
+
   // Check de autenticación
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || !user?.isAdmin)) {
@@ -205,6 +241,37 @@ export default function AdminPanel() {
       setPendingProductToEdit(null);
     }
   }, [brandProductsDialogOpen, pendingProductToEdit, productForm]);
+
+  // Bulk product creation mutation
+  const bulkCreateProductsMutation = useMutation({
+    mutationFn: async (data: BrandPackageFormData) => {
+      const response = await apiRequest('POST', '/api/products/bulk', data);
+      return response.json();
+    },
+    onMutate: () => {
+      setBulkCreationProgress({ isProcessing: true, currentIndex: 0, total: bulkUploadImages.length, results: { success: 0, failed: 0, errors: [] } });
+    },
+    onSuccess: (data: { success: number; failed: number; errors: string[] }) => {
+      setBulkCreationProgress(prev => ({ ...prev, isProcessing: false, results: data }));
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({
+        title: "Paquete creado exitosamente",
+        description: `Se crearon ${data.success} productos correctamente. ${data.failed > 0 ? `${data.failed} fallaron.` : ''}`,
+        variant: data.failed > 0 ? "destructive" : "default",
+      });
+      brandPackageForm.reset();
+      setBulkUploadImages([]);
+    },
+    onError: async (error: Error) => {
+      setBulkCreationProgress(prev => ({ ...prev, isProcessing: false }));
+      const parsedError = await parseApiError(error);
+      toast({
+        title: parsedError.title,
+        description: parsedError.description,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Consultas de datos
   const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
@@ -677,7 +744,7 @@ export default function AdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-6 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Productos</span>
@@ -697,6 +764,10 @@ export default function AdminPanel() {
           <TabsTrigger value="events" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-events">
             <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Eventos</span>
+          </TabsTrigger>
+          <TabsTrigger value="brand-packages" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brand-packages">
+            <Layers className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Paquetes</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1709,6 +1780,307 @@ export default function AdminPanel() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        {/* Brand Packages Tab - Bulk Product Creation */}
+        <TabsContent value="brand-packages" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold">Paquetes por Marca</h2>
+            <Dialog open={brandPackageDialogOpen} onOpenChange={setBrandPackageDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-brand-package">
+                  <Layers className="h-4 w-4 mr-2" />
+                  Crear Paquete
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+                <DialogHeader>
+                  <DialogTitle>Crear Paquete de Productos por Marca</DialogTitle>
+                  <DialogDescription>
+                    Crea múltiples productos de una marca de una sola vez. Mínimo 10 imágenes requeridas.
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...brandPackageForm}>
+                  <form onSubmit={brandPackageForm.handleSubmit((data) => {
+                    const formData = { ...data, images: bulkUploadImages };
+                    bulkCreateProductsMutation.mutate(formData);
+                  })} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="brandId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Marca</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-brand-package">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona la marca" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {brands?.map((brand: Brand) => (
+                                  <SelectItem key={brand.id} value={brand.id}>
+                                    {brand.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="categoryId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Categoría</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-category-package">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona la categoría" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {categories?.map((category: Category) => (
+                                  <SelectItem key={category.id} value={category.id}>
+                                    {category.emoji} {category.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={brandPackageForm.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Precio (COP) - Aplicará a todos los productos</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Ej: 150000"
+                              value={formatPrice(field.value)}
+                              onChange={(e) => field.onChange(parsePrice(e.target.value))}
+                              data-testid="input-price-package"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={brandPackageForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Descripción por defecto (opcional)</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="Descripción que se aplicará a todos los productos"
+                              className="min-h-[80px]"
+                              data-testid="textarea-description-package"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <div className="space-y-2">
+                      <FormLabel>Imágenes del Paquete (Mínimo 10)</FormLabel>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                        <ObjectUploader
+                          onComplete={(url: string) => {
+                            setBulkUploadImages(prev => [...prev, url]);
+                            brandPackageForm.setValue('images', [...bulkUploadImages, url]);
+                          }}
+                          buttonClassName="w-full"
+                        />
+                        {bulkUploadImages.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">
+                              Imágenes cargadas: {bulkUploadImages.length} {bulkUploadImages.length < 10 && '(Mínimo 10 requeridas)'}
+                            </p>
+                            <div className="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto">
+                              {bulkUploadImages.map((image, index) => (
+                                <div key={index} className="relative group">
+                                  <img
+                                    src={`/api/images/${image}`}
+                                    alt={`Imagen ${index + 1}`}
+                                    className="w-full h-16 object-cover rounded border"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="absolute -top-2 -right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => {
+                                      const newImages = bulkUploadImages.filter((_, i) => i !== index);
+                                      setBulkUploadImages(newImages);
+                                      brandPackageForm.setValue('images', newImages);
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="isFlashSale"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Oferta Flash</FormLabel>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-flash-sale-package" />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={brandPackageForm.control}
+                        name="isFeatured"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                              <FormLabel>Producto Destacado</FormLabel>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value || false} onCheckedChange={field.onChange} data-testid="switch-featured-package" />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* Progress indicator */}
+                    {bulkCreationProgress.isProcessing && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-blue-900">Creando productos...</span>
+                          <span className="text-sm text-blue-700">
+                            {bulkCreationProgress.currentIndex} / {bulkCreationProgress.total}
+                          </span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${(bulkCreationProgress.currentIndex / bulkCreationProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Results */}
+                    {!bulkCreationProgress.isProcessing && (bulkCreationProgress.results.success > 0 || bulkCreationProgress.results.failed > 0) && (
+                      <div className={`border rounded-lg p-4 ${
+                        bulkCreationProgress.results.failed > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+                      }`}>
+                        <h4 className="font-medium mb-2">Resultados:</h4>
+                        <div className="text-sm space-y-1">
+                          <p className="text-green-700">✅ Exitosos: {bulkCreationProgress.results.success}</p>
+                          {bulkCreationProgress.results.failed > 0 && (
+                            <p className="text-red-700">❌ Fallidos: {bulkCreationProgress.results.failed}</p>
+                          )}
+                          {bulkCreationProgress.results.errors.length > 0 && (
+                            <div className="mt-2">
+                              <p className="font-medium text-red-700">Errores:</p>
+                              <ul className="list-disc list-inside text-red-600 text-xs space-y-1">
+                                {bulkCreationProgress.results.errors.map((error, index) => (
+                                  <li key={index}>{error}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setBrandPackageDialogOpen(false);
+                          brandPackageForm.reset();
+                          setBulkUploadImages([]);
+                          setBulkCreationProgress({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={bulkCreateProductsMutation.isPending || bulkUploadImages.length < 10}
+                        data-testid="button-submit-brand-package"
+                      >
+                        {bulkCreateProductsMutation.isPending 
+                          ? "Creando..." 
+                          : `Crear ${bulkUploadImages.length} Productos`
+                        }
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Information Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Layers className="h-5 w-5 mr-2" />
+                Creación Masiva de Productos
+              </CardTitle>
+              <CardDescription>
+                Crea múltiples productos de una marca de forma eficiente. Cada producto tendrá una referencia única autogenerada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  <div>
+                    <strong>Referencias únicas:</strong> Se generan automáticamente códigos de 10 caracteres únicos para cada producto.
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  <div>
+                    <strong>Nombre automático:</strong> El nombre del producto será el nombre de la marca seleccionada.
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  <div>
+                    <strong>Mínimo 10 imágenes:</strong> Cada imagen se convertirá en un producto individual con la misma información base.
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  <div>
+                    <strong>Proceso rápido:</strong> Todos los productos se crean simultáneamente para máxima eficiencia.
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
