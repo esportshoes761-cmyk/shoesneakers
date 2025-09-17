@@ -2,7 +2,7 @@ import { type User, type InsertUser, type Product, type InsertProduct, type Cate
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from "@shared/schema";
-import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, inArray, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -1109,7 +1109,8 @@ export class DatabaseStorage implements IStorage {
       categoryDescription: categories.description
     })
     .from(products)
-    .leftJoin(categories, eq(products.categoryId, categories.id));
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .orderBy(desc(products.id)); // Orden cronológico: más recientes arriba
     
     return result.map(item => ({
       ...item,
