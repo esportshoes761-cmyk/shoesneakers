@@ -211,6 +211,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Ruta temporal removida después de uso exitoso
+
   // Categories routes
   app.get("/api/categories", async (req, res) => {
     try {
