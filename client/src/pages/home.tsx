@@ -47,8 +47,8 @@ export default function Home() {
   });
 
   const { data: featuredProducts = [] } = useQuery<ProductWithCategory[]>({
-    queryKey: ["/api/products", "featured"],
-    queryFn: () => fetch("/api/products?featured=true").then(res => res.json()),
+    queryKey: ["/api/products", "all-featured"],
+    queryFn: () => fetch("/api/products").then(res => res.json()),
   });
 
   // Build query parameters from search filters
