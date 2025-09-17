@@ -664,7 +664,7 @@ export default function AdminPanel() {
         </TabsList>
 
         {/* Panel de Productos */}
-        <TabsContent value="products" className="space-y-2 sm:space-y-4" forceMount>
+        <TabsContent value="products" className="space-y-2 sm:space-y-4">
           <div className="flex justify-between items-center mb-2 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Productos</h2>
             <Button 
