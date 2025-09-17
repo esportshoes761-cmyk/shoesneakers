@@ -21,6 +21,7 @@ export interface SearchFilters {
   sizes: string[];
   colors: string[];
   onSale: boolean;
+  inStock: boolean;
 }
 
 interface AdvancedSearchProps {
@@ -29,6 +30,7 @@ interface AdvancedSearchProps {
   categories: Category[];
   brands: BrandWithProducts[];
   onClear: () => void;
+  onSearch: (filters: SearchFilters) => void;
 }
 
 const commonSizes = ["35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45"];
@@ -39,8 +41,11 @@ export default function AdvancedSearch({
   onFiltersChange, 
   categories, 
   brands, 
-  onClear 
+  onClear,
+  onSearch 
 }: AdvancedSearchProps) {
+  // Local filters for editing before applying
+  const [localFilters, setLocalFilters] = useState<SearchFilters>(filters);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isPriceOpen, setIsPriceOpen] = useState(false);
   const [isBrandOpen, setIsBrandOpen] = useState(false);
@@ -48,46 +53,66 @@ export default function AdvancedSearch({
   const [isSizeOpen, setIsSizeOpen] = useState(false);
   const [isColorOpen, setIsColorOpen] = useState(false);
 
-  const updateFilters = (updates: Partial<SearchFilters>) => {
-    onFiltersChange({ ...filters, ...updates });
+  const updateLocalFilters = (updates: Partial<SearchFilters>) => {
+    setLocalFilters({ ...localFilters, ...updates });
+  };
+
+  const handleSearch = () => {
+    onSearch(localFilters);
+  };
+
+  const handleClear = () => {
+    const clearedFilters = {
+      query: "",
+      priceMin: 0,
+      priceMax: 1000000,
+      brands: [],
+      categories: [],
+      sizes: [],
+      colors: [],
+      onSale: false,
+      inStock: false,
+    };
+    setLocalFilters(clearedFilters);
+    onSearch(clearedFilters);
   };
 
   const toggleBrand = (brandId: string) => {
-    const newBrands = filters.brands.includes(brandId)
-      ? filters.brands.filter(b => b !== brandId)
-      : [...filters.brands, brandId];
-    updateFilters({ brands: newBrands });
+    const newBrands = localFilters.brands.includes(brandId)
+      ? localFilters.brands.filter(b => b !== brandId)
+      : [...localFilters.brands, brandId];
+    updateLocalFilters({ brands: newBrands });
   };
 
   const toggleCategory = (categoryName: string) => {
-    const newCategories = filters.categories.includes(categoryName)
-      ? filters.categories.filter(c => c !== categoryName)
-      : [...filters.categories, categoryName];
-    updateFilters({ categories: newCategories });
+    const newCategories = localFilters.categories.includes(categoryName)
+      ? localFilters.categories.filter(c => c !== categoryName)
+      : [...localFilters.categories, categoryName];
+    updateLocalFilters({ categories: newCategories });
   };
 
   const toggleSize = (size: string) => {
-    const newSizes = filters.sizes.includes(size)
-      ? filters.sizes.filter(s => s !== size)
-      : [...filters.sizes, size];
-    updateFilters({ sizes: newSizes });
+    const newSizes = localFilters.sizes.includes(size)
+      ? localFilters.sizes.filter(s => s !== size)
+      : [...localFilters.sizes, size];
+    updateLocalFilters({ sizes: newSizes });
   };
 
   const toggleColor = (color: string) => {
-    const newColors = filters.colors.includes(color)
-      ? filters.colors.filter(c => c !== color)
-      : [...filters.colors, color];
-    updateFilters({ colors: newColors });
+    const newColors = localFilters.colors.includes(color)
+      ? localFilters.colors.filter(c => c !== color)
+      : [...localFilters.colors, color];
+    updateLocalFilters({ colors: newColors });
   };
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.brands.length > 0) count++;
-    if (filters.categories.length > 0) count++;
-    if (filters.sizes.length > 0) count++;
-    if (filters.colors.length > 0) count++;
-    if (filters.onSale) count++;
-    if (filters.priceMin > 0 || filters.priceMax < 1000000) count++;
+    if (localFilters.brands.length > 0) count++;
+    if (localFilters.categories.length > 0) count++;
+    if (localFilters.sizes.length > 0) count++;
+    if (localFilters.colors.length > 0) count++;
+    if (localFilters.onSale) count++;
+    if (localFilters.priceMin > 0 || localFilters.priceMax < 1000000) count++;
     return count;
   };
 
@@ -98,11 +123,36 @@ export default function AdvancedSearch({
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
           placeholder="Buscar zapatos, marcas, modelos..."
-          value={filters.query}
-          onChange={(e) => updateFilters({ query: e.target.value })}
-          className="pl-10 h-10 sm:h-12 text-sm sm:text-base"
+          value={localFilters.query}
+          onChange={(e) => updateLocalFilters({ query: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSearch();
+            }
+          }}
+          className="pl-10 pr-20 h-10 sm:h-12 text-sm sm:text-base"
           data-testid="input-search-query"
         />
+        <Button
+          onClick={handleSearch}
+          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 sm:h-10 px-3 sm:px-4"
+          data-testid="button-search"
+        >
+          Buscar
+        </Button>
+      </div>
+
+      {/* Search and Clear Buttons */}
+      <div className="flex gap-2 mb-3">
+        <Button 
+          onClick={handleClear}
+          variant="outline"
+          className="flex items-center gap-2"
+          data-testid="button-clear-filters"
+        >
+          <X className="w-4 h-4" />
+          Limpiar Filtros
+        </Button>
       </div>
 
       {/* Filter Toggle Button */}
@@ -131,8 +181,8 @@ export default function AdvancedSearch({
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="onSale"
-                  checked={filters.onSale}
-                  onCheckedChange={(checked) => updateFilters({ onSale: checked as boolean })}
+                  checked={localFilters.onSale}
+                  onCheckedChange={(checked) => updateLocalFilters({ onSale: checked as boolean })}
                   data-testid="checkbox-on-sale"
                 />
                 <Label htmlFor="onSale" className="text-sm">En oferta</Label>
@@ -152,18 +202,18 @@ export default function AdvancedSearch({
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <Label className="text-xs text-muted-foreground">Mínimo</Label>
-                      <div className="text-sm font-medium">{formatCurrency(filters.priceMin)}</div>
+                      <div className="text-sm font-medium">{formatCurrency(localFilters.priceMin)}</div>
                     </div>
                     <div className="flex-1">
                       <Label className="text-xs text-muted-foreground">Máximo</Label>
-                      <div className="text-sm font-medium">{formatCurrency(filters.priceMax)}</div>
+                      <div className="text-sm font-medium">{formatCurrency(localFilters.priceMax)}</div>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm">Precio mínimo</Label>
                     <Slider
-                      value={[filters.priceMin]}
-                      onValueChange={([value]) => updateFilters({ priceMin: value })}
+                      value={[localFilters.priceMin]}
+                      onValueChange={([value]) => updateLocalFilters({ priceMin: value })}
                       max={500000}
                       step={10000}
                       className="w-full"
@@ -173,8 +223,8 @@ export default function AdvancedSearch({
                   <div className="space-y-2">
                     <Label className="text-sm">Precio máximo</Label>
                     <Slider
-                      value={[filters.priceMax]}
-                      onValueChange={([value]) => updateFilters({ priceMax: value })}
+                      value={[localFilters.priceMax]}
+                      onValueChange={([value]) => updateLocalFilters({ priceMax: value })}
                       max={1000000}
                       step={10000}
                       className="w-full"
@@ -190,7 +240,7 @@ export default function AdvancedSearch({
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full justify-between p-2">
                   <span className="font-medium">
-                    Marcas {filters.brands.length > 0 && `(${filters.brands.length})`}
+                    Marcas {localFilters.brands.length > 0 && `(${localFilters.brands.length})`}
                   </span>
                   {isBrandOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
@@ -201,7 +251,7 @@ export default function AdvancedSearch({
                     <div key={brand.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={`brand-${brand.id}`}
-                        checked={filters.brands.includes(brand.id)}
+                        checked={localFilters.brands.includes(brand.id)}
                         onCheckedChange={() => toggleBrand(brand.id)}
                         data-testid={`checkbox-brand-${brand.id}`}
                       />
@@ -230,7 +280,7 @@ export default function AdvancedSearch({
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full justify-between p-2">
                   <span className="font-medium">
-                    Categorías {filters.categories.length > 0 && `(${filters.categories.length})`}
+                    Categorías {localFilters.categories.length > 0 && `(${localFilters.categories.length})`}
                   </span>
                   {isCategoryOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
@@ -241,7 +291,7 @@ export default function AdvancedSearch({
                     <div key={category.name} className="flex items-center space-x-2">
                       <Checkbox
                         id={`category-${category.name}`}
-                        checked={filters.categories.includes(category.name)}
+                        checked={localFilters.categories.includes(category.name)}
                         onCheckedChange={() => toggleCategory(category.name)}
                         data-testid={`checkbox-category-${category.name}`}
                       />
@@ -260,7 +310,7 @@ export default function AdvancedSearch({
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full justify-between p-2">
                   <span className="font-medium">
-                    Tallas {filters.sizes.length > 0 && `(${filters.sizes.length})`}
+                    Tallas {localFilters.sizes.length > 0 && `(${localFilters.sizes.length})`}
                   </span>
                   {isSizeOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
@@ -270,7 +320,7 @@ export default function AdvancedSearch({
                   {commonSizes.map((size) => (
                     <Button
                       key={size}
-                      variant={filters.sizes.includes(size) ? "default" : "outline"}
+                      variant={localFilters.sizes.includes(size) ? "default" : "outline"}
                       size="sm"
                       onClick={() => toggleSize(size)}
                       className="h-8"
@@ -288,7 +338,7 @@ export default function AdvancedSearch({
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full justify-between p-2">
                   <span className="font-medium">
-                    Colores {filters.colors.length > 0 && `(${filters.colors.length})`}
+                    Colores {localFilters.colors.length > 0 && `(${localFilters.colors.length})`}
                   </span>
                   {isColorOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
@@ -298,7 +348,7 @@ export default function AdvancedSearch({
                   {commonColors.map((color) => (
                     <Button
                       key={color}
-                      variant={filters.colors.includes(color) ? "default" : "outline"}
+                      variant={localFilters.colors.includes(color) ? "default" : "outline"}
                       size="sm"
                       onClick={() => toggleColor(color)}
                       className="h-8 text-xs"
@@ -331,7 +381,7 @@ export default function AdvancedSearch({
       {/* Active Filters Display */}
       {getActiveFiltersCount() > 0 && (
         <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
-          {filters.brands.map((brandId) => {
+          {localFilters.brands.map((brandId) => {
             const brand = brands.find(b => b.id === brandId);
             return brand ? (
               <Badge key={brandId} variant="secondary" className="flex items-center gap-1">
@@ -354,7 +404,7 @@ export default function AdvancedSearch({
               </Badge>
             ) : null;
           })}
-          {filters.categories.map((categoryName) => (
+          {localFilters.categories.map((categoryName) => (
             <Badge key={categoryName} variant="secondary" className="flex items-center gap-1">
               {categoryName}
               <X 
@@ -363,7 +413,7 @@ export default function AdvancedSearch({
               />
             </Badge>
           ))}
-          {filters.sizes.map((size) => (
+          {localFilters.sizes.map((size) => (
             <Badge key={size} variant="secondary" className="flex items-center gap-1">
               Talla {size}
               <X 
@@ -372,7 +422,7 @@ export default function AdvancedSearch({
               />
             </Badge>
           ))}
-          {filters.colors.map((color) => (
+          {localFilters.colors.map((color) => (
             <Badge key={color} variant="secondary" className="flex items-center gap-1">
               {color}
               <X 
@@ -381,7 +431,7 @@ export default function AdvancedSearch({
               />
             </Badge>
           ))}
-          {filters.onSale && (
+          {localFilters.onSale && (
             <Badge variant="secondary" className="flex items-center gap-1">
               En oferta
               <X 

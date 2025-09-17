@@ -84,6 +84,7 @@ export default function AdminPanel() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   
+  // All state declarations first to prevent initialization order issues
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [imageZoomData, setImageZoomData] = useState<{product: Product; isOpen: boolean} | null>(null);
   const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
@@ -91,26 +92,18 @@ export default function AdminPanel() {
   const [brandDialogOpen, setBrandDialogOpen] = useState(false);
   const [brandProductsDialogOpen, setBrandProductsDialogOpen] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
-  
-  // Estado para controlar las pestañas activas
   const [activeTab, setActiveTab] = useState("products");
-
-  // Estados para edición
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
   const [isBrandEditMode, setIsBrandEditMode] = useState(false);
   const [pendingProductToEdit, setPendingProductToEdit] = useState<Product | null>(null);
-
-  // Estados para manejar múltiples campos
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
-  
-  // Estado para búsqueda por referencia
   const [searchReference, setSearchReference] = useState("");
 
-  // Formularios - MOVED BEFORE useEffect to fix initialization order
+  // Forms initialization after all states
   const productForm = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {

@@ -96,9 +96,14 @@ export default function Home() {
     setSelectedBrand(null);
   };
 
+  // Función para aplicar filtros desde el componente de búsqueda
+  const handleSearch = (filters: SearchFilters) => {
+    setSearchFilters(filters);
+  };
+
   // Función para limpiar filtros
   const clearFilters = () => {
-    setSearchFilters({
+    const clearedFilters = {
       query: "",
       priceMin: 0,
       priceMax: 1000000,
@@ -108,7 +113,8 @@ export default function Home() {
       colors: [],
       onSale: false,
       inStock: false,
-    });
+    };
+    setSearchFilters(clearedFilters);
   };
 
   // Función para aleatorizar el orden de productos
@@ -373,6 +379,7 @@ export default function Home() {
           categories={categories}
           brands={brands}
           onClear={clearFilters}
+          onSearch={handleSearch}
         />
 
         {/* Main Promo Banner - Compacto para móvil */}
