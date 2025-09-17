@@ -93,7 +93,6 @@ export const products = pgTable("products", {
   reference: text("reference"), // Referencia del producto
   sizes: text("sizes").array().default(sql`'{}'::text[]`), // Tallas disponibles
   colors: text("colors").array().default(sql`'{}'::text[]`), // Colores disponibles
-  stock: integer("stock").default(0),
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   reviewCount: integer("review_count").default(0),
   isFlashSale: boolean("is_flash_sale").default(false),

@@ -22,7 +22,6 @@ const productFormSchema = z.object({
   imageUrl: z.string().url("Ingresa una URL válida de imagen"),
   price: z.string().min(1, "El precio es requerido"),
   originalPrice: z.string().optional(),
-  stock: z.string().min(1, "El stock es requerido"),
   discountPercentage: z.string().optional(),
   isFlashSale: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
@@ -52,7 +51,6 @@ export default function ProductUploadForm({ onProductCreated }: ProductUploadFor
       description: "",
       price: "",
       originalPrice: "",
-      stock: "",
       discountPercentage: "",
       imageUrl: "",
       categoryId: "",
@@ -69,7 +67,6 @@ export default function ProductUploadForm({ onProductCreated }: ProductUploadFor
         ...data,
         price: data.price,
         originalPrice: data.originalPrice || null,
-        stock: parseInt(data.stock),
         discountPercentage: data.discountPercentage ? parseInt(data.discountPercentage) : 0,
         rating: data.rating,
         reviewCount: parseInt(data.reviewCount || "0"),
@@ -306,24 +303,6 @@ export default function ProductUploadForm({ onProductCreated }: ProductUploadFor
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="stock"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Stock</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="50" 
-                    type="number"
-                    {...field}
-                    data-testid="input-stock"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
 
           <FormField
             control={form.control}

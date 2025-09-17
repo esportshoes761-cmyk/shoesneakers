@@ -585,7 +585,6 @@ export class MemStorage implements IStorage {
       imageUrl: insertProduct.imageUrl ?? null,
       sizes: insertProduct.sizes ?? null,
       colors: insertProduct.colors ?? null,
-      stock: insertProduct.stock ?? 0,
       rating: insertProduct.rating ?? "0",
       reviewCount: insertProduct.reviewCount ?? 0,
       isFlashSale: insertProduct.isFlashSale ?? false,
@@ -1097,7 +1096,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1140,7 +1139,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1175,7 +1174,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1210,7 +1209,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1245,7 +1244,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1280,7 +1279,7 @@ export class DatabaseStorage implements IStorage {
       reference: products.reference,
       sizes: products.sizes,
       colors: products.colors,
-      stock: products.stock,
+
       rating: products.rating,
       reviewCount: products.reviewCount,
       isFlashSale: products.isFlashSale,
@@ -1449,7 +1448,7 @@ export class DatabaseStorage implements IStorage {
         reference: products.reference,
         sizes: products.sizes,
         colors: products.colors,
-        stock: products.stock,
+  
         rating: products.rating,
         reviewCount: products.reviewCount,
         isFlashSale: products.isFlashSale,

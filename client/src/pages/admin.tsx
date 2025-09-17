@@ -143,7 +143,6 @@ export default function AdminPanel() {
       originalPrice: null,
       imageUrl: "",
       reference: "",
-      stock: 0,
       categoryId: "",
       brandId: "",
       isFlashSale: false,
@@ -269,7 +268,6 @@ export default function AdminPanel() {
       originalPrice: product.originalPrice?.toString() || undefined,
       imageUrl: product.imageUrl || undefined,
       reference: product.reference || "",
-      stock: product.stock || 0,
       categoryId: product.categoryId || undefined,
       brandId: product.brandId || undefined,
       isFlashSale: product.isFlashSale || false,
@@ -747,19 +745,6 @@ export default function AdminPanel() {
 
                     {/* Stock y Precios */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-                      <FormField
-                        control={productForm.control}
-                        name="stock"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Stock</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} value={field.value || 0} onChange={(e) => field.onChange(parseInt(e.target.value))} data-testid="input-product-stock" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                       
                       <FormField
                         control={productForm.control}
@@ -1233,7 +1218,6 @@ export default function AdminPanel() {
                         {product.isFlashSale && <Badge variant="destructive">Oferta Flash</Badge>}
                         {product.isFeatured && <Badge>Destacado</Badge>}
                       </div>
-                      <p className="text-sm text-muted-foreground">Stock: {product.stock}</p>
                       
                       {/* Sistema de calificación administrativa */}
                       <div className="p-2 bg-muted/30 rounded-lg">
@@ -1592,11 +1576,6 @@ export default function AdminPanel() {
                           </div>
                         )}
                         
-                        {product.stock !== undefined && (
-                          <div className="text-xs">
-                            <span className="font-medium">Stock:</span> {product.stock}
-                          </div>
-                        )}
                         
                         {/* Tallas disponibles */}
                         {product.sizes && product.sizes.length > 0 && (

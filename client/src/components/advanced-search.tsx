@@ -21,7 +21,6 @@ export interface SearchFilters {
   sizes: string[];
   colors: string[];
   onSale: boolean;
-  inStock: boolean;
 }
 
 interface AdvancedSearchProps {
@@ -88,7 +87,6 @@ export default function AdvancedSearch({
     if (filters.sizes.length > 0) count++;
     if (filters.colors.length > 0) count++;
     if (filters.onSale) count++;
-    if (filters.inStock) count++;
     if (filters.priceMin > 0 || filters.priceMax < 1000000) count++;
     return count;
   };
@@ -138,15 +136,6 @@ export default function AdvancedSearch({
                   data-testid="checkbox-on-sale"
                 />
                 <Label htmlFor="onSale" className="text-sm">En oferta</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="inStock"
-                  checked={filters.inStock}
-                  onCheckedChange={(checked) => updateFilters({ inStock: checked as boolean })}
-                  data-testid="checkbox-in-stock"
-                />
-                <Label htmlFor="inStock" className="text-sm">Disponible</Label>
               </div>
             </div>
 
@@ -398,15 +387,6 @@ export default function AdvancedSearch({
               <X 
                 className="w-3 h-3 cursor-pointer" 
                 onClick={() => updateFilters({ onSale: false })}
-              />
-            </Badge>
-          )}
-          {filters.inStock && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Disponible
-              <X 
-                className="w-3 h-3 cursor-pointer" 
-                onClick={() => updateFilters({ inStock: false })}
               />
             </Badge>
           )}
