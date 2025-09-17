@@ -115,6 +115,11 @@ export default function AdminPanel() {
   const [productColors, setProductColors] = useState<string[]>([]);
   const [searchReference, setSearchReference] = useState("");
   
+  // Estados para detección de duplicados
+  const [duplicateWarningOpen, setDuplicateWarningOpen] = useState(false);
+  const [duplicatedProducts, setDuplicatedProducts] = useState<Product[]>([]);
+  const [pendingProductData, setPendingProductData] = useState<any>(null);
+  
   // Brand package states
   const [brandPackageDialogOpen, setBrandPackageDialogOpen] = useState(false);
   const [bulkUploadImages, setBulkUploadImages] = useState<string[]>([]);
@@ -434,29 +439,63 @@ export default function AdminPanel() {
     setBrandDialogOpen(false);
   };
 
+  // Función para detectar productos duplicados
+  const checkForDuplicates = (productName: string, productReference?: string) => {
+    const duplicates = allProducts.filter(product => {
+      // Verificar por nombre (similar)
+      const nameMatch = product.name.toLowerCase().trim() === productName.toLowerCase().trim();
+      
+      // Verificar por referencia si existe
+      const referenceMatch = productReference && product.reference && 
+        product.reference.toLowerCase().trim() === productReference.toLowerCase().trim();
+      
+      return nameMatch || referenceMatch;
+    });
+    
+    return duplicates;
+  };
+
+  // Función para crear producto con verificación de duplicados
+  const createProductWithDuplicateCheck = async (data: ProductFormData, forceDuplicate = false): Promise<Response> => {
+    // Si no es forzado, verificar duplicados primero
+    if (!forceDuplicate) {
+      const duplicates = checkForDuplicates(data.name, data.reference || "");
+      
+      if (duplicates.length > 0) {
+        // Encontrar duplicados - mostrar advertencia
+        setDuplicatedProducts(duplicates);
+        setPendingProductData(data);
+        setDuplicateWarningOpen(true);
+        // Retornar una Promise rechazada para detener el flujo
+        throw new Error("DUPLICATE_DETECTED");
+      }
+    }
+    
+    // Continuar con la creación normal del producto
+    const discountPercentage = data.originalPrice && data.price 
+      ? calculateDiscount(data.originalPrice.toString(), data.price)
+      : 0;
+    
+    const productData = {
+      ...data,
+      price: data.price || "1",
+      originalPrice: data.originalPrice || null,
+      discountPercentage,
+      images: productImages.filter(img => img.trim() !== ""),
+      sizes: productSizes,
+      colors: productColors,
+    };
+    
+    console.log("Datos completos del producto a enviar:", productData);
+    console.log("ImageURL principal:", data.imageUrl);
+    console.log("Imágenes adicionales:", productImages);
+    
+    return await apiRequest("POST", "/api/products", productData);
+  };
+
   // Mutaciones
   const createProductMutation = useMutation({
-    mutationFn: (data: ProductFormData) => {
-      // Calcular descuento si hay precio original
-      const discountPercentage = data.originalPrice && data.price 
-        ? calculateDiscount(data.originalPrice.toString(), data.price)
-        : 0;
-      
-      // Asegurar que las imágenes adicionales se incluyan en los datos
-      const productData = {
-        ...data,
-        price: data.price || "1", // Usar precio del formulario, fallback a "1"
-        originalPrice: data.originalPrice || null,
-        discountPercentage,
-        images: productImages.filter(img => img.trim() !== ""),
-        sizes: productSizes,
-        colors: productColors,
-      };
-      console.log("Datos completos del producto a enviar:", productData);
-      console.log("ImageURL principal:", data.imageUrl);
-      console.log("Imágenes adicionales:", productImages);
-      return apiRequest("POST", "/api/products", productData);
-    },
+    mutationFn: (data: ProductFormData) => createProductWithDuplicateCheck(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setProductDialogOpen(false);
@@ -467,6 +506,11 @@ export default function AdminPanel() {
       toast({ title: "¡Éxito!", description: "Producto publicado correctamente con todas sus imágenes" });
     },
     onError: async (error: any) => {
+      // Si es error de duplicado detectado, no mostrar toast de error
+      if (error.message === "DUPLICATE_DETECTED") {
+        return; // No mostrar error, el modal se encargará
+      }
+      
       console.error("Error creando producto:", error);
       
       const { title, description } = await parseApiError(error, "Error al crear el producto");
@@ -478,6 +522,51 @@ export default function AdminPanel() {
       });
     },
   });
+
+  // Mutación para forzar creación de productos duplicados
+  const forceCreateProductMutation = useMutation({
+    mutationFn: (data: ProductFormData) => createProductWithDuplicateCheck(data, true),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      setProductDialogOpen(false);
+      setDuplicateWarningOpen(false);
+      setPendingProductData(null);
+      setDuplicatedProducts([]);
+      productForm.reset();
+      setProductImages([]);
+      setProductSizes([]);
+      setProductColors([]);
+      toast({ 
+        title: "¡Éxito!", 
+        description: "Producto duplicado publicado correctamente (se permiten duplicados)" 
+      });
+    },
+    onError: async (error: any) => {
+      console.error("Error creando producto duplicado:", error);
+      
+      const { title, description } = await parseApiError(error, "Error al crear el producto duplicado");
+      
+      toast({ 
+        title, 
+        description, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Función para manejar cancelación de duplicados
+  const handleCancelDuplicate = () => {
+    setDuplicateWarningOpen(false);
+    setPendingProductData(null);
+    setDuplicatedProducts([]);
+  };
+
+  // Función para proceder con producto duplicado
+  const handleProceedWithDuplicate = () => {
+    if (pendingProductData) {
+      forceCreateProductMutation.mutate(pendingProductData);
+    }
+  };
 
   const updateProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
@@ -2567,6 +2656,106 @@ export default function AdminPanel() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Modal de advertencia de productos duplicados */}
+      <Dialog open={duplicateWarningOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleCancelDuplicate();
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                ⚠️
+              </div>
+              Producto Duplicado Detectado
+            </DialogTitle>
+            <DialogDescription>
+              Hemos encontrado productos similares en tu inventario. ¿Deseas continuar de todos modos?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Información del producto que se intenta crear */}
+            {pendingProductData && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-800 mb-2">📦 Producto a crear:</h4>
+                <p className="text-sm text-blue-700">
+                  <strong>Nombre:</strong> {pendingProductData.name}
+                </p>
+                {pendingProductData.reference && (
+                  <p className="text-sm text-blue-700">
+                    <strong>Referencia:</strong> {pendingProductData.reference}
+                  </p>
+                )}
+                <p className="text-sm text-blue-700">
+                  <strong>Precio:</strong> {formatCurrency(pendingProductData.price)} COP
+                </p>
+              </div>
+            )}
+
+            {/* Lista de productos duplicados encontrados */}
+            <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <h4 className="font-semibold text-amber-800 mb-3">
+                🔍 Productos similares encontrados ({duplicatedProducts.length}):
+              </h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {duplicatedProducts.map((product) => (
+                  <div key={product.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-900">{product.name}</p>
+                      {product.reference && (
+                        <p className="text-xs text-amber-600">Ref: {product.reference}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-amber-800">
+                        {formatCurrency(product.price)} COP
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Mensaje explicativo */}
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">
+                💡 <strong>Nota:</strong> Puedes continuar y crear el producto de todos modos. 
+                Esta advertencia es solo para informarte de posibles duplicados.
+              </p>
+            </div>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={handleCancelDuplicate}
+              className="flex-1"
+              data-testid="button-cancel-duplicate"
+            >
+              ❌ Cancelar
+            </Button>
+            <Button
+              onClick={handleProceedWithDuplicate}
+              disabled={forceCreateProductMutation.isPending}
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              data-testid="button-proceed-duplicate"
+            >
+              {forceCreateProductMutation.isPending ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Publicando...
+                </div>
+              ) : (
+                <>✅ Continuar de todos modos</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
