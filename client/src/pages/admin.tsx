@@ -248,8 +248,9 @@ export default function AdminPanel() {
       setBrandProductsDialogOpen(false);
       // Esperar un momento para que se cierre el diálogo antes de abrir el de editar
       setTimeout(() => {
+        console.log("🔥 Abriendo diálogo de editar para producto:", product.name);
         openEditProductDialog(product);
-      }, 150);
+      }, 200);
     } else {
       openEditProductDialog(product);
     }
@@ -257,6 +258,10 @@ export default function AdminPanel() {
 
   const openEditProductDialog = (product: Product) => {
     console.log("🔥 Abriendo diálogo de editar para producto:", product.name);
+    
+    // Asegurar que otros diálogos estén cerrados
+    setBrandProductsDialogOpen(false);
+    
     setEditingProduct(product);
     setIsEditMode(true);
     
@@ -282,7 +287,11 @@ export default function AdminPanel() {
     setProductSizes(product.sizes || []);
     setProductColors(product.colors || []);
     
-    setProductDialogOpen(true);
+    // Forzar la apertura del diálogo de producto con un pequeño delay
+    setTimeout(() => {
+      setProductDialogOpen(true);
+      console.log("🔥 Diálogo de editar producto abierto!");
+    }, 50);
   };
 
   const handleCancelEdit = () => {
