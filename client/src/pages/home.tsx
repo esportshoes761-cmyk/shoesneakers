@@ -5,7 +5,7 @@ import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
 import { SavingsDashboard } from "@/components/savings-dashboard";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Package, ZoomIn } from "lucide-react";
@@ -76,8 +76,15 @@ export default function Home() {
     },
   });
 
-  // Filtrar productos por marca seleccionada
-  const brandProducts = selectedBrand ? allProducts.filter(product => product.brandId === selectedBrand.id) : [];
+  // Filtrar productos por marca seleccionada y aleatorizarlos
+  const [randomizedBrandProducts, setRandomizedBrandProducts] = useState<ProductWithCategory[]>([]);
+  
+  useEffect(() => {
+    if (selectedBrand) {
+      const filteredProducts = allProducts.filter(product => product.brandId === selectedBrand.id);
+      setRandomizedBrandProducts(shuffleArray(filteredProducts));
+    }
+  }, [selectedBrand, allProducts]);
 
   // Función para mostrar catálogo de marca
   const showBrandCatalog = (brand: BrandWithProducts) => {
@@ -114,9 +121,14 @@ export default function Home() {
     return shuffled;
   };
 
-  // Productos en orden aleatorio para la pantalla principal
-  const randomizedAllProducts = useMemo(() => {
-    return shuffleArray(allProducts);
+  // Productos en orden aleatorio para la pantalla principal - se actualiza cada vez que se carga
+  const [randomizedAllProducts, setRandomizedAllProducts] = useState<ProductWithCategory[]>([]);
+  
+  // Efecto para aleatorizar productos cada vez que cambian o se monta el componente
+  useEffect(() => {
+    if (allProducts.length > 0) {
+      setRandomizedAllProducts(shuffleArray(allProducts));
+    }
   }, [allProducts]);
 
   // Mostrar todos los productos (para búsquedas)
@@ -170,16 +182,16 @@ export default function Home() {
                   Catálogo {selectedBrand.name}
                 </h1>
                 <p className="text-muted-foreground text-sm sm:text-base" data-testid={`text-catalog-product-count-${selectedBrand.id}`}>
-                  {brandProducts.length} productos disponibles
+                  {randomizedBrandProducts.length} productos disponibles
                 </p>
               </div>
             </div>
           </div>
 
           {/* Productos de la marca */}
-          {brandProducts.length > 0 ? (
+          {randomizedBrandProducts.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-              {brandProducts.map((product) => (
+              {randomizedBrandProducts.map((product) => (
                 <div key={product.id} className="bg-card border border-border rounded-lg sm:rounded-xl overflow-hidden hover:shadow-lg transition-shadow" data-testid={`card-brand-product-${product.id}`}>
                   {/* Imagen del producto */}
                   <div className="aspect-square bg-muted relative overflow-hidden group cursor-pointer">
