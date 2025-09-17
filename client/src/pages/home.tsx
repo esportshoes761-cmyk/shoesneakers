@@ -310,7 +310,7 @@ export default function Home() {
       <div className="gradient-bg text-white py-1 sm:py-2">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 text-center">
           <span className="font-bold flash-sale text-xs sm:text-sm" data-testid="text-promo-banner">
-            🔥 MEGA DESCUENTOS HOY! 🔥 Hasta 70% OFF
+            🔥 MEGA DESCUENTOS HOY! 🔥
           </span>
         </div>
       </div>
@@ -336,9 +336,6 @@ export default function Home() {
             </button>
           </div>
           <div className="absolute top-2 right-2 sm:top-4 sm:right-4">
-            <span className="bg-accent text-accent-foreground px-2 sm:px-4 py-1 sm:py-2 rounded-full font-bold text-sm sm:text-2xl" data-testid="text-discount-badge">
-              70% OFF
-            </span>
           </div>
         </div>
 
