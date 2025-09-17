@@ -126,7 +126,8 @@ export default function AdminPanel() {
   
   // Query para productos de una marca específica
   const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({
-    queryKey: ["/api/products", { brands: selectedBrandId }],
+    queryKey: ["/api/products", "brands", selectedBrandId],
+    queryFn: () => fetch(`/api/products?brands=${selectedBrandId}`).then(res => res.json()),
     enabled: !!selectedBrandId && brandProductsDialogOpen,
   });
 
