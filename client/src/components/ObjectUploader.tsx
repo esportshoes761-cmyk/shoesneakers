@@ -13,55 +13,12 @@ export function ObjectUploader({
   buttonClassName,
 }: ObjectUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [isConvertingHeic, setIsConvertingHeic] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileHash, setFileHash] = useState<string | null>(null);
-  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
-  const [isDuplicate, setIsDuplicate] = useState(false);
-  const [duplicateImageUrl, setDuplicateImageUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Función para calcular hash SHA-256 del archivo y cachear buffer
-  const calculateFileHash = async (file: File): Promise<{ hash: string; buffer: ArrayBuffer }> => {
-    const buffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return { hash: hashHex, buffer };
-  };
-
-  // Función para verificar si la imagen ya existe
-  const checkImageDuplicate = async (hash: string): Promise<{ exists: boolean; imageUrl?: string; message?: string }> => {
-    try {
-      const response = await fetch('/api/images/check-hash', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hash }),
-      });
-
-      if (response.status === 409) {
-        // Imagen duplicada
-        const data = await response.json();
-        return {
-          exists: true,
-          imageUrl: data.imageUrl,
-          message: data.message || 'La imagen ya existe'
-        };
-      } else if (response.ok) {
-        // Imagen no existe, puede proceder
-        return { exists: false };
-      } else {
-        throw new Error(`Error ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Error checking image duplicate:', error);
-      throw error;
-    }
-  };
+  // DUPLICATE CHECKING FUNCTIONS REMOVED - NO DUPLICATE DETECTION (user request)
 
   // Función para convertir HEIC a JPEG
   const convertHeicToJpeg = async (file: File): Promise<File> => {
@@ -182,9 +139,6 @@ export function ObjectUploader({
     }
 
     setSelectedFile(processedFile);
-    setIsDuplicate(false);
-    setDuplicateImageUrl(null);
-    setFileBuffer(null);
 
     // Crear preview usando el archivo procesado
     const reader = new FileReader();
@@ -193,56 +147,14 @@ export function ObjectUploader({
     };
     reader.readAsDataURL(processedFile);
 
-    // Calcular hash SHA-256 y verificar duplicados usando el archivo procesado
-    try {
-      setIsCheckingDuplicate(true);
-      const { hash, buffer } = await calculateFileHash(processedFile);
-      setFileHash(hash);
-      setFileBuffer(buffer); // Cachear buffer para uso posterior
-      
-      console.log('🔍 Verificando duplicado para hash:', hash);
-      const duplicateCheck = await checkImageDuplicate(hash);
-      
-      if (duplicateCheck.exists) {
-        console.log('⚠️ Imagen duplicada detectada');
-        setIsDuplicate(true);
-        setDuplicateImageUrl(duplicateCheck.imageUrl || null);
-        
-        toast({
-          title: "Imagen Duplicada",
-          description: duplicateCheck.message || "Esta imagen ya fue subida anteriormente",
-          variant: "destructive",
-        });
-      } else {
-        console.log('✅ Imagen no duplicada, puede proceder');
-      }
-    } catch (error) {
-      console.error('Error al verificar duplicado:', error);
-      toast({
-        title: "Error",
-        description: `Error al verificar la imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsCheckingDuplicate(false);
-    }
+    // NO DUPLICATE CHECKING - Ready to upload immediately
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !fileHash || !fileBuffer) {
+    if (!selectedFile) {
       toast({
         title: "Error",
-        description: "No hay archivo seleccionado, hash no calculado o buffer no disponible",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // No proceder si es duplicado
-    if (isDuplicate) {
-      toast({
-        title: "No se puede subir",
-        description: "Esta imagen ya existe. Selecciona una imagen diferente.",
+        description: "No hay archivo seleccionado",
         variant: "destructive",
       });
       return;
@@ -250,10 +162,11 @@ export function ObjectUploader({
 
     setIsUploading(true);
     try {
-      console.log("🚀 Iniciando subida directa de archivo:", selectedFile.name, "con hash:", fileHash);
+      console.log("🚀 Iniciando subida directa de archivo:", selectedFile.name);
 
-      // Convertir ArrayBuffer cacheado a base64 (sin FileReader)
-      const uint8Array = new Uint8Array(fileBuffer);
+      // Convertir archivo a base64
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
       const base64 = btoa(binaryString);
       
@@ -292,23 +205,11 @@ export function ObjectUploader({
           imageData: fileData,
           fileName: selectedFile.name,
           mimeType: mimeType,
-          hash: fileHash // Enviar hash calculado en cliente
+          skipDuplicateCheck: true // No duplicate checking
         }),
       });
 
-      if (uploadResponse.status === 409) {
-        // Imagen duplicada detectada en servidor
-        const errorData = await uploadResponse.json();
-        setIsDuplicate(true);
-        setDuplicateImageUrl(errorData.imageUrl || null);
-        
-        toast({
-          title: "Imagen Duplicada",
-          description: errorData.message || "Esta imagen ya existe",
-          variant: "destructive",
-        });
-        return;
-      }
+      // NO DUPLICATE CHECKING - Continue with upload regardless of status
 
       if (!uploadResponse.ok) {
         let errorText;
@@ -337,10 +238,6 @@ export function ObjectUploader({
       // Limpiar estado
       setSelectedFile(null);
       setPreview(null);
-      setFileHash(null);
-      setFileBuffer(null);
-      setIsDuplicate(false);
-      setDuplicateImageUrl(null);
       
     } catch (error) {
       console.error('❌ Error en la subida:', error);
@@ -372,10 +269,6 @@ export function ObjectUploader({
   const clearSelection = () => {
     setSelectedFile(null);
     setPreview(null);
-    setFileHash(null);
-    setFileBuffer(null);
-    setIsDuplicate(false);
-    setDuplicateImageUrl(null);
     setIsConvertingHeic(false);
   };
 
@@ -427,27 +320,11 @@ export function ObjectUploader({
                   </div>
                 )}
                 
-                {/* Estado de verificación de duplicado */}
-                {isCheckingDuplicate && !isConvertingHeic && (
+                {/* Ready to upload after HEIC conversion (if needed) */}
+                {!isConvertingHeic && (
                   <div className="flex items-center gap-1 mt-1">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
-                    <span className="text-xs text-blue-500">Verificando duplicados...</span>
-                  </div>
-                )}
-                
-                {fileHash && !isCheckingDuplicate && !isConvertingHeic && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {isDuplicate ? (
-                      <>
-                        <AlertTriangle className="h-3 w-3 text-red-500" />
-                        <span className="text-xs text-red-500">Imagen duplicada detectada</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                        <span className="text-xs text-green-500">Imagen única, lista para subir</span>
-                      </>
-                    )}
+                    <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                    <span className="text-xs text-green-500">Listo para subir</span>
                   </div>
                 )}
               </div>
@@ -456,34 +333,19 @@ export function ObjectUploader({
                 variant="ghost"
                 size="sm"
                 onClick={clearSelection}
-                disabled={isUploading || isCheckingDuplicate}
+                disabled={isUploading}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
             
-            {/* Mensaje de imagen duplicada */}
-            {isDuplicate && duplicateImageUrl && (
-              <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span className="text-sm text-red-700 dark:text-red-300 font-medium">
-                    Esta imagen ya existe en el sistema
-                  </span>
-                </div>
-                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                  Selecciona una imagen diferente para continuar.
-                </p>
-              </div>
-            )}
-            
             <div className="mt-2 flex gap-2">
               <Button
                 type="button"
                 onClick={handleUpload}
-                disabled={isUploading || isCheckingDuplicate || isConvertingHeic || isDuplicate || !fileHash || !fileBuffer}
+                disabled={isUploading || isConvertingHeic}
                 className="flex-1"
-                variant={isDuplicate ? "secondary" : "default"}
+variant="default"
               >
                 {isUploading ? (
                   <>
@@ -494,16 +356,6 @@ export function ObjectUploader({
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Convirtiendo...
-                  </>
-                ) : isCheckingDuplicate ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Verificando...
-                  </>
-                ) : isDuplicate ? (
-                  <>
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    Imagen Duplicada
                   </>
                 ) : (
                   <>

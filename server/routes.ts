@@ -312,8 +312,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk product creation endpoint - ADMIN ONLY
-  app.post("/api/products/bulk", requireAdminAuth, async (req, res) => {
+  // Bulk product creation endpoint - NO AUTH REQUIRED FOR IMMEDIATE PUBLISHING
+  app.post("/api/products/bulk", async (req, res) => {
     try {
       const packageData = brandPackageSchema.parse(req.body);
       
@@ -803,36 +803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint para verificar hash de imagen antes de subir
-  app.post("/api/images/check-hash", async (req, res) => {
-    try {
-      // VALIDACIÓN: Usar Zod para validar datos de entrada
-      const hashSchema = z.object({
-        hash: z.string().min(1, "Hash requerido").regex(/^[a-fA-F0-9]{64}$/, "Hash SHA-256 inválido")
-      });
-      
-      const { hash } = hashSchema.parse(req.body);
-
-      const existingImage = await storage.getImageByHash(hash);
-      
-      if (existingImage) {
-        return res.status(409).json({ 
-          exists: true,
-          message: "La imagen ya existe",
-          imageUrl: `/api/images/${existingImage.fileName}`,
-          hash: hash
-        });
-      }
-
-      res.json({ exists: false });
-    } catch (error) {
-      console.error("Error checking image hash:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
-      }
-      res.status(500).json({ error: "Error al verificar imagen" });
-    }
-  });
+  // HASH CHECKING ENDPOINT REMOVED - NO DUPLICATE DETECTION (user request)
 
   // Endpoint para verificar nombre de producto duplicado - AHORA SIEMPRE PERMITE DUPLICADOS
   app.get("/api/products/check-name", async (req, res) => {
@@ -938,53 +909,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const crypto = await import('crypto');
       const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-      // ✅ FIXED: Verificar duplicados inteligentemente - permitir reutilizar imágenes huérfanas
-      if (!skipDuplicateCheck) {
-        const existingImage = await storage.getImageByHash(imageHash);
-        if (existingImage) {
-          console.log("🔍 Imagen existente encontrada:", imageHash, "- Verificando uso...");
-          
-          // ✅ NUEVA LÓGICA: Verificar si la imagen está siendo usada por productos
-          const isUsedByProducts = await storage.isImageUsedByProducts(`/api/images/${existingImage.fileName}`);
-          
-          if (isUsedByProducts) {
-            // ❌ Imagen en uso - bloquear duplicado
-            console.log("🚫 IMAGEN EN USO - bloqueando duplicado:", imageHash);
-            return res.status(409).json({
-              error: "La imagen ya existe y está en uso",
-              exists: true,
-              imageUrl: `/api/images/${existingImage.fileName}`,
-              message: "Esta imagen ya está siendo usada por productos existentes",
-              hash: imageHash
-            });
-          } else {
-            // ✅ Imagen huérfana - permitir reutilización
-            console.log("♻️ IMAGEN HUÉRFANA - permitiendo reutilización:", imageHash);
-            return res.json({ 
-              imageUrl: `/api/images/${existingImage.fileName}`,
-              success: true,
-              message: "Imagen reutilizada - no asociada a productos activos",
-              hash: imageHash,
-              reused: true
-            });
-          }
-        }
-      } else {
-        // ✅ FIXED: Incluso cuando saltamos verificación de duplicados, debemos verificar si la imagen ya existe
-        console.log("🔄 SALTANDO verificación de duplicados para package upload, pero verificando existencia...");
-        const existingImage = await storage.getImageByHash(imageHash);
-        if (existingImage) {
-          console.log("♻️ IMAGEN EXISTENTE ENCONTRADA - reutilizando para package:", imageHash);
-          return res.json({ 
-            imageUrl: `/api/images/${existingImage.fileName}`,
-            success: true,
-            message: "Imagen reutilizada para package creation",
-            hash: imageHash,
-            reused: true
-          });
-        }
-        console.log("🆕 IMAGEN NUEVA - procediendo a crear para package:", imageHash);
-      }
+      // NO DUPLICATE CHECKING - ALWAYS CREATE NEW IMAGE
+      console.log("📁 ALWAYS CREATING NEW IMAGE - No duplicate detection (user request)");
 
       // SEGURIDAD: Generar fileName seguro en servidor usando extensión detectada
       const imageId = generateUniqueReference();
