@@ -104,7 +104,22 @@ export default function Home() {
     });
   };
 
-  // Mostrar todos los productos
+  // Función para aleatorizar el orden de productos
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  // Productos en orden aleatorio para la pantalla principal
+  const randomizedAllProducts = useMemo(() => {
+    return shuffleArray(allProducts);
+  }, [allProducts]);
+
+  // Mostrar todos los productos (para búsquedas)
   const displayedProducts = allProducts;
 
   // Si se seleccionó una marca, mostrar su catálogo
@@ -476,8 +491,35 @@ export default function Home() {
           </section>
         ) : null}
 
-
-
+        {/* Todos los Productos - Solo se muestra cuando no hay filtros activos */}
+        {!(searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
+          searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
+          searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000) && (
+          <section className="mb-6 sm:mb-8">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h3 className="text-lg sm:text-2xl font-bold" data-testid="text-all-products-title">
+                🛍️ Todos los Productos
+              </h3>
+              <span className="text-sm text-muted-foreground" data-testid="text-all-products-count">
+                {randomizedAllProducts.length} producto{randomizedAllProducts.length !== 1 ? 's' : ''} disponible{randomizedAllProducts.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            {randomizedAllProducts.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                {randomizedAllProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground" data-testid="text-no-products">
+                <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">No hay productos disponibles</h3>
+                <p>Aún no se han agregado productos al catálogo.</p>
+              </div>
+            )}
+          </section>
+        )}
 
       </main>
 
