@@ -347,23 +347,26 @@ export function MultiImageUploader({
       // Función auxiliar para esperar
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       
-      // PASO 1: Subir archivos secuencialmente
+      // PASO 1: Subir archivos secuencialmente (OPTIMIZADO para evitar file reference expiry)
       for (let i = 0; i < filesToUpload.length; i++) {
         const dr = filesToUpload[i];
         let uploadSuccess = false;
         let lastError: string = '';
         
-        // Intentar subir con retry logic
-        for (let attempt = 0; attempt < maxRetries && !uploadSuccess; attempt++) {
+        // Intentar subir con retry logic reducido para archivos posteriores
+        const dynamicMaxRetries = i > 30 ? 1 : maxRetries; // Reducir retries para archivos tardíos
+        for (let attempt = 0; attempt < dynamicMaxRetries && !uploadSuccess; attempt++) {
           try {
-            console.log(`📤 Subiendo ${dr.file.name} (${i + 1}/${filesToUpload.length}) - Intento ${attempt + 1}/${maxRetries}`);
+            console.log(`📤 Subiendo ${dr.file.name} (${i + 1}/${filesToUpload.length}) - Intento ${attempt + 1}/${dynamicMaxRetries}`);
             
-            // Actualizar UI para mostrar intento actual
-            setImages(prev => prev.map(img => 
-              img.id === tempImages[dr.index].id 
-                ? { ...img, retryAttempt: attempt, isUploading: true, error: undefined }
-                : img
-            ));
+            // Actualizar UI para mostrar intento actual (solo si es necesario)
+            if (attempt === 0) {
+              setImages(prev => prev.map(img => 
+                img.id === tempImages[dr.index].id 
+                  ? { ...img, retryAttempt: attempt, isUploading: true, error: undefined }
+                  : img
+              ));
+            }
             
             // 🛡️ VALIDACIÓN PROBLEMÁTICA ELIMINADA
             // Proceder directamente al upload sin validar file reference
@@ -413,16 +416,17 @@ export function MultiImageUploader({
             
             console.warn(`⚠️ Intento ${attempt + 1} falló para ${dr.file.name}: ${errorMsg}`);
             
-            // Si no es el último intento, esperar antes del siguiente
-            if (attempt < maxRetries - 1) {
-              await delay(retryDelay * (attempt + 1)); // Delay progresivo
+            // Si no es el último intento, esperar antes del siguiente (reducido para archivos tardíos)
+            if (attempt < dynamicMaxRetries - 1) {
+              const shortDelay = i > 30 ? 200 : retryDelay * (attempt + 1); // Delay más corto para archivos tardíos
+              await delay(shortDelay);
             }
           }
         }
         
         // Si falló todos los intentos, marcar como error
         if (!uploadSuccess) {
-          failedUploads.push({ dr, attempts: maxRetries, lastError });
+          failedUploads.push({ dr, attempts: dynamicMaxRetries, lastError });
           
           // Categorizar tipo de error final
           let finalErrorType: 'permission' | 'network' | 'server' | 'validation' | 'unknown' = 'unknown';
@@ -440,15 +444,15 @@ export function MultiImageUploader({
             img.id === tempImages[dr.index].id 
               ? { 
                   ...img, 
-                  error: `Error después de ${maxRetries} intentos: ${lastError}`, 
+                  error: `Error después de ${dynamicMaxRetries} intentos: ${lastError}`, 
                   isUploading: false,
-                  retryAttempt: maxRetries,
+                  retryAttempt: dynamicMaxRetries,
                   lastErrorType: finalErrorType
                 }
               : img
           ));
           
-          console.error(`❌ FALLO DEFINITIVO para ${dr.file.name} después de ${maxRetries} intentos:`, {
+          console.error(`❌ FALLO DEFINITIVO para ${dr.file.name} después de ${dynamicMaxRetries} intentos:`, {
             error: lastError,
             fileName: dr.file.name,
             fileSize: dr.file.size,
@@ -461,9 +465,9 @@ export function MultiImageUploader({
         completedUploads++;
         setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70);
         
-        // Pequeña pausa entre archivos para evitar saturar el browser
+        // Pausa mínima entre archivos (optimizada)
         if (i < filesToUpload.length - 1) {
-          await delay(100); // 100ms entre archivos
+          await delay(50); // 50ms entre archivos (reducido de 100ms)
         }
       }
         
