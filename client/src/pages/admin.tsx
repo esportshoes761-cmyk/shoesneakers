@@ -774,6 +774,8 @@ export default function AdminPanel() {
 
   // ✨ CENTRALIZED: Modal handlers
   const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct", data?: any) => {
+    console.log("🚀 OPENING MODAL:", type, data);
+    console.log("🚀 CURRENT MODAL STATE:", activeModal);
     setActiveModal({ type, data });
   };
 
@@ -2969,227 +2971,18 @@ export default function AdminPanel() {
         <TabsContent value="brand-packages" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold">Paquetes por Marca</h2>
-            <Dialog open={activeModal.type === "brandPackage"} onOpenChange={(open) => open ? openModal("brandPackage") : closeModal()}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-brand-package">
-                  <Layers className="h-4 w-4 mr-2" />
-                  Crear Paquete
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
-                <DialogHeader>
-                  <DialogTitle>⚡ Paquete Ultra-Rápido por Marca</DialogTitle>
-                  <DialogDescription>
-                    Publicación ultra-simplificada: solo elige marca, categoría y fotos. Todo lo demás se auto-genera (precio, talla, descripción). ¡Cada foto = 1 producto destacado!
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...brandPackageForm}>
-                  <form onSubmit={brandPackageForm.handleSubmit((data) => {
-                    console.log('🚀 Enviando paquete:', data);
-                    bulkCreateProductsMutation.mutate(data);
-                  })} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="brandId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Marca</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-brand-package">
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona la marca" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {brands?.map((brand: Brand) => (
-                                  <SelectItem key={brand.id} value={brand.id}>
-                                    {brand.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="categoryId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Categoría</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-category-package">
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona la categoría" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {categories?.map((category: Category) => (
-                                  <SelectItem key={category.id} value={category.id}>
-                                    {category.emoji} {category.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="sizeFrom"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Talla Inicial</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-from">
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona talla inicial" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
-                                  <SelectItem key={size} value={size}>
-                                    {size}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={brandPackageForm.control}
-                        name="sizeTo"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Talla Final</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-to">
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona talla final" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
-                                  <SelectItem key={size} value={size}>
-                                    {size}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    
-                    <FormField
-                      control={brandPackageForm.control}
-                      name="images"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fotografías ⚡ (Mínimo 1)</FormLabel>
-                          <FormControl>
-                            <IntelligentUploader 
-                              onImagesUploaded={(imageUrls) => {
-                                field.onChange(imageUrls);
-                                setBulkOperations(prev => ({
-                                  ...prev,
-                                  brandPackage: { ...prev.brandPackage, images: imageUrls }
-                                }));
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-
-                    {/* Progress indicator */}
-                    {bulkOperations.brandPackage.progress.isProcessing && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-blue-900">Creando productos...</span>
-                          <span className="text-sm text-blue-700">
-                            {bulkOperations.brandPackage.progress.currentIndex} / {bulkOperations.brandPackage.progress.total}
-                          </span>
-                        </div>
-                        <div className="w-full bg-blue-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${(bulkOperations.brandPackage.progress.currentIndex / bulkOperations.brandPackage.progress.total) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Results */}
-                    {!bulkOperations.brandPackage.progress.isProcessing && (bulkOperations.brandPackage.progress.results.success > 0 || bulkOperations.brandPackage.progress.results.failed > 0) && (
-                      <div className={`border rounded-lg p-4 ${
-                        bulkOperations.brandPackage.progress.results.failed > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
-                      }`}>
-                        <h4 className="font-medium mb-2">Resultados:</h4>
-                        <div className="text-sm space-y-1">
-                          <p className="text-green-700">✅ Exitosos: {bulkOperations.brandPackage.progress.results.success}</p>
-                          {bulkOperations.brandPackage.progress.results.failed > 0 && (
-                            <p className="text-red-700">❌ Fallidos: {bulkOperations.brandPackage.progress.results.failed}</p>
-                          )}
-                          {bulkOperations.brandPackage.progress.results.errors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="font-medium text-red-700">Errores:</p>
-                              <ul className="list-disc list-inside text-red-600 text-xs space-y-1">
-                                {bulkOperations.brandPackage.progress.results.errors.map((error, index) => (
-                                  <li key={index}>{error}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end space-x-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => {
-                          closeModal();
-                          brandPackageForm.reset();
-                          setBulkOperations(prev => ({
-                            ...prev,
-                            brandPackage: { ...prev.brandPackage, images: [] }
-                          }));
-                          setBulkOperations(prev => ({
-                            ...prev,
-                            brandPackage: { ...prev.brandPackage, progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } }
-                          }));
-                        }}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button 
-                        type="submit" 
-                        disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 1}
-                        data-testid="button-submit-brand-package"
-                      >
-                        {bulkCreateProductsMutation.isPending 
-                          ? "Creando productos destacados..." 
-                          : `Crear ${(brandPackageForm.watch('images')?.length || 0)} Productos Destacados`
-                        }
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button 
+              onClick={() => openModal("brandPackage")}
+              data-testid="button-add-brand-package"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Crear Paquete
+            </Button>
+          </div>
+          
+          {/* Contenido del paquete por marcas aquí */}
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">El modal de paquetes se abrirá cuando presiones "Crear Paquete"</p>
           </div>
 
           {/* Information Card */}
@@ -3546,6 +3339,230 @@ export default function AdminPanel() {
               </p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Brand Package - Creación masiva de productos */}
+      <Dialog open={activeModal.type === "brandPackage"} onOpenChange={(open) => open ? openModal("brandPackage") : closeModal()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Crear Paquete de Productos
+            </DialogTitle>
+            <DialogDescription>
+              Crea múltiples productos de una marca de forma eficiente. Cada imagen se convertirá en un producto individual.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...brandPackageForm}>
+            <form onSubmit={brandPackageForm.handleSubmit((data) => {
+              console.log('🚀 Enviando paquete:', data);
+              bulkCreateProductsMutation.mutate(data);
+            })} className="space-y-6">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={brandPackageForm.control}
+                  name="brandId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Marca</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-brand-package">
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona la marca" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {brands?.map((brand: Brand) => (
+                            <SelectItem key={brand.id} value={brand.id}>
+                              {brand.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={brandPackageForm.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Categoría</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-category-package">
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona la categoría" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories?.map((category: Category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.emoji} {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={brandPackageForm.control}
+                  name="sizeFrom"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Talla Inicial</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-from">
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona talla inicial" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
+                            <SelectItem key={size} value={size}>
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={brandPackageForm.control}
+                  name="sizeTo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Talla Final</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-size-to">
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona talla final" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {["28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"].map((size) => (
+                            <SelectItem key={size} value={size}>
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={brandPackageForm.control}
+                name="images"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fotografías ⚡ (Mínimo 1)</FormLabel>
+                    <FormControl>
+                      <IntelligentUploader 
+                        onImagesUploaded={(imageUrls) => {
+                          field.onChange(imageUrls);
+                          setBulkOperations(prev => ({
+                            ...prev,
+                            brandPackage: { ...prev.brandPackage, images: imageUrls }
+                          }));
+                        }}
+                        maxImages={50}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Progress indicator */}
+              {bulkOperations.brandPackage.progress.isProcessing && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-blue-900">Creando productos...</span>
+                    <span className="text-sm text-blue-700">
+                      {bulkOperations.brandPackage.progress.currentIndex} / {bulkOperations.brandPackage.progress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${(bulkOperations.brandPackage.progress.currentIndex / bulkOperations.brandPackage.progress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Results */}
+              {!bulkOperations.brandPackage.progress.isProcessing && (bulkOperations.brandPackage.progress.results.success > 0 || bulkOperations.brandPackage.progress.results.failed > 0) && (
+                <div className={`border rounded-lg p-4 ${
+                  bulkOperations.brandPackage.progress.results.failed > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+                }`}>
+                  <h4 className="font-medium mb-2">Resultados:</h4>
+                  <div className="text-sm space-y-1">
+                    <p className="text-green-700">✅ Exitosos: {bulkOperations.brandPackage.progress.results.success}</p>
+                    {bulkOperations.brandPackage.progress.results.failed > 0 && (
+                      <p className="text-red-700">❌ Fallidos: {bulkOperations.brandPackage.progress.results.failed}</p>
+                    )}
+                    {bulkOperations.brandPackage.progress.results.errors.length > 0 && (
+                      <div className="mt-2">
+                        <p className="font-medium text-red-700">Errores:</p>
+                        <ul className="list-disc list-inside text-red-600 text-xs space-y-1">
+                          {bulkOperations.brandPackage.progress.results.errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    closeModal();
+                    brandPackageForm.reset();
+                    setBulkOperations(prev => ({
+                      ...prev,
+                      brandPackage: { ...prev.brandPackage, images: [] }
+                    }));
+                    setBulkOperations(prev => ({
+                      ...prev,
+                      brandPackage: { ...prev.brandPackage, progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } }
+                    }));
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 1}
+                  data-testid="button-submit-brand-package"
+                >
+                  {bulkCreateProductsMutation.isPending 
+                    ? "Creando productos destacados..." 
+                    : `Crear ${(brandPackageForm.watch('images')?.length || 0)} Productos Destacados`
+                  }
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
