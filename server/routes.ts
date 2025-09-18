@@ -101,6 +101,28 @@ const brandPackageSchema = z.object({
   sizeTo: z.string().min(1, "Size to is required"),
 });
 
+// 🔒 SECURE: Duplicate detection validation schemas
+const duplicateQuerySchema = z.object({
+  by: z.enum(["reference", "name", "image"], {
+    required_error: "Criteria is required",
+    invalid_type_error: "Criteria must be 'reference', 'name', or 'image'"
+  }),
+  brandId: z.string().optional(),
+  page: z.string().optional().transform(val => val ? parseInt(val, 10) : 1),
+  limit: z.string().optional().transform(val => val ? parseInt(val, 10) : 20)
+});
+
+const mergeProductsSchema = z.object({
+  primaryId: z.string().min(1, "Primary product ID is required"),
+  duplicateIds: z.array(z.string()).min(1, "At least one duplicate ID is required"),
+  strategy: z.enum(["keep_primary", "merge_data"], {
+    required_error: "Merge strategy is required",
+    invalid_type_error: "Strategy must be 'keep_primary' or 'merge_data'"
+  })
+});
+
+const updateProductSchema = insertProductSchema.partial();
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Crear directorio para las imágenes si no existe
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -709,7 +731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reference: p.reference,
           imageUrl: p.imageUrl,
           images: p.images,
-          brandName: p.brandName || 'Sin marca'
+          brandId: p.brandId || 'Sin marca'
         }))
       });
     } catch (error) {
@@ -963,6 +985,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Product deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Error deleting product" });
+    }
+  });
+
+  // 🔒 SECURE: Admin-only duplicate management endpoints
+  app.get("/api/admin/products/duplicates", requireAdminAuth, async (req, res) => {
+    try {
+      const query = duplicateQuerySchema.parse(req.query);
+      const { by, brandId, page, limit } = query;
+      
+      let duplicateGroups: Array<{ key: string; products: any[]; count: number }> = [];
+      
+      // Call appropriate method based on criteria
+      switch (by) {
+        case "reference":
+          duplicateGroups = await storage.getDuplicateProductsByReference(brandId);
+          break;
+        case "name":
+          duplicateGroups = await storage.getDuplicateProductsByNameBrand(brandId);
+          break;
+        case "image":
+          duplicateGroups = await storage.getDuplicateProductsByImageHash(brandId);
+          break;
+        default:
+          return res.status(400).json({ message: "Invalid criteria specified" });
+      }
+      
+      // Apply pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedGroups = duplicateGroups.slice(startIndex, endIndex);
+      
+      // Calculate summary statistics
+      const totalGroups = duplicateGroups.length;
+      const totalDuplicates = duplicateGroups.reduce((sum, group) => sum + group.count - 1, 0); // -1 because only duplicates, not the original
+      
+      res.json({
+        success: true,
+        data: {
+          groups: paginatedGroups,
+          pagination: {
+            page,
+            limit,
+            totalGroups,
+            totalPages: Math.ceil(totalGroups / limit),
+            hasNext: endIndex < totalGroups,
+            hasPrev: page > 1
+          },
+          summary: {
+            totalGroups,
+            totalDuplicates,
+            criteria: by,
+            brandId
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching duplicates:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid query parameters", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Error fetching duplicate products" });
+    }
+  });
+
+  app.post("/api/admin/products/duplicates/:groupKey/merge", requireAdminAuth, async (req, res) => {
+    try {
+      const { groupKey } = req.params;
+      const mergeData = mergeProductsSchema.parse(req.body);
+      const { primaryId, duplicateIds, strategy } = mergeData;
+      
+      // Validate that primary product exists and is not in duplicateIds
+      if (duplicateIds.includes(primaryId)) {
+        return res.status(400).json({ 
+          message: "Primary product ID cannot be in the duplicate IDs list" 
+        });
+      }
+      
+      // Perform the atomic merge operation
+      const mergedProduct = await storage.mergeProducts(primaryId, duplicateIds, strategy);
+      
+      if (!mergedProduct) {
+        return res.status(404).json({ message: "Failed to merge products - primary product not found" });
+      }
+      
+      res.json({
+        success: true,
+        message: `Successfully merged ${duplicateIds.length} duplicate products into primary product`,
+        data: {
+          mergedProduct,
+          primaryId,
+          duplicateIds,
+          strategy,
+          groupKey
+        }
+      });
+    } catch (error) {
+      console.error('Error merging products:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid merge data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Error merging duplicate products" });
+    }
+  });
+
+  app.patch("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const productData = updateProductSchema.parse(req.body);
+      
+      // Validate that product exists
+      const existingProduct = await storage.getProduct(req.params.id);
+      if (!existingProduct) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      
+      // Update the product with validated data
+      const updatedProduct = await storage.updateProduct(req.params.id, productData);
+      
+      if (!updatedProduct) {
+        return res.status(500).json({ message: "Failed to update product" });
+      }
+      
+      res.json({
+        success: true,
+        message: "Product updated successfully",
+        data: updatedProduct
+      });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid product data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Error updating product" });
     }
   });
 

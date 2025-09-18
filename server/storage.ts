@@ -89,6 +89,12 @@ export interface IStorage {
   updateCustomerSavings(customerId: string, updateData: Partial<InsertCustomerSavings>): Promise<CustomerSavings | undefined>;
   addSavings(customerId: string, amount: string): Promise<CustomerSavings | undefined>;
   applySavingsDiscount(customerId: string, discountAmount: string): Promise<CustomerSavings | undefined>;
+
+  // Duplicate detection methods
+  getDuplicateProductsByReference(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
+  getDuplicateProductsByNameBrand(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
+  getDuplicateProductsByImageHash(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
+  mergeProducts(primaryId: string, duplicateIds: string[], strategy: 'keep_primary' | 'merge_data'): Promise<Product | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1068,6 +1074,228 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error applying savings discount:', error);
       return undefined;
+    }
+  }
+
+  // Duplicate detection methods implementation
+  async getDuplicateProductsByReference(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>> {
+    try {
+      let whereConditions = sql`reference IS NOT NULL AND reference != ''`;
+      
+      if (brandId) {
+        whereConditions = sql`${whereConditions} AND brand_id = ${brandId}`;
+      }
+
+      const allProducts = await db.select().from(products).where(whereConditions);
+      
+      // Group by reference
+      const groupedByReference = allProducts.reduce((acc, product) => {
+        if (!product.reference) return acc;
+        
+        const key = product.reference;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(product);
+        return acc;
+      }, {} as Record<string, Product[]>);
+
+      // Filter groups with more than 1 product (duplicates)
+      return Object.entries(groupedByReference)
+        .filter(([_, products]) => products.length > 1)
+        .map(([key, products]) => ({
+          key,
+          products,
+          count: products.length
+        }))
+        .sort((a, b) => b.count - a.count); // Sort by count desc
+    } catch (error) {
+      console.error('Error getting duplicates by reference:', error);
+      return [];
+    }
+  }
+
+  async getDuplicateProductsByNameBrand(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>> {
+    try {
+      let whereConditions = sql`name_normalized IS NOT NULL AND name_normalized != '' AND brand_id IS NOT NULL`;
+      
+      if (brandId) {
+        whereConditions = sql`${whereConditions} AND brand_id = ${brandId}`;
+      }
+
+      const allProducts = await db.select().from(products).where(whereConditions);
+      
+      // Group by nameNormalized + brandId
+      const groupedByNameBrand = allProducts.reduce((acc, product) => {
+        if (!product.nameNormalized || !product.brandId) return acc;
+        
+        const key = `${product.nameNormalized}|${product.brandId}`;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(product);
+        return acc;
+      }, {} as Record<string, Product[]>);
+
+      // Filter groups with more than 1 product (duplicates)
+      return Object.entries(groupedByNameBrand)
+        .filter(([_, products]) => products.length > 1)
+        .map(([key, products]) => ({
+          key,
+          products,
+          count: products.length
+        }))
+        .sort((a, b) => b.count - a.count); // Sort by count desc
+    } catch (error) {
+      console.error('Error getting duplicates by name+brand:', error);
+      return [];
+    }
+  }
+
+  async getDuplicateProductsByImageHash(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>> {
+    try {
+      // Get all images with their hashes
+      const allImages = await db.select().from(images);
+      const imageHashMap = allImages.reduce((acc, img) => {
+        acc[img.path] = img.sha256;
+        return acc;
+      }, {} as Record<string, string>);
+
+      let whereConditions = sql`image_url IS NOT NULL AND image_url != ''`;
+      
+      if (brandId) {
+        whereConditions = sql`${whereConditions} AND brand_id = ${brandId}`;
+      }
+
+      const allProducts = await db.select().from(products).where(whereConditions);
+      
+      // Group by image hash
+      const groupedByImageHash = allProducts.reduce((acc, product) => {
+        if (!product.imageUrl) return acc;
+        
+        // Extract filename from image URL to get hash
+        const imagePath = product.imageUrl.split('/').pop();
+        const imageHash = imagePath ? imageHashMap[imagePath] : null;
+        
+        if (!imageHash) return acc;
+        
+        const key = imageHash;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(product);
+        return acc;
+      }, {} as Record<string, Product[]>);
+
+      // Filter groups with more than 1 product (duplicates)
+      return Object.entries(groupedByImageHash)
+        .filter(([_, products]) => products.length > 1)
+        .map(([key, products]) => ({
+          key,
+          products,
+          count: products.length
+        }))
+        .sort((a, b) => b.count - a.count); // Sort by count desc
+    } catch (error) {
+      console.error('Error getting duplicates by image hash:', error);
+      return [];
+    }
+  }
+
+  async mergeProducts(primaryId: string, duplicateIds: string[], strategy: 'keep_primary' | 'merge_data'): Promise<Product | undefined> {
+    if (!duplicateIds.length) {
+      console.error('No duplicate IDs provided for merge');
+      return undefined;
+    }
+
+    try {
+      // Start transaction
+      return await db.transaction(async (tx) => {
+        // Get primary product
+        const primaryProduct = await tx.select().from(products).where(eq(products.id, primaryId)).limit(1);
+        if (!primaryProduct.length) {
+          throw new Error('Primary product not found');
+        }
+
+        const primary = primaryProduct[0];
+
+        // Get duplicate products for merging data if needed
+        let mergedData = primary;
+        if (strategy === 'merge_data') {
+          const duplicateProducts = await tx.select().from(products).where(inArray(products.id, duplicateIds));
+          
+          // Merge logic: combine images, sizes, colors, update ratings
+          const allImages = new Set<string>(primary.images || []);
+          const allSizes = new Set<string>(primary.sizes || []);
+          const allColors = new Set<string>(primary.colors || []);
+          
+          let totalReviews = primary.reviewCount || 0;
+          let totalRating = (parseFloat(primary.rating || '0') * totalReviews);
+
+          duplicateProducts.forEach(dup => {
+            // Combine arrays
+            (dup.images || []).forEach(img => allImages.add(img));
+            (dup.sizes || []).forEach(size => allSizes.add(size));
+            (dup.colors || []).forEach(color => allColors.add(color));
+            
+            // Merge ratings
+            const dupReviews = dup.reviewCount || 0;
+            const dupRating = parseFloat(dup.rating || '0');
+            totalRating += dupRating * dupReviews;
+            totalReviews += dupReviews;
+          });
+
+          // Calculate new average rating
+          const newRating = totalReviews > 0 ? (totalRating / totalReviews).toFixed(1) : primary.rating;
+
+          mergedData = {
+            ...primary,
+            images: Array.from(allImages),
+            sizes: Array.from(allSizes),
+            colors: Array.from(allColors),
+            rating: newRating,
+            reviewCount: totalReviews
+          };
+        }
+
+        // 1. Update all cartItems to point to primary product
+        await tx.update(cartItems)
+          .set({ productId: primaryId })
+          .where(inArray(cartItems.productId, duplicateIds));
+
+        // 2. Update all reviews to point to primary product
+        await tx.update(reviews)
+          .set({ productId: primaryId })
+          .where(inArray(reviews.productId, duplicateIds));
+
+        // 3. Update all orders to point to primary product
+        await tx.update(orders)
+          .set({ productId: primaryId })
+          .where(inArray(orders.productId, duplicateIds));
+
+        // 4. Update primary product with merged data if needed
+        if (strategy === 'merge_data') {
+          await tx.update(products)
+            .set({
+              images: mergedData.images,
+              sizes: mergedData.sizes,
+              colors: mergedData.colors,
+              rating: mergedData.rating,
+              reviewCount: mergedData.reviewCount
+            })
+            .where(eq(products.id, primaryId));
+        }
+
+        // 5. Delete duplicate products
+        await tx.delete(products).where(inArray(products.id, duplicateIds));
+
+        // Return the updated primary product
+        const updatedPrimary = await tx.select().from(products).where(eq(products.id, primaryId)).limit(1);
+        return updatedPrimary[0];
+      });
+    } catch (error) {
+      console.error('Error merging products:', error);
+      throw error;
     }
   }
 }

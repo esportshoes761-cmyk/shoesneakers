@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +20,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -55,10 +56,37 @@ const brandFormSchema = insertBrandSchema.extend({
   logo: z.string().min(1, "El logo es requerido"),
 });
 
+// Duplicate management schemas
+const duplicateFiltersSchema = z.object({
+  by: z.enum(["reference", "name", "image"]),
+  brandId: z.string().optional(),
+  search: z.string().optional(),
+});
+
+const mergeProductsSchema = z.object({
+  primaryId: z.string().min(1, "Primary product ID is required"),
+  duplicateIds: z.array(z.string()).min(1, "At least one duplicate ID is required"),
+  strategy: z.enum(["keep_primary", "merge_data"]),
+});
+
+const editProductSchema = insertProductSchema.partial();
+
 type ProductFormData = z.infer<typeof productFormSchema>;
 type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
 type BrandFormData = z.infer<typeof brandFormSchema>;
+type DuplicateFiltersData = z.infer<typeof duplicateFiltersSchema>;
+type MergeProductsData = z.infer<typeof mergeProductsSchema>;
+type EditProductData = z.infer<typeof editProductSchema>;
+
+// Duplicate group type
+type DuplicateGroup = {
+  key: string;
+  products: Product[];
+  count: number;
+  brands: string[];
+  categories: string[];
+};
 
 // Brand package schema for bulk product creation - SECURE VERSION 🔒
 const brandPackageSchema = z.object({
@@ -92,60 +120,413 @@ const calculateDiscount = (originalPrice: string, salePrice: string) => {
   return Math.round(((original - sale) / original) * 100);
 };
 
+// ✨ DUPLICATE MANAGEMENT: Component for displaying duplicate groups
+interface DuplicateGroupsListProps {
+  filters: DuplicateFiltersData;
+  page: number;
+  expandedGroups: Set<string>;
+  selectedProducts: Set<string>;
+  onToggleExpand: (groupKey: string) => void;
+  onToggleSelect: (productId: string) => void;
+  onEditProduct: (product: Product) => void;
+  onMergeProducts: (groupKey: string, products: Product[]) => void;
+  onPageChange: (page: number) => void;
+}
+
+const DuplicateGroupsList: React.FC<DuplicateGroupsListProps> = ({
+  filters,
+  page,
+  expandedGroups,
+  selectedProducts,
+  onToggleExpand,
+  onToggleSelect,
+  onEditProduct,
+  onMergeProducts,
+  onPageChange,
+}) => {
+  const { toast } = useToast();
+
+  const duplicatesQuery = useQuery({
+    queryKey: ["/api/admin/products/duplicates", filters, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        by: filters.by,
+        page: page.toString(),
+        limit: "20",
+      });
+      
+      if (filters.brandId) {
+        params.append("brandId", filters.brandId);
+      }
+      
+      if (filters.search) {
+        params.append("search", filters.search);
+      }
+      
+      const response = await apiRequest("GET", `/api/admin/products/duplicates?${params}`);
+      return response.json();
+    },
+  });
+
+  if (duplicatesQuery.isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span>Buscando productos duplicados...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (duplicatesQuery.isError) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4" />
+            <p>Error al cargar los productos duplicados</p>
+            <Button 
+              variant="outline" 
+              onClick={() => duplicatesQuery.refetch()}
+              className="mt-2"
+            >
+              Reintentar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const data = duplicatesQuery.data;
+  const groups = data?.data?.groups || [];
+  const summary = data?.data?.summary || {};
+  const pagination = data?.data?.pagination || {};
+
+  if (groups.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-4" />
+            <p>No se encontraron productos duplicados con los filtros actuales</p>
+            <p className="text-sm mt-2">Intenta cambiar los criterios de búsqueda</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <div className="text-2xl font-bold text-primary">{summary.totalGroups || 0}</div>
+              <div className="text-sm text-muted-foreground">Grupos</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-orange-600">{summary.totalDuplicates || 0}</div>
+              <div className="text-sm text-muted-foreground">Duplicados</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-blue-600">{summary.totalProducts || 0}</div>
+              <div className="text-sm text-muted-foreground">Productos Total</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-green-600">{summary.brandCount || 0}</div>
+              <div className="text-sm text-muted-foreground">Marcas Afectadas</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Groups */}
+      <div className="space-y-3">
+        {groups.map((group: DuplicateGroup) => {
+          const isExpanded = expandedGroups.has(group.key);
+          const groupSelectedProducts = group.products.filter(p => selectedProducts.has(p.id));
+          
+          return (
+            <Card key={group.key} className="overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleExpand(group.key)}
+                      data-testid={`button-expand-${group.key}`}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </Button>
+                    
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-mono text-sm">{group.key}</span>
+                        <Badge variant="secondary">
+                          {group.count} productos
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4 mt-1 text-sm text-muted-foreground">
+                        <span>Marcas: {group.brands?.join(", ") || "N/A"}</span>
+                        <span>Categorías: {group.categories?.join(", ") || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {groupSelectedProducts.length > 0 && (
+                      <Badge variant="outline">
+                        {groupSelectedProducts.length} seleccionados
+                      </Badge>
+                    )}
+                    
+                    {isExpanded && group.products.length > 1 && (
+                      <Button
+                        size="sm"
+                        onClick={() => onMergeProducts(group.key, group.products)}
+                        disabled={group.products.length < 2}
+                        data-testid={`button-merge-${group.key}`}
+                      >
+                        <Merge className="h-4 w-4 mr-1" />
+                        Fusionar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+
+              {isExpanded && (
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {group.products.map((product, index) => {
+                      const isSelected = selectedProducts.has(product.id);
+                      
+                      return (
+                        <div
+                          key={product.id}
+                          className={`border rounded-lg p-3 ${isSelected ? 'border-primary bg-primary/5' : 'border-border'}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => onToggleSelect(product.id)}
+                                className="mt-1"
+                                data-testid={`checkbox-select-${product.id}`}
+                              />
+                              
+                              {product.imageUrl && (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-16 h-16 object-cover rounded border"
+                                />
+                              )}
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="font-medium truncate">{product.name}</h4>
+                                  {index === 0 && (
+                                    <Badge variant="default" className="text-xs">
+                                      Primario
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 text-sm text-muted-foreground">
+                                  <span>Ref: {product.reference || "Sin referencia"}</span>
+                                  <span>Precio: {formatCurrency(product.price)} COP</span>
+                                  <span>ID: {product.id.slice(0, 8)}...</span>
+                                </div>
+                                
+                                {product.description && (
+                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                    {product.description}
+                                  </p>
+                                )}
+                                
+                                {(product.sizes?.length > 0 || product.colors?.length > 0) && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {product.sizes?.map((size) => (
+                                      <Badge key={size} variant="outline" className="text-xs">
+                                        {size}
+                                      </Badge>
+                                    ))}
+                                    {product.colors?.map((color) => (
+                                      <Badge key={color} variant="secondary" className="text-xs">
+                                        {color}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onEditProduct(product)}
+                              data-testid={`button-edit-${product.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Página {pagination.currentPage} de {pagination.totalPages}
+                ({pagination.totalItems} elementos total)
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.currentPage <= 1}
+                  onClick={() => onPageChange(pagination.currentPage - 1)}
+                  data-testid="button-prev-page"
+                >
+                  Anterior
+                </Button>
+                
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, pagination.currentPage - 2) + i;
+                  if (pageNum > pagination.totalPages) return null;
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === pagination.currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => onPageChange(pageNum)}
+                      data-testid={`button-page-${pageNum}`}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.currentPage >= pagination.totalPages}
+                  onClick={() => onPageChange(pagination.currentPage + 1)}
+                  data-testid="button-next-page"
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
+
 export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   
-  // 🧹 CLEANUP: States for malformed URLs detection and cleanup
-  const [malformedUrlsDialogOpen, setMalformedUrlsDialogOpen] = useState(false);
+  // ✨ REORGANIZED: Main tab navigation
+  const [activeTab, setActiveTab] = useState("catalog");
+  const [catalogSubTab, setCatalogSubTab] = useState("list");
+  const [toolsSubTab, setToolsSubTab] = useState("duplicates");
   
-  // All state declarations first to prevent initialization order issues
-  const [productDialogOpen, setProductDialogOpen] = useState(false);
-  const [imageZoomData, setImageZoomData] = useState<{product: Product; isOpen: boolean} | null>(null);
-  const [promotionDialogOpen, setPromotionDialogOpen] = useState(false);
-  const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [brandDialogOpen, setBrandDialogOpen] = useState(false);
-  const [brandProductsDialogOpen, setBrandProductsDialogOpen] = useState(false);
-  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("products");
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<BrandWithProducts | null>(null);
-  const [isBrandEditMode, setIsBrandEditMode] = useState(false);
-  const [pendingProductToEdit, setPendingProductToEdit] = useState<Product | null>(null);
-  const [brandToDelete, setBrandToDelete] = useState<BrandWithProducts | null>(null);
-  const [deleteBrandDialogOpen, setDeleteBrandDialogOpen] = useState(false);
+  // ✨ CENTRALIZED: Single modal state per tab
+  const [activeModal, setActiveModal] = useState<{
+    type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct" | null;
+    data?: any;
+  }>({ type: null });
+  
+  // ✨ UNIFIED: Image zoom with Drawer
+  const [imageZoomDrawer, setImageZoomDrawer] = useState<{
+    product: Product;
+    isOpen: boolean;
+  } | null>(null);
+  
+  // ✨ CENTRALIZED: Edit states
+  const [editingItem, setEditingItem] = useState<{
+    type: "product" | "brand" | null;
+    item: Product | BrandWithProducts | null;
+  }>({ type: null, item: null });
+  
+  // ✨ PRODUCT FORM: Centralized product form states
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productSizes, setProductSizes] = useState<string[]>([]);
   const [productColors, setProductColors] = useState<string[]>([]);
   const [searchReference, setSearchReference] = useState("");
   
-  // Estados para detección de duplicados
-  const [duplicateWarningOpen, setDuplicateWarningOpen] = useState(false);
-  const [duplicatedProducts, setDuplicatedProducts] = useState<Product[]>([]);
-  const [pendingProductData, setPendingProductData] = useState<any>(null);
-  
-  // Brand package states
-  const [brandPackageDialogOpen, setBrandPackageDialogOpen] = useState(false);
-  const [bulkUploadImages, setBulkUploadImages] = useState<string[]>([]);
-  const [bulkCreationProgress, setBulkCreationProgress] = useState<{
-    isProcessing: boolean;
-    currentIndex: number;
-    total: number;
-    results: { success: number; failed: number; errors: string[] };
-  }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
+  // ✨ UNIFIED: Bulk operations
+  const [bulkOperations, setBulkOperations] = useState<{
+    brandPackage: {
+      images: string[];
+      progress: { isProcessing: boolean; currentIndex: number; total: number; results: { success: number; failed: number; errors: string[] } };
+    };
+    intelligentUpload: {
+      images: string[];
+      progress: { isProcessing: boolean; currentIndex: number; total: number; results: { success: number; failed: number; errors: string[] } };
+    };
+  }>({ 
+    brandPackage: { images: [], progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } },
+    intelligentUpload: { images: [], progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } }
+  });
 
-  // 🚀 NEW Intelligent upload states - Simple and robust
+  // ✨ CENTRALIZED: Specific operation states (replacing legacy)
+  const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  const [pendingProductData, setPendingProductData] = useState<ProductFormData | null>(null);
+  const [duplicatedProducts, setDuplicatedProducts] = useState<Product[]>([]);
+  const [brandToDelete, setBrandToDelete] = useState<BrandWithProducts | null>(null);
+
+  // ✨ CENTRALIZED: Intelligent upload states (replacing legacy)
   const [intelligentUploadedImages, setIntelligentUploadedImages] = useState<string[]>([]);
-  const [intelligentUploadProgress, setIntelligentUploadProgress] = useState<{
-    isProcessing: boolean;
-    currentIndex: number;
-    total: number;
-    results: { success: number; failed: number; errors: string[] };
-  }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
-  const [intelligentConfirmationOpen, setIntelligentConfirmationOpen] = useState(false);
+
+  // ✨ DUPLICATE MANAGEMENT: Centralized duplicate states
+  const [duplicateFilters, setDuplicateFilters] = useState<DuplicateFiltersData>({
+    by: "reference",
+    brandId: "",
+    search: "",
+  });
+  const [duplicatePage, setDuplicatePage] = useState(1);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [mergeData, setMergeData] = useState<{
+    groupKey: string;
+    primaryId: string;
+    duplicateIds: string[];
+    strategy: "keep_primary" | "merge_data";
+  } | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Forms initialization after all states
   const productForm = useForm<ProductFormData>({
@@ -215,65 +596,73 @@ export default function AdminPanel() {
     },
   });
 
-  // Check de autenticación
+  // ✨ DUPLICATE MANAGEMENT: Forms
+  const duplicateFiltersForm = useForm<DuplicateFiltersData>({
+    resolver: zodResolver(duplicateFiltersSchema),
+    defaultValues: duplicateFilters,
+  });
+
+  const editProductForm = useForm<EditProductData>({
+    resolver: zodResolver(editProductSchema),
+    defaultValues: {},
+  });
+
+  // ✨ REORGANIZED: Authentication check
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || !user?.isAdmin)) {
       setLocation("/admin-login");
     }
   }, [isLoading, isAuthenticated, user, setLocation]);
 
-  // Efecto para manejar secuenciado de diálogos de edición de productos
+  // ✨ CLEAN: Close modals when switching main tabs
   useEffect(() => {
-    if (!brandProductsDialogOpen && pendingProductToEdit) {
-      // Configurar edición
-      setEditingProduct(pendingProductToEdit);
-      setIsEditMode(true);
-      
-      // Poblar el formulario con los datos del producto
-      productForm.reset({
-        name: pendingProductToEdit.name,
-        description: pendingProductToEdit.description,
-        price: pendingProductToEdit.price.toString(),
-        originalPrice: pendingProductToEdit.originalPrice?.toString() || undefined,
-        imageUrl: pendingProductToEdit.imageUrl || undefined,
-        reference: pendingProductToEdit.reference || "",
-        categoryId: pendingProductToEdit.categoryId || undefined,
-        brandId: pendingProductToEdit.brandId || undefined,
-        isFlashSale: pendingProductToEdit.isFlashSale || false,
-        isFeatured: pendingProductToEdit.isFeatured || false,
-        images: pendingProductToEdit.images || [],
-        sizes: pendingProductToEdit.sizes || [],
-        colors: pendingProductToEdit.colors || [],
-      });
-      
-      // Poblar estados auxiliares
-      setProductImages(pendingProductToEdit.images || []);
-      setProductSizes(pendingProductToEdit.sizes || []);
-      setProductColors(pendingProductToEdit.colors || []);
-      
-      // Usar requestAnimationFrame para diferir la apertura del diálogo
-      requestAnimationFrame(() => {
-        setProductDialogOpen(true);
-      });
-      
-      // Limpiar el estado pendiente
-      setPendingProductToEdit(null);
-    }
-  }, [brandProductsDialogOpen, pendingProductToEdit, productForm]);
+    setActiveModal({ type: null });
+    setImageZoomDrawer(null);
+    setEditingItem({ type: null, item: null });
+  }, [activeTab]);
 
-  // Bulk product creation mutation - SECURE SESSION-BASED AUTH 🔒
+  // ✨ CLEAN: Close modals when switching catalog sub-tabs
+  useEffect(() => {
+    if (activeTab === "catalog") {
+      setActiveModal({ type: null });
+      setEditingItem({ type: null, item: null });
+    }
+  }, [catalogSubTab, activeTab]);
+
+  // ✨ CLEAN: Close modals when switching tools sub-tabs
+  useEffect(() => {
+    if (activeTab === "tools") {
+      setActiveModal({ type: null });
+      setEditingProduct(null);
+      setMergeData(null);
+      setSelectedProducts(new Set());
+    }
+  }, [toolsSubTab, activeTab]);
+
+  // ✨ REORGANIZED: Bulk product creation mutation
   const bulkCreateProductsMutation = useMutation({
     mutationFn: async (data: BrandPackageFormData) => {
-      // 🔒 SECURE: Use authenticated session instead of hardcoded credentials
       console.log('🔑 Sending bulk request with session-based authentication');
       const response = await apiRequest('POST', '/api/products/bulk', data);
       return response.json();
     },
     onMutate: () => {
-      setBulkCreationProgress({ isProcessing: true, currentIndex: 0, total: bulkUploadImages.length, results: { success: 0, failed: 0, errors: [] } });
+      setBulkOperations(prev => ({
+        ...prev,
+        brandPackage: {
+          ...prev.brandPackage,
+          progress: { isProcessing: true, currentIndex: 0, total: prev.brandPackage.images.length, results: { success: 0, failed: 0, errors: [] } }
+        }
+      }));
     },
     onSuccess: (data: { success: number; failed: number; errors: string[] }) => {
-      setBulkCreationProgress(prev => ({ ...prev, isProcessing: false, results: data }));
+      setBulkOperations(prev => ({
+        ...prev,
+        brandPackage: {
+          ...prev.brandPackage,
+          progress: { ...prev.brandPackage.progress, isProcessing: false, results: data }
+        }
+      }));
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       toast({
         title: "¡Paquete creado exitosamente! 🎉",
@@ -281,11 +670,17 @@ export default function AdminPanel() {
         variant: data.failed > 0 ? "destructive" : "default",
       });
       brandPackageForm.reset();
-      setBulkUploadImages([]);
-      setBrandPackageDialogOpen(false); // ✅ Close dialog
+      setBulkOperations(prev => ({ ...prev, brandPackage: { images: [], progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } } }));
+      closeModal();
     },
     onError: async (error: Error) => {
-      setBulkCreationProgress(prev => ({ ...prev, isProcessing: false }));
+      setBulkOperations(prev => ({
+        ...prev,
+        brandPackage: {
+          ...prev.brandPackage,
+          progress: { ...prev.brandPackage.progress, isProcessing: false }
+        }
+      }));
       const parsedError = await parseApiError(error);
       toast({
         title: parsedError.title,
@@ -312,14 +707,24 @@ export default function AdminPanel() {
   const { data: categories = [] } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const { data: brands = [] } = useQuery<BrandWithProducts[]>({ queryKey: ["/api/brands/admin/with-products"] });
   
-  // Query para productos de una marca específica
+  // ✨ MISSING QUERIES: Brand products query
   const { data: brandProducts = [], isLoading: brandProductsLoading } = useQuery<Product[]>({
     queryKey: ["/api/products", "brands", selectedBrandId],
     queryFn: () => fetch(`/api/products?brands=${selectedBrandId}`).then(res => res.json()),
-    enabled: !!selectedBrandId && brandProductsDialogOpen,
+    enabled: !!selectedBrandId && activeModal.type === "brandProducts",
   });
 
-  // Funciones para manejar múltiples campos
+  // ✨ MISSING QUERIES: Malformed URLs query
+  const { data: malformedUrlsData, isLoading: isLoadingMalformed, refetch: refetchMalformed } = useQuery({
+    queryKey: ["/api/products/malformed-urls"],
+    queryFn: async () => {
+      const response = await fetch("/api/products/malformed-urls");
+      return response.json();
+    },
+    enabled: false, // Only fetch when explicitly called
+  });
+
+  // ✨ UNIFIED: Product form helpers
   const addProductImage = () => {
     if (productImages.length < 9) {
       setProductImages([...productImages, ""]);
@@ -367,18 +772,36 @@ export default function AdminPanel() {
     productForm.setValue("colors", newColors);
   };
 
-  // Función para manejar edición de producto
+  // ✨ CENTRALIZED: Modal handlers
+  const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls", data?: any) => {
+    setActiveModal({ type, data });
+  };
+
+  const closeModal = () => {
+    setActiveModal({ type: null });
+    setEditingItem({ type: null, item: null });
+    // Clear form states when closing modals
+    productForm.reset();
+    brandForm.reset();
+    promotionForm.reset();
+    eventForm.reset();
+    setProductImages([]);
+    setProductSizes([]);
+    setProductColors([]);
+  };
+
+  // ✨ UNIFIED: Edit handlers
   const handleEditProduct = (product: Product) => {
-    console.log("🔥 INICIANDO EDICIÓN DE PRODUCTO:", product.name, product.id);
+    console.log("✨ Editing product:", product.name, product.id);
     
-    // Cambiar a la pestaña de productos para mejor UX
-    setActiveTab("products");
+    // Navigate to catalog edit tab
+    setActiveTab("catalog");
+    setCatalogSubTab("edit");
     
-    // SIEMPRE configurar el producto a editar primero
-    setEditingProduct(product);
-    setIsEditMode(true);
+    // Set editing state
+    setEditingItem({ type: "product", item: product });
     
-    // Poblar el formulario con los datos del producto
+    // Populate form
     productForm.reset({
       name: product.name,
       description: product.description,
@@ -395,49 +818,22 @@ export default function AdminPanel() {
       colors: product.colors || [],
     });
     
-    // Poblar estados auxiliares
+    // Populate auxiliary states
     setProductImages(product.images || []);
     setProductSizes(product.sizes || []);
     setProductColors(product.colors || []);
     
-    // Si el diálogo de productos de marca está abierto, usar secuenciado
-    if (brandProductsDialogOpen) {
-      console.log("🔥 CERRANDO DIÁLOGO DE MARCA Y PREPARANDO EDICIÓN");
-      // Guardar el producto a editar para procesarlo cuando se cierre el diálogo
-      setPendingProductToEdit(product);
-      
-      // Cerrar diálogo de productos de marca
-      setBrandProductsDialogOpen(false);
-      
-      // Usar setTimeout para asegurar que el diálogo se abra después del cierre
-      setTimeout(() => {
-        console.log("🔥 ABRIENDO DIÁLOGO DE EDICIÓN DESPUÉS DEL TIMEOUT");
-        setProductDialogOpen(true);
-      }, 100);
-    } else {
-      console.log("🔥 ABRIENDO DIÁLOGO DE EDICIÓN DIRECTAMENTE");
-      // Abrir diálogo directamente
-      setProductDialogOpen(true);
-    }
+    // Close any open modal
+    closeModal();
   };
 
-
-  const handleCancelEdit = () => {
-    setEditingProduct(null);
-    setIsEditMode(false);
-    productForm.reset();
-    setProductImages([]);
-    setProductSizes([]);
-    setProductColors([]);
-    setProductDialogOpen(false);
-  };
-
-  // Función para manejar edición de marca
   const handleEditBrand = (brand: BrandWithProducts) => {
-    setEditingBrand(brand);
-    setIsBrandEditMode(true);
+    console.log("✨ Editing brand:", brand.name, brand.id);
     
-    // Poblar el formulario con los datos de la marca
+    // Set editing state
+    setEditingItem({ type: "brand", item: brand });
+    
+    // Populate form
     brandForm.reset({
       name: brand.name,
       logo: brand.logo,
@@ -446,14 +842,24 @@ export default function AdminPanel() {
       isActive: brand.isActive ?? true,
     });
     
-    setBrandDialogOpen(true);
+    // Open brand modal
+    openModal("brand", brand);
   };
 
-  const handleCancelBrandEdit = () => {
-    setEditingBrand(null);
-    setIsBrandEditMode(false);
+  const handleCancelEdit = () => {
+    setEditingItem({ type: null, item: null });
+    productForm.reset();
     brandForm.reset();
-    setBrandDialogOpen(false);
+    setProductImages([]);
+    setProductSizes([]);
+    setProductColors([]);
+  };
+
+  // ✨ MISSING: Brand cancel edit handler
+  const handleCancelBrandEdit = () => {
+    closeModal();
+    setEditingItem({ type: null, item: null });
+    brandForm.reset();
   };
 
   // Función para detectar productos duplicados
@@ -482,7 +888,7 @@ export default function AdminPanel() {
         // Encontrar duplicados - mostrar advertencia
         setDuplicatedProducts(duplicates);
         setPendingProductData(data);
-        setDuplicateWarningOpen(true);
+        openModal("duplicateWarning", { duplicates, productData: data });
         // Retornar una Promise rechazada para detener el flujo
         throw new Error("DUPLICATE_DETECTED");
       }
@@ -515,7 +921,7 @@ export default function AdminPanel() {
     mutationFn: (data: ProductFormData) => createProductWithDuplicateCheck(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setProductDialogOpen(false);
+      closeModal();
       productForm.reset();
       setProductImages([]);
       setProductSizes([]);
@@ -545,8 +951,7 @@ export default function AdminPanel() {
     mutationFn: (data: ProductFormData) => createProductWithDuplicateCheck(data, true),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setProductDialogOpen(false);
-      setDuplicateWarningOpen(false);
+      closeModal();
       setPendingProductData(null);
       setDuplicatedProducts([]);
       productForm.reset();
@@ -573,7 +978,7 @@ export default function AdminPanel() {
 
   // Función para manejar cancelación de duplicados
   const handleCancelDuplicate = () => {
-    setDuplicateWarningOpen(false);
+    closeModal();
     setPendingProductData(null);
     setDuplicatedProducts([]);
   };
@@ -583,24 +988,25 @@ export default function AdminPanel() {
     if (pendingProductData) {
       forceCreateProductMutation.mutate(pendingProductData);
     }
+    closeModal();
   };
 
   // Funciones para eliminar marca
   const handleDeleteBrand = (brand: BrandWithProducts) => {
     setBrandToDelete(brand);
-    setDeleteBrandDialogOpen(true);
+    openModal("deleteBrand", brand);
   };
 
   const handleCancelDeleteBrand = () => {
     setBrandToDelete(null);
-    setDeleteBrandDialogOpen(false);
+    closeModal();
   };
 
   const handleConfirmDeleteBrand = () => {
     if (brandToDelete) {
       deleteBrandMutation.mutate(brandToDelete.id);
       setBrandToDelete(null);
-      setDeleteBrandDialogOpen(false);
+      closeModal();
     }
   };
 
@@ -622,12 +1028,18 @@ export default function AdminPanel() {
     }
 
     // Start the intelligent upload process with uploaded image URLs
-    setIntelligentUploadProgress({
-      isProcessing: true,
-      currentIndex: 0,
-      total: intelligentUploadedImages.length,
-      results: { success: 0, failed: 0, errors: [] }
-    });
+    setBulkOperations(prev => ({
+      ...prev,
+      intelligentUpload: {
+        ...prev.intelligentUpload,
+        progress: {
+          isProcessing: true,
+          currentIndex: 0,
+          total: intelligentUploadedImages.length,
+          results: { success: 0, failed: 0, errors: [] }
+        }
+      }
+    }));
 
     console.log(`🚀 Starting intelligent upload processing with ${intelligentUploadedImages.length} uploaded images`);
     intelligentUploadMutation.mutate(intelligentUploadedImages);
@@ -635,7 +1047,7 @@ export default function AdminPanel() {
 
   const updateProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
-      if (!editingProduct) throw new Error("No hay producto para editar");
+      if (editingItem.type !== "product" || !editingItem.item) throw new Error("No hay producto para editar");
       
       // Calcular descuento si hay precio original
       const discountPercentage = data.originalPrice && data.price 
@@ -651,14 +1063,14 @@ export default function AdminPanel() {
         sizes: productSizes,
         colors: productColors,
       };
-      console.log("Actualizando producto:", editingProduct.id, productData);
-      return apiRequest("PUT", `/api/products/${editingProduct.id}`, productData);
+      console.log("Actualizando producto:", (editingItem.item as Product).id, productData);
+      return apiRequest("PUT", `/api/products/${(editingItem.item as Product).id}`, productData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setProductDialogOpen(false);
-      setEditingProduct(null);
-      setIsEditMode(false);
+      closeModal();
+      // Legacy state removed - using centralized editingItem
+      // Legacy state removed - using centralized editingItem
       productForm.reset();
       setProductImages([]);
       setProductSizes([]);
@@ -682,7 +1094,7 @@ export default function AdminPanel() {
     mutationFn: (data: PromotionFormData) => apiRequest("POST", "/api/promotions", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
-      setPromotionDialogOpen(false);
+      closeModal();
       promotionForm.reset();
       toast({ title: "Éxito", description: "Promoción creada exitosamente" });
     },
@@ -695,7 +1107,7 @@ export default function AdminPanel() {
     mutationFn: (data: EventFormData) => apiRequest("POST", "/api/events", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      setEventDialogOpen(false);
+      closeModal();
       eventForm.reset();
       toast({ title: "Éxito", description: "Evento creado exitosamente" });
     },
@@ -763,26 +1175,26 @@ export default function AdminPanel() {
 
   const createBrandMutation = useMutation({
     mutationFn: (data: BrandFormData) => {
-      if (isBrandEditMode && editingBrand) {
-        return apiRequest("PUT", `/api/brands/${editingBrand.id}`, data);
+      if (editingItem.type === "brand" && editingItem.item) {
+        return apiRequest("PUT", `/api/brands/${editingItem.item.id}`, data);
       }
       return apiRequest("POST", "/api/brands", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
-      setBrandDialogOpen(false);
-      setEditingBrand(null);
-      setIsBrandEditMode(false);
+      closeModal();
+      // Legacy state removed - using centralized editingItem
+      // Legacy state removed - using centralized editingItem
       brandForm.reset();
       toast({ 
         title: "Éxito", 
-        description: isBrandEditMode ? "Marca actualizada exitosamente" : "Marca creada exitosamente" 
+        description: editingItem.type === "brand" ? "Marca actualizada exitosamente" : "Marca creada exitosamente" 
       });
     },
     onError: () => {
       toast({ 
         title: "Error", 
-        description: isBrandEditMode ? "No se pudo actualizar la marca" : "No se pudo crear la marca", 
+        description: editingItem.type === "brand" ? "No se pudo actualizar la marca" : "No se pudo crear la marca", 
         variant: "destructive" 
       });
     },
@@ -808,7 +1220,7 @@ export default function AdminPanel() {
 
   // 🚀 NEW Intelligent upload mutation - Simple and robust
   const intelligentUploadMutation = useMutation({
-    mutationFn: async (imageUrls: string[]) => {
+    mutationFn: async (imageUrls: string[]): Promise<{ created: number; pendingReview: number; results: any[] }> => {
       console.log(`🚀 [NEW] Starting intelligent upload with ${imageUrls.length} successfully uploaded image URLs`);
       console.log(`🔗 Image URLs:`, imageUrls);
       
@@ -824,7 +1236,8 @@ export default function AdminPanel() {
       };
       
       console.log(`🎯 Sending payload to server:`, payload);
-      return apiRequest("POST", "/api/products/intelligent-upload", payload);
+      const response = await apiRequest("POST", "/api/products/intelligent-upload", payload);
+      return response as { created: number; pendingReview: number; results: any[] };
     },
     onSuccess: (data: { created: number; pendingReview: number; results: any[] }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
@@ -833,13 +1246,19 @@ export default function AdminPanel() {
       const totalSuccessful = data.created + data.pendingReview;
       const totalFailed = data.results.filter((r: any) => r.status === 'failed').length;
       
-      setIntelligentUploadProgress(prev => ({
+      setBulkOperations(prev => ({
         ...prev,
-        isProcessing: false,
-        results: { 
-          success: totalSuccessful, 
-          failed: totalFailed, 
-          errors: data.results.filter((r: any) => r.status === 'failed').map((r: any) => r.reason || 'Error desconocido')
+        intelligentUpload: {
+          ...prev.intelligentUpload,
+          progress: {
+            ...prev.intelligentUpload.progress,
+            isProcessing: false,
+            results: { 
+              success: totalSuccessful, 
+              failed: totalFailed, 
+              errors: data.results.filter((r: any) => r.status === 'failed').map((r: any) => r.reason || 'Error desconocido')
+            }
+          }
         }
       }));
       
@@ -862,12 +1281,18 @@ export default function AdminPanel() {
       // Clear uploaded images after successful upload
       setTimeout(() => {
         setIntelligentUploadedImages([]);
-        setIntelligentUploadProgress({ 
-          isProcessing: false, 
-          currentIndex: 0, 
-          total: 0, 
-          results: { success: 0, failed: 0, errors: [] } 
-        });
+        setBulkOperations(prev => ({
+          ...prev,
+          intelligentUpload: {
+            images: [],
+            progress: { 
+              isProcessing: false, 
+              currentIndex: 0, 
+              total: 0, 
+              results: { success: 0, failed: 0, errors: [] } 
+            }
+          }
+        }));
       }, 3000);
     },
     onError: async (error: any) => {
@@ -875,9 +1300,15 @@ export default function AdminPanel() {
       
       const { title, description } = await parseApiError(error, "Error en la carga inteligente");
       
-      setIntelligentUploadProgress(prev => ({
+      setBulkOperations(prev => ({
         ...prev,
-        isProcessing: false
+        intelligentUpload: {
+          ...prev.intelligentUpload,
+          progress: {
+            ...prev.intelligentUpload.progress,
+            isProcessing: false
+          }
+        }
       }));
       
       toast({ 
@@ -886,12 +1317,6 @@ export default function AdminPanel() {
         variant: "destructive" 
       });
     }
-  });
-
-  // 🧹 CLEANUP: Query to detect malformed URLs
-  const { data: malformedUrlsData, isLoading: isLoadingMalformed, refetch: refetchMalformed } = useQuery({
-    queryKey: ["/api/products/malformed-urls"],
-    enabled: false // Only run when explicitly called
   });
 
   // 🧹 CLEANUP: Mutation to clean malformed URLs
@@ -908,7 +1333,7 @@ export default function AdminPanel() {
       
       // Refetch malformed URLs to update the count
       refetchMalformed();
-      setMalformedUrlsDialogOpen(false);
+      closeModal();
     },
     onError: async (error: any) => {
       const { title, description } = await parseApiError(error, "Error en la limpieza");
@@ -918,6 +1343,82 @@ export default function AdminPanel() {
         variant: "destructive"
       });
     }
+  });
+
+  // ✨ DUPLICATE MANAGEMENT: Queries and mutations
+  const duplicatesQuery = useQuery({
+    queryKey: ["/api/admin/products/duplicates", duplicateFilters, duplicatePage],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        by: duplicateFilters.by,
+        page: duplicatePage.toString(),
+        limit: "20",
+      });
+      
+      if (duplicateFilters.brandId) {
+        params.append("brandId", duplicateFilters.brandId);
+      }
+      
+      if (duplicateFilters.search) {
+        params.append("search", duplicateFilters.search);
+      }
+      
+      const response = await apiRequest("GET", `/api/admin/products/duplicates?${params}`);
+      return response.json();
+    },
+    enabled: activeTab === "tools" && toolsSubTab === "duplicates",
+  });
+
+  const mergeProductsMutation = useMutation({
+    mutationFn: async (data: { groupKey: string; mergeData: MergeProductsData }) => {
+      const response = await apiRequest("POST", `/api/admin/products/duplicates/${data.groupKey}/merge`, data.mergeData);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/duplicates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "✅ Productos fusionados exitosamente",
+        description: `${data.merged || 1} productos han sido combinados en uno solo`,
+      });
+      setActiveModal({ type: null });
+      setMergeData(null);
+      setSelectedProducts(new Set());
+    },
+    onError: async (error: Error) => {
+      const parsedError = await parseApiError(error);
+      toast({
+        title: parsedError.title,
+        description: parsedError.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editProductMutation = useMutation({
+    mutationFn: async (data: { id: string; productData: EditProductData }) => {
+      const response = await apiRequest("PATCH", `/api/admin/products/${data.id}`, data.productData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/duplicates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "✅ Producto actualizado",
+        description: "Los cambios han sido guardados correctamente",
+      });
+      setActiveModal({ type: null });
+      setEditingProduct(null);
+      editProductForm.reset();
+    },
+    onError: async (error: Error) => {
+      const parsedError = await parseApiError(error);
+      toast({
+        title: parsedError.title,
+        description: parsedError.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Función para sugerir categoría y marca basado en el nombre del producto
@@ -1033,18 +1534,15 @@ export default function AdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-8 h-auto">
-          <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
+        {/* ✨ REORGANIZED: Clean main tab structure */}
+        <TabsList className="grid w-full grid-cols-6 h-auto">
+          <TabsTrigger value="catalog" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-catalog">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="mt-1 sm:mt-0">Productos</span>
+            <span className="mt-1 sm:mt-0">Catálogo</span>
           </TabsTrigger>
           <TabsTrigger value="brands" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brands">
             <Briefcase className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Marcas</span>
-          </TabsTrigger>
-          <TabsTrigger value="orders" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-orders">
-            <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="mt-1 sm:mt-0">Pedidos</span>
           </TabsTrigger>
           <TabsTrigger value="promotions" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-promotions">
             <Gift className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -1054,60 +1552,78 @@ export default function AdminPanel() {
             <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Eventos</span>
           </TabsTrigger>
-          <TabsTrigger value="brand-packages" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brand-packages">
-            <Layers className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="mt-1 sm:mt-0">Paquetes</span>
+          <TabsTrigger value="orders" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-orders">
+            <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Pedidos</span>
           </TabsTrigger>
-          <TabsTrigger value="intelligent-upload" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-intelligent-upload">
-            <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="mt-1 sm:mt-0">Carga Inteligente</span>
-          </TabsTrigger>
-          <TabsTrigger value="cleanup" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-cleanup">
-            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="mt-1 sm:mt-0">Limpieza</span>
+          <TabsTrigger value="tools" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-tools">
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Herramientas</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Panel de Productos */}
-        <TabsContent value="products" className="space-y-2 sm:space-y-4">
-          <div className="flex justify-between items-center mb-2 sm:mb-4">
-            <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Productos</h2>
-            <Button 
-              size="sm" 
-              className="h-8 sm:h-10 text-xs sm:text-sm" 
-              data-testid="button-add-product"
-              onClick={() => setProductDialogOpen(true)}
-            >
-              <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Agregar Producto</span>
-              <span className="sm:hidden">Nuevo</span>
-            </Button>
-          </div>
+        {/* ✨ REORGANIZED: Catálogo with sub-tabs */}
+        <TabsContent value="catalog" className="space-y-2 sm:space-y-4">
+          <Tabs value={catalogSubTab} onValueChange={setCatalogSubTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="list" className="flex items-center gap-2" data-testid="subtab-catalog-list">
+                <Search className="h-4 w-4" />
+                Lista
+              </TabsTrigger>
+              <TabsTrigger value="edit" className="flex items-center gap-2" data-testid="subtab-catalog-edit">
+                <Edit className="h-4 w-4" />
+                Crear/Editar
+              </TabsTrigger>
+              <TabsTrigger value="uploads" className="flex items-center gap-2" data-testid="subtab-catalog-uploads">
+                <Upload className="h-4 w-4" />
+                Cargas
+              </TabsTrigger>
+              <TabsTrigger value="cleanup" className="flex items-center gap-2" data-testid="subtab-catalog-cleanup">
+                <Sparkles className="h-4 w-4" />
+                Limpieza
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Sub-tab: Lista de productos */}
+            <TabsContent value="list" className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Lista de Productos</h3>
+                <Button 
+                  size="sm" 
+                  className="h-8 sm:h-10 text-xs sm:text-sm" 
+                  data-testid="button-add-product"
+                  onClick={() => setCatalogSubTab("edit")}
+                >
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Crear Producto</span>
+                  <span className="sm:hidden">Nuevo</span>
+                </Button>
+              </div>
           
-          {/* Búsqueda por referencia */}
-          <div className="mb-4">
-            <div className="max-w-sm">
-              <label htmlFor="search-reference" className="block text-sm font-medium mb-2">
-                Buscar por referencia
-              </label>
-              <Input
-                id="search-reference"
-                type="text"
-                placeholder="Ingresa la referencia del producto..."
-                value={searchReference}
-                onChange={(e) => setSearchReference(e.target.value)}
-                className="w-full"
-                data-testid="input-search-reference"
-              />
-              {searchReference && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {products.length} producto(s) encontrado(s)
-                </p>
-              )}
-            </div>
-          </div>
+              {/* Búsqueda por referencia */}
+              <div className="mb-4">
+                <div className="max-w-sm">
+                  <label htmlFor="search-reference" className="block text-sm font-medium mb-2">
+                    Buscar por referencia
+                  </label>
+                  <Input
+                    id="search-reference"
+                    type="text"
+                    placeholder="Ingresa la referencia del producto..."
+                    value={searchReference}
+                    onChange={(e) => setSearchReference(e.target.value)}
+                    className="w-full"
+                    data-testid="input-search-reference"
+                  />
+                  {searchReference && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {products.length} producto(s) encontrado(s)
+                    </p>
+                  )}
+                </div>
+              </div>
           
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
               <Card key={product.id}>
                 <CardHeader>
@@ -1157,7 +1673,7 @@ export default function AdminPanel() {
                           })()} 
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform hover:scale-105"
-                          onClick={() => setImageZoomData({product, isOpen: true})}
+                          onClick={() => setImageZoomDrawer({product, isOpen: true})}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
@@ -1278,14 +1794,141 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+              </div>
+            </TabsContent>
+
+            {/* Sub-tab: Crear/Editar productos */}
+            <TabsContent value="edit" className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">
+                  {editingItem.type === "product" ? "Editar Producto" : "Crear Producto"}
+                </h3>
+                {editingItem.type === "product" && (
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      handleCancelEdit();
+                      setCatalogSubTab("list");
+                    }}
+                    data-testid="button-cancel-edit"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              {/* Product form will be rendered here */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Formulario de Producto</CardTitle>
+                  <CardDescription>
+                    {editingItem.type === "product" 
+                      ? "Modifica la información del producto"
+                      : "Completa los datos del nuevo producto"
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">El formulario de producto se implementará aquí con los nuevos estados centralizados.</p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Sub-tab: Cargas (uploads) */}
+            <TabsContent value="uploads" className="space-y-4">
+              <h3 className="text-lg font-semibold">Herramientas de Carga</h3>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Layers className="h-5 w-5" />
+                      Paquetes por Marca
+                    </CardTitle>
+                    <CardDescription>
+                      Crea múltiples productos de una marca de forma eficiente
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button 
+                      onClick={() => openModal("brandProducts")}
+                      data-testid="button-brand-packages"
+                    >
+                      <Layers className="h-4 w-4 mr-2" />
+                      Crear Paquete
+                    </Button>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5" />
+                      Carga Inteligente
+                    </CardTitle>
+                    <CardDescription>
+                      Upload con detección automática de marcas por IA
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Funcionalidad de carga inteligente estará disponible aquí
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Sub-tab: Limpieza */}
+            <TabsContent value="cleanup" className="space-y-4">
+              <h3 className="text-lg font-semibold">Herramientas de Limpieza</h3>
+              <div className="grid gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trash2 className="h-5 w-5" />
+                      Limpieza de Datos
+                    </CardTitle>
+                    <CardDescription>
+                      Herramientas para limpiar y organizar el catálogo
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">URLs mal formadas</p>
+                          <p className="text-sm text-muted-foreground">Detectar y corregir URLs de imágenes problemáticas</p>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          <Search className="h-4 w-4 mr-2" />
+                          Escanear
+                        </Button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Productos duplicados</p>
+                          <p className="text-sm text-muted-foreground">Encontrar productos con nombres o referencias similares</p>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          <Search className="h-4 w-4 mr-2" />
+                          Buscar
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* Panel de Marcas */}
         <TabsContent value="brands" className="space-y-2 sm:space-y-4">
           <div className="flex justify-between items-center mb-2 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Marcas</h2>
-            <Dialog open={brandDialogOpen} onOpenChange={setBrandDialogOpen}>
+            <Dialog open={activeModal.type === "brand"} onOpenChange={(open) => open ? openModal("brand") : closeModal()}>
               <DialogTrigger asChild>
                 <Button size="sm" className="h-8 sm:h-10 text-xs sm:text-sm" data-testid="button-add-brand">
                   <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -1295,9 +1938,9 @@ export default function AdminPanel() {
               </DialogTrigger>
               <DialogContent className="max-w-2xl mx-2 sm:mx-auto">
                 <DialogHeader>
-                  <DialogTitle>{isBrandEditMode ? "Editar Marca" : "Agregar Nueva Marca"}</DialogTitle>
+                  <DialogTitle>{editingItem.type === "brand" ? "Editar Marca" : "Agregar Nueva Marca"}</DialogTitle>
                   <DialogDescription>
-                    {isBrandEditMode ? "Modifica la información de la marca" : "Crea una nueva marca para organizar los productos"}
+                    {editingItem.type === "brand" ? "Modifica la información de la marca" : "Crea una nueva marca para organizar los productos"}
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...brandForm}>
@@ -1395,8 +2038,8 @@ export default function AdminPanel() {
                         data-testid="button-submit-brand"
                       >
                         {createBrandMutation.isPending 
-                          ? (isBrandEditMode ? "Actualizando..." : "Creando...") 
-                          : (isBrandEditMode ? "Actualizar Marca" : "Crear Marca")
+                          ? (editingItem.type === "brand" ? "Actualizando..." : "Creando...") 
+                          : (editingItem.type === "brand" ? "Actualizar Marca" : "Crear Marca")
                         }
                       </Button>
                       <Button 
@@ -1527,8 +2170,198 @@ export default function AdminPanel() {
           <AdminOrders />
         </TabsContent>
 
+        {/* Panel de Herramientas */}
+        <TabsContent value="tools" className="space-y-2 sm:space-y-4">
+          <Tabs value={toolsSubTab} onValueChange={setToolsSubTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-1">
+              <TabsTrigger value="duplicates" className="flex items-center gap-2" data-testid="subtab-tools-duplicates">
+                <Copy className="h-4 w-4" />
+                Duplicados
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Sub-tab: Gestión de Duplicados */}
+            <TabsContent value="duplicates" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-semibold">Gestión de Productos Duplicados</h2>
+                  <p className="text-muted-foreground">Encuentra, edita y fusiona productos duplicados en el catálogo</p>
+                </div>
+              </div>
+
+              {/* Filtros */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    Filtros de Búsqueda
+                  </CardTitle>
+                  <CardDescription>
+                    Configure los criterios para detectar productos duplicados
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...duplicateFiltersForm}>
+                    <form className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={duplicateFiltersForm.control}
+                          name="by"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Criterio de Búsqueda</FormLabel>
+                              <Select 
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setDuplicateFilters(prev => ({ ...prev, by: value as "reference" | "name" | "image" }));
+                                  setDuplicatePage(1);
+                                }} 
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-duplicate-criteria">
+                                    <SelectValue placeholder="Selecciona criterio" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="reference">Referencia del Producto</SelectItem>
+                                  <SelectItem value="name">Nombre + Marca</SelectItem>
+                                  <SelectItem value="image">Hash de Imagen</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={duplicateFiltersForm.control}
+                          name="brandId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Filtrar por Marca</FormLabel>
+                              <Select 
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setDuplicateFilters(prev => ({ ...prev, brandId: value }));
+                                  setDuplicatePage(1);
+                                }} 
+                                value={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-duplicate-brand">
+                                    <SelectValue placeholder="Todas las marcas" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="">Todas las marcas</SelectItem>
+                                  {brandsQuery.data?.map((brand) => (
+                                    <SelectItem key={brand.id} value={brand.id}>
+                                      {brand.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={duplicateFiltersForm.control}
+                          name="search"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Búsqueda de Texto</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Buscar productos..."
+                                    className="pl-8"
+                                    {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setDuplicateFilters(prev => ({ ...prev, search: e.target.value }));
+                                      setDuplicatePage(1);
+                                    }}
+                                    data-testid="input-duplicate-search"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              {/* Lista de Grupos Duplicados */}
+              <DuplicateGroupsList 
+                filters={duplicateFilters}
+                page={duplicatePage}
+                expandedGroups={expandedGroups}
+                selectedProducts={selectedProducts}
+                onToggleExpand={(groupKey) => {
+                  setExpandedGroups(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(groupKey)) {
+                      newSet.delete(groupKey);
+                    } else {
+                      newSet.add(groupKey);
+                    }
+                    return newSet;
+                  });
+                }}
+                onToggleSelect={(productId) => {
+                  setSelectedProducts(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(productId)) {
+                      newSet.delete(productId);
+                    } else {
+                      newSet.add(productId);
+                    }
+                    return newSet;
+                  });
+                }}
+                onEditProduct={(product) => {
+                  setEditingProduct(product);
+                  editProductForm.reset({
+                    name: product.name,
+                    description: product.description,
+                    price: product.price,
+                    originalPrice: product.originalPrice,
+                    reference: product.reference,
+                    sizes: product.sizes,
+                    colors: product.colors,
+                  });
+                  setActiveModal({ type: "editProduct", data: product });
+                }}
+                onMergeProducts={(groupKey, products) => {
+                  if (products.length < 2) return;
+                  
+                  const primaryId = products[0].id;
+                  const duplicateIds = products.slice(1).map(p => p.id);
+                  
+                  setMergeData({
+                    groupKey,
+                    primaryId,
+                    duplicateIds,
+                    strategy: "keep_primary"
+                  });
+                  setActiveModal({ type: "mergeConfirm", data: { groupKey, products } });
+                }}
+                onPageChange={setDuplicatePage}
+              />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
         {/* Modal para ver productos de una marca */}
-        <Dialog open={brandProductsDialogOpen} onOpenChange={setBrandProductsDialogOpen}>
+        <Dialog open={activeModal.type === "brandProducts"} onOpenChange={(open) => open ? openModal("brandProducts") : closeModal()}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -1652,7 +2485,7 @@ export default function AdminPanel() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setImageZoomData({ product, isOpen: true })}
+                              onClick={() => setImageZoomDrawer({product, isOpen: true})}
                               data-testid={`button-zoom-brand-product-${product.id}`}
                             >
                               <ZoomIn className="h-3 w-3" />
@@ -1681,7 +2514,7 @@ export default function AdminPanel() {
         <TabsContent value="promotions" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold">Promociones</h2>
-            <Dialog open={promotionDialogOpen} onOpenChange={setPromotionDialogOpen}>
+            <Dialog open={activeModal.type === "promotion"} onOpenChange={(open) => open ? openModal("promotion") : closeModal()}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-promotion">
                   <Plus className="h-4 w-4 mr-2" />
@@ -1895,7 +2728,7 @@ export default function AdminPanel() {
         <TabsContent value="events" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold">Eventos</h2>
-            <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
+            <Dialog open={activeModal.type === "event"} onOpenChange={(open) => open ? openModal("event") : closeModal()}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-event">
                   <Plus className="h-4 w-4 mr-2" />
@@ -2136,7 +2969,7 @@ export default function AdminPanel() {
         <TabsContent value="brand-packages" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold">Paquetes por Marca</h2>
-            <Dialog open={brandPackageDialogOpen} onOpenChange={setBrandPackageDialogOpen}>
+            <Dialog open={activeModal.type === "brandPackage"} onOpenChange={(open) => open ? openModal("brandPackage") : closeModal()}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-brand-package">
                   <Layers className="h-4 w-4 mr-2" />
@@ -2269,8 +3102,6 @@ export default function AdminPanel() {
                                 field.onChange(imageUrls);
                                 setBulkUploadImages(imageUrls);
                               }}
-                              minImages={1}
-                              maxImages={50}
                             />
                           </FormControl>
                           <FormMessage />
@@ -2280,39 +3111,39 @@ export default function AdminPanel() {
 
 
                     {/* Progress indicator */}
-                    {bulkCreationProgress.isProcessing && (
+                    {bulkOperations.brandPackage.progress.isProcessing && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-blue-900">Creando productos...</span>
                           <span className="text-sm text-blue-700">
-                            {bulkCreationProgress.currentIndex} / {bulkCreationProgress.total}
+                            {bulkOperations.brandPackage.progress.currentIndex} / {bulkOperations.brandPackage.progress.total}
                           </span>
                         </div>
                         <div className="w-full bg-blue-200 rounded-full h-2">
                           <div 
                             className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${(bulkCreationProgress.currentIndex / bulkCreationProgress.total) * 100}%` }}
+                            style={{ width: `${(bulkOperations.brandPackage.progress.currentIndex / bulkOperations.brandPackage.progress.total) * 100}%` }}
                           />
                         </div>
                       </div>
                     )}
 
                     {/* Results */}
-                    {!bulkCreationProgress.isProcessing && (bulkCreationProgress.results.success > 0 || bulkCreationProgress.results.failed > 0) && (
+                    {!bulkOperations.brandPackage.progress.isProcessing && (bulkOperations.brandPackage.progress.results.success > 0 || bulkOperations.brandPackage.progress.results.failed > 0) && (
                       <div className={`border rounded-lg p-4 ${
-                        bulkCreationProgress.results.failed > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+                        bulkOperations.brandPackage.progress.results.failed > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
                       }`}>
                         <h4 className="font-medium mb-2">Resultados:</h4>
                         <div className="text-sm space-y-1">
-                          <p className="text-green-700">✅ Exitosos: {bulkCreationProgress.results.success}</p>
-                          {bulkCreationProgress.results.failed > 0 && (
-                            <p className="text-red-700">❌ Fallidos: {bulkCreationProgress.results.failed}</p>
+                          <p className="text-green-700">✅ Exitosos: {bulkOperations.brandPackage.progress.results.success}</p>
+                          {bulkOperations.brandPackage.progress.results.failed > 0 && (
+                            <p className="text-red-700">❌ Fallidos: {bulkOperations.brandPackage.progress.results.failed}</p>
                           )}
-                          {bulkCreationProgress.results.errors.length > 0 && (
+                          {bulkOperations.brandPackage.progress.results.errors.length > 0 && (
                             <div className="mt-2">
                               <p className="font-medium text-red-700">Errores:</p>
                               <ul className="list-disc list-inside text-red-600 text-xs space-y-1">
-                                {bulkCreationProgress.results.errors.map((error, index) => (
+                                {bulkOperations.brandPackage.progress.results.errors.map((error, index) => (
                                   <li key={index}>{error}</li>
                                 ))}
                               </ul>
@@ -2327,10 +3158,13 @@ export default function AdminPanel() {
                         type="button" 
                         variant="outline" 
                         onClick={() => {
-                          setBrandPackageDialogOpen(false);
+                          closeModal();
                           brandPackageForm.reset();
                           setBulkUploadImages([]);
-                          setBulkCreationProgress({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
+                          setBulkOperations(prev => ({
+                            ...prev,
+                            brandPackage: { ...prev.brandPackage, progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } }
+                          }));
                         }}
                       >
                         Cancelar
@@ -2439,14 +3273,14 @@ export default function AdminPanel() {
                 <div className="flex gap-3">
                   <Button 
                     onClick={handleStartIntelligentUpload}
-                    disabled={intelligentUploadProgress.isProcessing || intelligentUploadedImages.length === 0}
+                    disabled={bulkOperations.intelligentUpload.progress.isProcessing || intelligentUploadedImages.length === 0}
                     className="flex-1"
                     data-testid="button-start-intelligent-upload"
                   >
-                    {intelligentUploadProgress.isProcessing ? (
+                    {bulkOperations.intelligentUpload.progress.isProcessing ? (
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Procesando con IA... ({intelligentUploadProgress.currentIndex}/{intelligentUploadProgress.total})
+                        Procesando con IA... ({bulkOperations.intelligentUpload.progress.currentIndex}/{bulkOperations.intelligentUpload.progress.total})
                       </div>
                     ) : (
                       <>
@@ -2459,14 +3293,20 @@ export default function AdminPanel() {
                     variant="outline"
                     onClick={() => {
                       setIntelligentUploadedImages([]);
-                      setIntelligentUploadProgress({ 
-                        isProcessing: false, 
-                        currentIndex: 0, 
-                        total: 0, 
-                        results: { success: 0, failed: 0, errors: [] } 
-                      });
+                      setBulkOperations(prev => ({
+                        ...prev,
+                        intelligentUpload: {
+                          images: [],
+                          progress: { 
+                            isProcessing: false, 
+                            currentIndex: 0, 
+                            total: 0, 
+                            results: { success: 0, failed: 0, errors: [] } 
+                          }
+                        }
+                      }));
                     }}
-                    disabled={intelligentUploadProgress.isProcessing}
+                    disabled={bulkOperations.intelligentUpload.progress.isProcessing}
                     data-testid="button-clear-intelligent-uploads"
                   >
                     <X className="h-4 w-4 mr-2" />
@@ -2474,30 +3314,30 @@ export default function AdminPanel() {
                   </Button>
                 </div>
 
-                {intelligentUploadProgress.isProcessing && (
+                {bulkOperations.intelligentUpload.progress.isProcessing && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Progreso</span>
-                      <span>{Math.round((intelligentUploadProgress.currentIndex / intelligentUploadProgress.total) * 100)}%</span>
+                      <span>{Math.round((bulkOperations.intelligentUpload.progress.currentIndex / bulkOperations.intelligentUpload.progress.total) * 100)}%</span>
                     </div>
                     <Progress 
-                      value={(intelligentUploadProgress.currentIndex / intelligentUploadProgress.total) * 100} 
+                      value={(bulkOperations.intelligentUpload.progress.currentIndex / bulkOperations.intelligentUpload.progress.total) * 100} 
                       className="w-full"
                     />
                   </div>
                 )}
 
-                {intelligentUploadProgress.results.success > 0 && (
+                {bulkOperations.intelligentUpload.progress.results.success > 0 && (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center gap-2 text-green-800">
                       <Check className="h-5 w-5" />
                       <span className="font-semibold">
-                        ¡Proceso completado! {intelligentUploadProgress.results.success} productos creados exitosamente.
+                        ¡Proceso completado! {bulkOperations.intelligentUpload.progress.results.success} productos creados exitosamente.
                       </span>
                     </div>
-                    {intelligentUploadProgress.results.failed > 0 && (
+                    {bulkOperations.intelligentUpload.progress.results.failed > 0 && (
                       <div className="mt-2 text-red-600">
-                        {intelligentUploadProgress.results.failed} productos fallaron al crear.
+                        {bulkOperations.intelligentUpload.progress.results.failed} productos fallaron al crear.
                       </div>
                     )}
                   </div>
@@ -2571,7 +3411,7 @@ export default function AdminPanel() {
                 <Button
                   onClick={() => {
                     refetchMalformed();
-                    setMalformedUrlsDialogOpen(true);
+                    openModal("malformedUrls");
                   }}
                   disabled={isLoadingMalformed}
                   data-testid="button-detect-malformed-urls"
@@ -2614,7 +3454,7 @@ export default function AdminPanel() {
       </Tabs>
 
       {/* Dialog para mostrar URLs malformadas */}
-      <Dialog open={malformedUrlsDialogOpen} onOpenChange={setMalformedUrlsDialogOpen}>
+      <Dialog open={activeModal.type === "malformedUrls"} onOpenChange={(open) => open ? openModal("malformedUrls") : closeModal()}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -2659,7 +3499,7 @@ export default function AdminPanel() {
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={() => setMalformedUrlsDialogOpen(false)}
+                  onClick={() => closeModal()}
                   className="flex-1"
                 >
                   Cancelar
@@ -2704,12 +3544,12 @@ export default function AdminPanel() {
       </Dialog>
 
       {/* Diálogo de productos movido fuera de TabsContent para resolver problemas de z-index */}
-      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+      <Dialog open={activeModal.type === "product"} onOpenChange={(open) => open ? openModal("product") : closeModal()}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
           <DialogHeader>
-            <DialogTitle>{isEditMode ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
+            <DialogTitle>{editingItem.type === "product" ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
             <DialogDescription>
-              {isEditMode 
+              {editingItem.type === "product" 
                 ? "Modifica los detalles del producto que desees actualizar"
                 : "Completa todos los detalles del producto incluyendo imágenes, tallas y colores"
               }
@@ -2717,7 +3557,7 @@ export default function AdminPanel() {
           </DialogHeader>
           <Form {...productForm}>
             <form onSubmit={productForm.handleSubmit((data) => {
-              if (isEditMode) {
+              if (editingItem.type === "product") {
                 updateProductMutation.mutate(data);
               } else {
                 createProductMutation.mutate(data);
@@ -3135,15 +3975,15 @@ export default function AdminPanel() {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={isEditMode ? handleCancelEdit : () => setProductDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={editingItem.type === "product" ? handleCancelEdit : closeModal}>
                   Cancelar
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={isEditMode ? updateProductMutation.isPending : createProductMutation.isPending} 
+                  disabled={editingItem.type === "product" ? updateProductMutation.isPending : createProductMutation.isPending} 
                   data-testid="button-submit-product"
                 >
-                  {isEditMode 
+                  {editingItem.type === "product" 
                     ? (updateProductMutation.isPending ? "Actualizando..." : "Actualizar Producto")
                     : (createProductMutation.isPending ? "Creando..." : "Crear Producto")
                   }
@@ -3155,11 +3995,11 @@ export default function AdminPanel() {
       </Dialog>
 
       {/* Modal de zoom para imágenes de productos en admin */}
-      {imageZoomData && (
-        <Dialog open={imageZoomData.isOpen} onOpenChange={(open) => setImageZoomData(open ? imageZoomData : null)}>
+      {imageZoomDrawer && (
+        <Dialog open={imageZoomDrawer?.isOpen || false} onOpenChange={(open) => setImageZoomDrawer(open && imageZoomDrawer ? imageZoomDrawer : null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] p-2">
             <DialogHeader>
-              <DialogTitle>{imageZoomData.product.name}</DialogTitle>
+              <DialogTitle>{imageZoomDrawer?.product.name}</DialogTitle>
               <DialogDescription>
                 Imagen en detalle del producto - Panel Admin
               </DialogDescription>
@@ -3167,15 +4007,15 @@ export default function AdminPanel() {
             <div className="relative flex justify-center">
               <img 
                 src={(() => {
-                  let imageUrl = imageZoomData.product.imageUrl || imageZoomData.product.images?.[0];
+                  let imageUrl = imageZoomDrawer?.product.imageUrl || imageZoomDrawer?.product.images?.[0];
                   if (imageUrl && !imageUrl.startsWith('http')) {
                     imageUrl = `${window.location.origin}${imageUrl}`;
                   }
                   return imageUrl;
                 })()} 
-                alt={imageZoomData.product.name}
+                alt={imageZoomDrawer?.product.name || "Product image"}
                 className="max-w-full max-h-[70vh] object-contain rounded-lg"
-                data-testid={`img-admin-zoom-${imageZoomData.product.id}`}
+                data-testid={`img-admin-zoom-${imageZoomDrawer?.product.id}`}
               />
             </div>
           </DialogContent>
@@ -3183,7 +4023,7 @@ export default function AdminPanel() {
       )}
 
       {/* Modal de advertencia de productos duplicados */}
-      <Dialog open={duplicateWarningOpen} onOpenChange={(open) => {
+      <Dialog open={activeModal.type === "duplicateWarning"} onOpenChange={(open) => {
         if (!open) {
           handleCancelDuplicate();
         }
@@ -3283,7 +4123,7 @@ export default function AdminPanel() {
       </Dialog>
 
       {/* Modal de confirmación para eliminar marca */}
-      <Dialog open={deleteBrandDialogOpen} onOpenChange={setDeleteBrandDialogOpen}>
+      <Dialog open={activeModal.type === "deleteBrand"} onOpenChange={(open) => open ? openModal("deleteBrand") : closeModal()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -3356,6 +4196,375 @@ export default function AdminPanel() {
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para editar producto individual */}
+      <Dialog open={activeModal.type === "editProduct"} onOpenChange={(open) => open ? openModal("editProduct") : closeModal()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Editar Producto
+            </DialogTitle>
+            <DialogDescription>
+              Edita los detalles del producto. Los cambios se guardarán inmediatamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingProduct && (
+            <Form {...editProductForm}>
+              <form
+                onSubmit={editProductForm.handleSubmit((data) => {
+                  editProductMutation.mutate({
+                    id: editingProduct.id,
+                    productData: data,
+                  });
+                })}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editProductForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre del Producto</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nombre del producto" data-testid="input-edit-product-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editProductForm.control}
+                    name="reference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Referencia</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Referencia del producto" data-testid="input-edit-product-reference" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editProductForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Descripción</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Descripción del producto"
+                          className="min-h-[80px]"
+                          data-testid="textarea-edit-product-description"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editProductForm.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Precio</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0" 
+                            onChange={(e) => field.onChange(formatPrice(e.target.value))}
+                            data-testid="input-edit-product-price"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editProductForm.control}
+                    name="originalPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Precio Original (Opcional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0"
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(e.target.value ? formatPrice(e.target.value) : "")}
+                            data-testid="input-edit-product-original-price"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Product Info Display */}
+                <div className="p-4 bg-muted rounded-lg">
+                  <div className="flex items-start gap-3">
+                    {editingProduct.imageUrl && (
+                      <img
+                        src={editingProduct.imageUrl}
+                        alt={editingProduct.name}
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h4 className="font-medium">{editingProduct.name}</h4>
+                      <p className="text-sm text-muted-foreground">ID: {editingProduct.id}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Precio actual: {formatCurrency(editingProduct.price)} COP
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setActiveModal({ type: null });
+                      setEditingProduct(null);
+                      editProductForm.reset();
+                    }}
+                    className="flex-1"
+                    data-testid="button-cancel-edit-product"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={editProductMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-save-edit-product"
+                  >
+                    {editProductMutation.isPending ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Guardando...
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Guardar Cambios
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para confirmar fusión de productos */}
+      <Dialog open={activeModal.type === "mergeConfirm"} onOpenChange={(open) => open ? openModal("mergeConfirm") : closeModal()}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Merge className="h-5 w-5" />
+              Confirmar Fusión de Productos
+            </DialogTitle>
+            <DialogDescription>
+              Esta acción fusionará los productos duplicados en uno solo. Esta operación no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+
+          {mergeData && activeModal.data?.products && (
+            <div className="space-y-4">
+              {/* Estrategia de fusión */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Estrategia de Fusión</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        value="keep_primary"
+                        checked={mergeData.strategy === "keep_primary"}
+                        onChange={() => setMergeData(prev => prev ? { ...prev, strategy: "keep_primary" } : null)}
+                        data-testid="radio-merge-keep-primary"
+                      />
+                      <div>
+                        <div className="font-medium">Mantener Primario</div>
+                        <div className="text-sm text-muted-foreground">
+                          Conservar solo la información del producto primario y eliminar los duplicados
+                        </div>
+                      </div>
+                    </label>
+                    
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        value="merge_data"
+                        checked={mergeData.strategy === "merge_data"}
+                        onChange={() => setMergeData(prev => prev ? { ...prev, strategy: "merge_data" } : null)}
+                        data-testid="radio-merge-combine-data"
+                      />
+                      <div>
+                        <div className="font-medium">Combinar Datos</div>
+                        <div className="text-sm text-muted-foreground">
+                          Fusionar información de todos los productos (imágenes, tallas, colores, etc.)
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Producto primario */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-500" />
+                    Producto Primario (se mantendrá)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const primary = activeModal.data.products.find((p: Product) => p.id === mergeData.primaryId);
+                    if (!primary) return null;
+                    
+                    return (
+                      <div className="flex items-start gap-3 p-3 border rounded-lg bg-green-50">
+                        {primary.imageUrl && (
+                          <img
+                            src={primary.imageUrl}
+                            alt={primary.name}
+                            className="w-16 h-16 object-cover rounded border"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-medium">{primary.name}</h4>
+                          <div className="grid grid-cols-2 gap-2 mt-1 text-sm text-muted-foreground">
+                            <span>Ref: {primary.reference || "N/A"}</span>
+                            <span>Precio: {formatCurrency(primary.price)} COP</span>
+                          </div>
+                          {primary.description && (
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                              {primary.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Productos a fusionar */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <UserX className="h-4 w-4 text-red-500" />
+                    Productos que se fusionarán ({mergeData.duplicateIds.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {mergeData.duplicateIds.map(id => {
+                      const product = activeModal.data.products.find((p: Product) => p.id === id);
+                      if (!product) return null;
+                      
+                      return (
+                        <div key={id} className="flex items-start gap-3 p-3 border rounded-lg bg-red-50">
+                          {product.imageUrl && (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-12 h-12 object-cover rounded border"
+                            />
+                          )}
+                          <div className="flex-1">
+                            <h5 className="text-sm font-medium">{product.name}</h5>
+                            <div className="text-xs text-muted-foreground">
+                              Ref: {product.reference || "N/A"} | Precio: {formatCurrency(product.price)} COP
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Información del grupo */}
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="flex items-center gap-2 text-amber-800">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="font-medium">Información del Grupo</span>
+                </div>
+                <div className="text-sm text-amber-700 mt-1">
+                  Grupo: <span className="font-mono">{mergeData.groupKey}</span> | 
+                  Total productos: {activeModal.data.products.length} | 
+                  Se eliminarán: {mergeData.duplicateIds.length} productos
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setActiveModal({ type: null });
+                    setMergeData(null);
+                  }}
+                  className="flex-1"
+                  data-testid="button-cancel-merge"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (mergeData) {
+                      mergeProductsMutation.mutate({
+                        groupKey: mergeData.groupKey,
+                        mergeData: {
+                          primaryId: mergeData.primaryId,
+                          duplicateIds: mergeData.duplicateIds,
+                          strategy: mergeData.strategy,
+                        },
+                      });
+                    }
+                  }}
+                  disabled={mergeProductsMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-confirm-merge"
+                >
+                  {mergeProductsMutation.isPending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Fusionando...
+                    </div>
+                  ) : (
+                    <>
+                      <Merge className="w-4 h-4 mr-2" />
+                      Confirmar Fusión
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
