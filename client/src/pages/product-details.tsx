@@ -254,7 +254,6 @@ export default function ProductDetails() {
             size="sm"
             variant="outline"
             className="flex-1 max-w-40"
-            disabled={(product.stock || 0) === 0}
             onClick={() => {
               addItem(product);
               toast({
@@ -265,7 +264,7 @@ export default function ProductDetails() {
             data-testid="button-add-to-cart"
           >
             <ShoppingCart className="w-4 h-4 mr-2" />
-            {(product.stock || 0) === 0 ? 'Sin Stock' : 'Al Carrito'}
+            Al Carrito
           </Button>
         </div>
       </div>
