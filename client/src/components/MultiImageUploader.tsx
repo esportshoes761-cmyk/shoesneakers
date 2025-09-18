@@ -12,6 +12,9 @@ interface UploadedImage {
   isUploading?: boolean;
   error?: string;
   isDuplicate?: boolean;
+  retryAttempt?: number; // Número de intento actual (0 = primer intento)
+  maxRetries?: number; // Máximo de reintentos permitidos
+  lastErrorType?: 'permission' | 'network' | 'server' | 'validation' | 'unknown'; // Tipo de error
   duplicateInfo?: {
     type: 'hash' | 'name_and_size' | 'name_only';
     reason: string;
@@ -127,8 +130,21 @@ export function MultiImageUploader({
     }
   };
 
-  // Función para subir una imagen individual
-  const uploadSingleImage = async (file: File): Promise<string> => {
+  // Función para validar que el archivo aún sea accesible
+  const validateFileReference = async (file: File): Promise<boolean> => {
+    try {
+      // Intentar leer una pequeña parte del archivo para verificar accesibilidad
+      const slice = file.slice(0, 1024); // Primeros 1KB
+      await slice.arrayBuffer();
+      return true;
+    } catch (error) {
+      console.warn(`⚠️ File reference invalid for ${file.name}:`, error);
+      return false;
+    }
+  };
+
+  // Función para subir una imagen individual con retry logic
+  const uploadSingleImage = async (file: File, retryCount = 0): Promise<string> => {
     let processedFile = file;
 
     // Detectar y convertir HEIC
@@ -138,6 +154,12 @@ export function MultiImageUploader({
     
     if (isHeic) {
       processedFile = await convertHeicToJpeg(file);
+    }
+
+    // Validar file reference antes de procesar
+    const isFileValid = await validateFileReference(processedFile);
+    if (!isFileValid) {
+      throw new Error('Archivo no accesible - referencia inválida');
     }
 
     // Validar tipo de imagen
@@ -307,6 +329,9 @@ export function MultiImageUploader({
       fileName: dr.file.name,
       isUploading: !dr.result.isExactDuplicate, // No subir duplicados exactos
       isDuplicate: dr.result.isDuplicate,
+      retryAttempt: 0,
+      maxRetries: 3,
+      lastErrorType: undefined,
       duplicateInfo: dr.result.isDuplicate ? {
         type: dr.result.isExactDuplicate ? 'hash' as const : 
               dr.result.isLikelyDuplicate ? 'name_and_size' as const : 'name_only' as const,
@@ -324,82 +349,183 @@ export function MultiImageUploader({
     const newImageUrls: string[] = [];
 
     if (filesToUpload.length > 0) {
-      // Subir imágenes en paralelo (máximo 3 simultáneas)
-      const uploadPromises = filesToUpload.map(async (dr) => {
-        try {
-          const imageUrl = await uploadSingleImage(dr.file);
-          newImageUrls.push(imageUrl);
+      // 🚀 NUEVA LÓGICA SECUENCIAL CON RETRY
+      // Subir imágenes de forma secuencial para evitar invalidación de file references
+      
+      const maxRetries = 3;
+      const retryDelay = 1000; // 1 segundo entre reintentos
+      const failedUploads: Array<{ dr: any, attempts: number, lastError?: string }> = [];
+      
+      // Función auxiliar para esperar
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      
+      // PASO 1: Subir archivos secuencialmente
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const dr = filesToUpload[i];
+        let uploadSuccess = false;
+        let lastError: string = '';
+        
+        // Intentar subir con retry logic
+        for (let attempt = 0; attempt < maxRetries && !uploadSuccess; attempt++) {
+          try {
+            console.log(`📤 Subiendo ${dr.file.name} (${i + 1}/${filesToUpload.length}) - Intento ${attempt + 1}/${maxRetries}`);
+            
+            // Actualizar UI para mostrar intento actual
+            setImages(prev => prev.map(img => 
+              img.id === tempImages[dr.index].id 
+                ? { ...img, retryAttempt: attempt, isUploading: true, error: undefined }
+                : img
+            ));
+            
+            // Validar file reference antes del intento
+            const isValid = await validateFileReference(dr.file);
+            if (!isValid && attempt === 0) {
+              throw new Error('Archivo no accesible desde el inicio');
+            } else if (!isValid) {
+              console.warn(`⚠️ File reference perdida para ${dr.file.name} en intento ${attempt + 1}, esperando...`);
+              await delay(retryDelay * attempt); // Delay progresivo
+              continue;
+            }
+            
+            const imageUrl = await uploadSingleImage(dr.file, attempt);
+            newImageUrls.push(imageUrl);
+            
+            // Actualizar el estado de la imagen como exitosa
+            setImages(prev => prev.map(img => 
+              img.id === tempImages[dr.index].id 
+                ? { ...img, url: imageUrl, isUploading: false, error: undefined, retryAttempt: 0 }
+                : img
+            ));
+            
+            uploadSuccess = true;
+            
+            // Log de éxito
+            const duplicateStatus = dr.result.isDuplicate ? 
+              (dr.result.isLikelyDuplicate ? ' (⚠️ posible duplicado)' : ' (⚠️ nombre duplicado)') : 
+              '';
+            console.log(`✅ Imagen subida exitosamente: ${dr.file.name}${duplicateStatus} (intento ${attempt + 1})`);
+            
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            lastError = errorMsg;
+            
+            // Categorizar tipo de error
+            let errorType: 'permission' | 'network' | 'server' | 'validation' | 'unknown' = 'unknown';
+            if (errorMsg.includes('permission') || errorMsg.includes('could not be read')) {
+              errorType = 'permission';
+            } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+              errorType = 'network';
+            } else if (errorMsg.includes('server') || errorMsg.includes('HTTP')) {
+              errorType = 'server';
+            } else if (errorMsg.includes('validation') || errorMsg.includes('invalid')) {
+              errorType = 'validation';
+            }
+            
+            // Actualizar UI con error temporal si no es el último intento
+            if (attempt < maxRetries - 1) {
+              setImages(prev => prev.map(img => 
+                img.id === tempImages[dr.index].id 
+                  ? { ...img, retryAttempt: attempt + 1, lastErrorType: errorType, isUploading: false }
+                  : img
+              ));
+            }
+            
+            console.warn(`⚠️ Intento ${attempt + 1} falló para ${dr.file.name}: ${errorMsg}`);
+            
+            // Si no es el último intento, esperar antes del siguiente
+            if (attempt < maxRetries - 1) {
+              await delay(retryDelay * (attempt + 1)); // Delay progresivo
+            }
+          }
+        }
+        
+        // Si falló todos los intentos, marcar como error
+        if (!uploadSuccess) {
+          failedUploads.push({ dr, attempts: maxRetries, lastError });
           
-          // Actualizar el estado de la imagen
+          // Categorizar tipo de error final
+          let finalErrorType: 'permission' | 'network' | 'server' | 'validation' | 'unknown' = 'unknown';
+          if (lastError.includes('permission') || lastError.includes('could not be read')) {
+            finalErrorType = 'permission';
+          } else if (lastError.includes('network') || lastError.includes('fetch')) {
+            finalErrorType = 'network';
+          } else if (lastError.includes('server') || lastError.includes('HTTP')) {
+            finalErrorType = 'server';
+          } else if (lastError.includes('validation') || lastError.includes('invalid')) {
+            finalErrorType = 'validation';
+          }
+          
           setImages(prev => prev.map(img => 
             img.id === tempImages[dr.index].id 
-              ? { ...img, url: imageUrl, isUploading: false }
-              : img
-          ));
-
-          completedUploads++;
-          setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70); // 70% restante del progreso
-
-          // 🔔 Notificación específica por cada imagen subida
-          const duplicateStatus = dr.result.isDuplicate ? 
-            (dr.result.isLikelyDuplicate ? ' (⚠️ posible duplicado)' : ' (⚠️ nombre duplicado)') : 
-            '';
-          console.log(`✅ Imagen cargada correctamente para producto: ${dr.file.name}${duplicateStatus}`);
-
-          return imageUrl;
-        } catch (error) {
-          // Marcar como error
-          setImages(prev => prev.map(img => 
-            img.id === tempImages[dr.index].id 
-              ? { ...img, error: error instanceof Error ? error.message : 'Error desconocido', isUploading: false }
+              ? { 
+                  ...img, 
+                  error: `Error después de ${maxRetries} intentos: ${lastError}`, 
+                  isUploading: false,
+                  retryAttempt: maxRetries,
+                  lastErrorType: finalErrorType
+                }
               : img
           ));
           
-          completedUploads++;
-          setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70);
-          
-          // Log detallado del error para debugging
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error(`❌ Error uploading ${dr.file.name}:`, {
-            error: errorMsg,
+          console.error(`❌ FALLO DEFINITIVO para ${dr.file.name} después de ${maxRetries} intentos:`, {
+            error: lastError,
             fileName: dr.file.name,
             fileSize: dr.file.size,
             fileType: dr.file.type,
             wasDuplicate: dr.result.isDuplicate
           });
-          return null;
         }
-      });
-
-      try {
-        await Promise.all(uploadPromises);
         
-        const successfulUploads = newImageUrls.filter(Boolean);
-        const skippedDuplicates = exactDuplicates.length;
+        // Actualizar progreso
+        completedUploads++;
+        setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70);
         
-        // Notificación final
-        if (successfulUploads.length > 0 || skippedDuplicates > 0) {
-          toast({
-            title: "🎯 Proceso Completado",
-            description: `✅ ${successfulUploads.length} subidas • ⚠️ ${skippedDuplicates} duplicados saltados • ${likelyDuplicates.length} con advertencias`,
-            duration: 6000,
-          });
+        // Pequeña pausa entre archivos para evitar saturar el browser
+        if (i < filesToUpload.length - 1) {
+          await delay(100); // 100ms entre archivos
         }
-
-        // Notificar cambios
-        const allUrls = images
-          .filter(img => img.url && !img.error)
-          .map(img => img.url)
-          .concat(successfulUploads);
-        onImagesChange(allUrls);
-
-      } catch (error) {
+      }
+        
+      // PASO 2: Mostrar resultados finales
+      const successfulUploads = newImageUrls.filter(Boolean);
+      const skippedDuplicates = exactDuplicates.length;
+      
+      // Mostrar notificación final detallada
+      if (successfulUploads.length > 0 || skippedDuplicates > 0 || failedUploads.length > 0) {
+        const title = failedUploads.length === 0 ? "🎯 Proceso Completado" : "⚠️ Proceso Completado con Errores";
+        
+        let description = `✅ ${successfulUploads.length} exitosas`;
+        if (skippedDuplicates > 0) description += ` • 🔄 ${skippedDuplicates} duplicados saltados`;
+        if (likelyDuplicates.length > 0) description += ` • ⚠️ ${likelyDuplicates.length} con advertencias`;
+        if (failedUploads.length > 0) description += ` • ❌ ${failedUploads.length} fallaron`;
+        
         toast({
-          title: "Error en la subida",
-          description: "Algunas imágenes no se pudieron subir",
-          variant: "destructive",
+          title,
+          description,
+          duration: 8000,
+          variant: failedUploads.length > 0 ? "destructive" : "default"
         });
       }
+      
+      // Log resumen para debugging
+      console.log('📊 RESUMEN DE SUBIDA:', {
+        exitosas: successfulUploads.length,
+        duplicadosSaltados: skippedDuplicates,
+        conAdvertencias: likelyDuplicates.length,
+        fallidas: failedUploads.length,
+        detallesFallas: failedUploads.map(f => ({ 
+          archivo: f.dr.file.name, 
+          intentos: f.attempts, 
+          ultimoError: f.lastError 
+        }))
+      });
+      
+      // Notificar cambios - solo URLs exitosas
+      const allUrls = images
+        .filter(img => img.url && !img.error)
+        .map(img => img.url)
+        .concat(successfulUploads);
+      onImagesChange(allUrls);
     } else {
       // Todas las imágenes son duplicados exactos
       toast({
@@ -524,6 +650,11 @@ export function MultiImageUploader({
               <span className="flex items-center gap-1">
                 <Loader2 className="h-3 w-3 text-blue-500" />
                 Cargando: <strong className="text-blue-600">{images.filter(img => img.isUploading).length}</strong>
+                {images.some(img => img.retryAttempt && img.retryAttempt > 0) && (
+                  <span className="text-xs text-orange-600 ml-1">
+                    ({images.filter(img => img.retryAttempt && img.retryAttempt > 0).length} reintentando)
+                  </span>
+                )}
               </span>
               <span className="flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 text-red-500" />
@@ -571,6 +702,34 @@ export function MultiImageUploader({
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                 💡 Pasa el cursor sobre las imágenes con borde de color para ver detalles del duplicado
+              </p>
+            </div>
+          )}
+          
+          {/* Sección de errores detallada */}
+          {images.some(img => img.error) && (
+            <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
+              <p className="text-xs font-medium text-red-600 dark:text-red-300 mb-2">🚨 Errores Detallados:</p>
+              <div className="max-h-24 overflow-y-auto space-y-1">
+                {images.filter(img => img.error).map((img, index) => (
+                  <div key={img.id} className="text-xs bg-red-50 dark:bg-red-900/20 p-2 rounded flex items-start gap-2">
+                    <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-red-700 dark:text-red-300 truncate">{img.fileName}</p>
+                      <p className="text-red-600 dark:text-red-400 break-words text-xs leading-tight">
+                        {img.error}
+                      </p>
+                      {img.retryAttempt && img.retryAttempt > 0 && (
+                        <p className="text-orange-600 dark:text-orange-400 text-xs mt-1">
+                          💢 Falló después de {img.retryAttempt} intento(s)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                💡 Los errores de "permission problems" se resuelven automáticamente con el procesamiento secuencial
               </p>
             </div>
           )}
@@ -630,13 +789,36 @@ export function MultiImageUploader({
                 {image.isUploading ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 dark:bg-gray-800/90 p-2">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
-                    <p className="text-xs text-blue-600 text-center font-medium">Subiendo...</p>
+                    <p className="text-xs text-blue-600 text-center font-medium">
+                      {image.retryAttempt && image.retryAttempt > 0 ? 
+                        `Reintentando (${image.retryAttempt}/${image.maxRetries || 3})` : 
+                        'Subiendo...'}
+                    </p>
+                    {image.retryAttempt && image.retryAttempt > 0 && (
+                      <p className="text-xs text-orange-600 text-center mt-1">
+                        🔄 Procesamiento secuencial
+                      </p>
+                    )}
                   </div>
                 ) : image.error ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/95 dark:bg-red-900/40 p-2">
                     <AlertTriangle className="h-6 w-6 text-red-500 mb-2" />
-                    <p className="text-xs text-red-600 text-center font-medium">Error</p>
-                    <p className="text-xs text-red-500 text-center">{image.error}</p>
+                    <p className="text-xs text-red-600 text-center font-medium">
+                      {image.retryAttempt && image.retryAttempt > 0 ? 
+                        `Error (${image.retryAttempt}/${image.maxRetries || 3} intentos)` : 
+                        'Error'}
+                    </p>
+                    <p className="text-xs text-red-500 text-center line-clamp-3 max-w-full break-words">
+                      {image.error}
+                    </p>
+                    {image.lastErrorType && (
+                      <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-800/50 rounded text-xs">
+                        {image.lastErrorType === 'permission' ? '🔒 Permisos' :
+                         image.lastErrorType === 'network' ? '🌐 Red' :
+                         image.lastErrorType === 'server' ? '🖥️ Servidor' :
+                         image.lastErrorType === 'validation' ? '✓ Validación' : '❓ Desconocido'}
+                      </div>
+                    )}
                   </div>
                 ) : image.isDuplicate && image.duplicateInfo ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
