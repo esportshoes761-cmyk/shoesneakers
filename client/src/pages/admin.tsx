@@ -2150,7 +2150,7 @@ export default function AdminPanel() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedBrandId(brand.id);
-                          setActiveModal('brandProducts');
+                          openModal('brandProducts');
                         }}
                         data-testid={`button-view-brand-products-${brand.id}`}
                       >
@@ -2335,8 +2335,8 @@ export default function AdminPanel() {
                     price: product.price,
                     originalPrice: product.originalPrice,
                     reference: product.reference,
-                    sizes: product.sizes,
-                    colors: product.colors,
+                    sizes: product.sizes || [],
+                    colors: product.colors || [],
                   });
                   setActiveModal({ type: "editProduct", data: product });
                 }}
@@ -4268,6 +4268,7 @@ export default function AdminPanel() {
                       <FormControl>
                         <Textarea 
                           {...field} 
+                          value={field.value || ""}
                           placeholder="Descripción del producto"
                           className="min-h-[80px]"
                           data-testid="textarea-edit-product-description"
