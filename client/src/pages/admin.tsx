@@ -12,19 +12,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBrandSchema } from "@shared/schema";
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { MultiImageUploader } from "@/components/MultiImageUploader";
+import { IntelligentUploader } from "@/components/IntelligentUploader";
 import { formatCurrency } from "@/lib/currency";
 import { getBrandLogoType } from "@/lib/brand-utils";
 import AdminOrders from "@/components/admin-orders";
@@ -131,6 +133,16 @@ export default function AdminPanel() {
     total: number;
     results: { success: number; failed: number; errors: string[] };
   }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
+
+  // Intelligent upload states
+  const [intelligentDetections, setIntelligentDetections] = useState<any[]>([]);
+  const [intelligentUploadProgress, setIntelligentUploadProgress] = useState<{
+    isProcessing: boolean;
+    currentIndex: number;
+    total: number;
+    results: { success: number; failed: number; errors: string[] };
+  }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
+  const [intelligentConfirmationOpen, setIntelligentConfirmationOpen] = useState(false);
 
   // Forms initialization after all states
   const productForm = useForm<ProductFormData>({
@@ -589,6 +601,33 @@ export default function AdminPanel() {
     }
   };
 
+  // Intelligent upload handlers
+  const handleIntelligentDetectionComplete = (detections: any[]) => {
+    setIntelligentDetections(detections);
+    console.log("🔍 Detecciones completadas:", detections);
+  };
+
+  const handleStartIntelligentUpload = () => {
+    if (intelligentDetections.length === 0) {
+      toast({
+        title: "Sin imágenes",
+        description: "No hay imágenes detectadas para procesar",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Start the intelligent upload process
+    setIntelligentUploadProgress({
+      isProcessing: true,
+      currentIndex: 0,
+      total: intelligentDetections.length,
+      results: { success: 0, failed: 0, errors: [] }
+    });
+
+    intelligentUploadMutation.mutate(intelligentDetections);
+  };
+
   const updateProductMutation = useMutation({
     mutationFn: (data: ProductFormData) => {
       if (!editingProduct) throw new Error("No hay producto para editar");
@@ -762,6 +801,55 @@ export default function AdminPanel() {
     },
   });
 
+  // Intelligent upload mutation
+  const intelligentUploadMutation = useMutation({
+    mutationFn: async (detections: any[]) => {
+      return apiRequest("POST", "/api/products/intelligent-upload", { detections });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
+      
+      setIntelligentUploadProgress(prev => ({
+        ...prev,
+        isProcessing: false,
+        results: data.results || { success: 0, failed: 0, errors: [] }
+      }));
+      
+      toast({ 
+        title: "¡Proceso completado!", 
+        description: `${data.results?.success || 0} productos creados exitosamente mediante detección inteligente` 
+      });
+      
+      // Clear detections after successful upload
+      setTimeout(() => {
+        setIntelligentDetections([]);
+        setIntelligentUploadProgress({ 
+          isProcessing: false, 
+          currentIndex: 0, 
+          total: 0, 
+          results: { success: 0, failed: 0, errors: [] } 
+        });
+      }, 3000);
+    },
+    onError: async (error: any) => {
+      console.error("Error en carga inteligente:", error);
+      
+      const { title, description } = await parseApiError(error, "Error en la carga inteligente");
+      
+      setIntelligentUploadProgress(prev => ({
+        ...prev,
+        isProcessing: false
+      }));
+      
+      toast({ 
+        title, 
+        description, 
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Función para sugerir categoría y marca basado en el nombre del producto
   const getSuggestions = (productName: string) => {
     const name = productName.toLowerCase();
@@ -875,7 +963,7 @@ export default function AdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-6 h-auto">
+        <TabsList className="grid w-full grid-cols-7 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Productos</span>
@@ -899,6 +987,10 @@ export default function AdminPanel() {
           <TabsTrigger value="brand-packages" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-brand-packages">
             <Layers className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Paquetes</span>
+          </TabsTrigger>
+          <TabsTrigger value="intelligent-upload" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-intelligent-upload">
+            <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Carga Inteligente</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2223,6 +2315,162 @@ export default function AdminPanel() {
                   <div>
                     <strong>Proceso rápido:</strong> Todos los productos se crean simultáneamente para máxima eficiencia.
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Panel de Carga Inteligente */}
+        <TabsContent value="intelligent-upload" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-semibold flex items-center gap-2">
+                <Sparkles className="h-6 w-6 text-purple-600" />
+                Carga Inteligente de Productos
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Sube imágenes de múltiples marcas y el sistema las organizará automáticamente
+              </p>
+            </div>
+          </div>
+
+          <IntelligentUploader
+            onDetectionComplete={handleIntelligentDetectionComplete}
+            maxImages={50}
+          />
+
+          {intelligentDetections.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Confirmación de Creación Masiva</CardTitle>
+                <CardDescription>
+                  Revisa las detecciones antes de crear los productos automáticamente
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {intelligentDetections.length}
+                    </div>
+                    <div className="text-sm text-blue-800">Imágenes totales</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {intelligentDetections.filter(d => d.detectedBrand).length}
+                    </div>
+                    <div className="text-sm text-green-800">Marcas detectadas</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {intelligentDetections.filter(d => !d.detectedBrand).length}
+                    </div>
+                    <div className="text-sm text-orange-800">Sin marca detectada</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button 
+                    onClick={handleStartIntelligentUpload}
+                    disabled={intelligentUploadProgress.isProcessing || intelligentDetections.length === 0}
+                    className="flex-1"
+                    data-testid="button-start-intelligent-upload"
+                  >
+                    {intelligentUploadProgress.isProcessing ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Creando productos... ({intelligentUploadProgress.currentIndex}/{intelligentUploadProgress.total})
+                      </div>
+                    ) : (
+                      <>
+                        <Package className="h-4 w-4 mr-2" />
+                        Crear {intelligentDetections.length} Productos Automáticamente
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIntelligentDetections([]);
+                      setIntelligentUploadProgress({ 
+                        isProcessing: false, 
+                        currentIndex: 0, 
+                        total: 0, 
+                        results: { success: 0, failed: 0, errors: [] } 
+                      });
+                    }}
+                    disabled={intelligentUploadProgress.isProcessing}
+                    data-testid="button-clear-intelligent-detections"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpiar
+                  </Button>
+                </div>
+
+                {intelligentUploadProgress.isProcessing && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Progreso</span>
+                      <span>{Math.round((intelligentUploadProgress.currentIndex / intelligentUploadProgress.total) * 100)}%</span>
+                    </div>
+                    <Progress 
+                      value={(intelligentUploadProgress.currentIndex / intelligentUploadProgress.total) * 100} 
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                {intelligentUploadProgress.results.success > 0 && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800">
+                      <Check className="h-5 w-5" />
+                      <span className="font-semibold">
+                        ¡Proceso completado! {intelligentUploadProgress.results.success} productos creados exitosamente.
+                      </span>
+                    </div>
+                    {intelligentUploadProgress.results.failed > 0 && (
+                      <div className="mt-2 text-red-600">
+                        {intelligentUploadProgress.results.failed} productos fallaron al crear.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Usage Guide */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-yellow-600" />
+                Guía de Uso
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Nombres de archivo:</strong> Usa nombres descriptivos con la marca incluida (ej: "nike_air_max.jpg", "adidas_ultraboost.jpg")
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Detección automática:</strong> El sistema reconoce más de 20 marcas populares incluyendo Nike, Adidas, Jordan, Puma, etc.
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Productos automáticos:</strong> Cada imagen se convierte en un producto con el nombre de la marca detectada y referencia única.
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Categoría requerida:</strong> Selecciona una categoría por defecto antes de iniciar la creación masiva.
                 </div>
               </div>
             </CardContent>

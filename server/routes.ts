@@ -43,6 +43,45 @@ async function generateUniqueReferenceForProduct(): Promise<string> {
   throw new Error('No se pudo generar una referencia única después de múltiples intentos');
 }
 
+// 🤖 INTELLIGENT BRAND DETECTION: Advanced algorithm for brand recognition from filenames
+function detectBrandFromFilename(filename: string): { brandName: string | null; confidence: number } {
+  const normalizedName = filename.toLowerCase().replace(/[^a-z0-9]/g, ' ');
+  
+  // Comprehensive brand mapping with variations and confidence scoring
+  const brandMappings = [
+    { keywords: ['nike', 'air', 'jordan', 'airmax', 'airforce'], brand: 'Nike', confidence: 0.95 },
+    { keywords: ['adidas', 'ultraboost', 'gazelle', 'stan smith', 'originals'], brand: 'Adidas', confidence: 0.95 },
+    { keywords: ['jordan', 'retro', 'jumpman'], brand: 'Jordan Air', confidence: 0.90 },
+    { keywords: ['puma', 'suede', 'speed', 'rs'], brand: 'Puma', confidence: 0.90 },
+    { keywords: ['converse', 'chuck', 'allstar', 'all star'], brand: 'Converse', confidence: 0.90 },
+    { keywords: ['vans', 'authentic', 'old skool', 'oldskool'], brand: 'Vans', confidence: 0.90 },
+    { keywords: ['newbalance', 'new balance', 'nb'], brand: 'New Balance', confidence: 0.85 },
+    { keywords: ['reebok', 'classic', 'instapump'], brand: 'Reebok', confidence: 0.85 },
+    { keywords: ['fila', 'disruptor'], brand: 'Fila', confidence: 0.80 },
+    { keywords: ['underarmour', 'under armour', 'ua'], brand: 'Under Armour', confidence: 0.80 },
+    { keywords: ['asics', 'gel', 'tiger'], brand: 'Asics', confidence: 0.80 },
+    { keywords: ['skechers', 'shape ups'], brand: 'Skechers', confidence: 0.75 },
+    { keywords: ['timberland', 'timber'], brand: 'Timberland', confidence: 0.75 },
+    { keywords: ['balenciaga', 'triple s'], brand: 'Balenciaga', confidence: 0.85 },
+    { keywords: ['gucci', 'ace'], brand: 'Gucci', confidence: 0.85 }
+  ];
+  
+  let bestMatch: { brandName: string | null; confidence: number } = { brandName: null, confidence: 0 };
+  
+  for (const mapping of brandMappings) {
+    for (const keyword of mapping.keywords) {
+      if (normalizedName.includes(keyword)) {
+        if (mapping.confidence > bestMatch.confidence) {
+          bestMatch = { brandName: mapping.brand, confidence: mapping.confidence };
+        }
+      }
+    }
+  }
+  
+  console.log(`🔍 Brand detection for "${filename}": ${bestMatch.brandName || 'No match'} (confidence: ${bestMatch.confidence})`);
+  return bestMatch;
+}
+
 // 🔒 SECURE: Session-based admin authorization middleware
 async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   try {
@@ -479,6 +518,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error creating bulk products:", error);
       res.status(500).json({ message: "Error al crear paquete de productos" });
+    }
+  });
+
+  // 🤖 INTELLIGENT UPLOAD: AI-powered brand detection and automatic product creation
+  app.post("/api/products/intelligent-upload", requireAdminAuthHeaders, async (req, res) => {
+    try {
+      const { detections } = req.body;
+      
+      if (!detections || !Array.isArray(detections)) {
+        return res.status(400).json({ message: "Se requiere un array de detecciones" });
+      }
+      
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+      const createdProducts = [];
+      
+      // Auto-generated defaults for intelligent upload
+      const DEFAULT_PRICE = "85000"; // $85,000 COP - competitive pricing
+      const DEFAULT_CATEGORY_ID = "C3D950FF197A9F23FE76B2351508D4D7"; // Fallback to "Deportivos"
+      
+      // Get all brands to match detected brand names
+      const allBrands = await storage.getBrands();
+      const brandMap = new Map(allBrands.map(b => [b.name.toLowerCase(), b]));
+      
+      console.log("🤖 Processing intelligent upload with", detections.length, "detections");
+      
+      for (let i = 0; i < detections.length; i++) {
+        const detection = detections[i];
+        try {
+          const { fileName, url, detectedBrand } = detection;
+          
+          // Re-detect brand from filename using our algorithm
+          const brandDetection = detectBrandFromFilename(fileName);
+          let brandId = DEFAULT_CATEGORY_ID; // Default fallback
+          let productName = "Zapato Deportivo"; // Default name
+          
+          if (brandDetection.brandName && brandDetection.confidence > 0.7) {
+            // Find matching brand in database
+            const matchingBrand = brandMap.get(brandDetection.brandName.toLowerCase());
+            if (matchingBrand) {
+              brandId = matchingBrand.id;
+              productName = matchingBrand.name; // Product name = Brand name as requested
+              console.log(`✅ Brand matched: ${fileName} → ${matchingBrand.name} (confidence: ${brandDetection.confidence})`);
+            } else {
+              console.log(`❌ Brand detected but not found in database: ${brandDetection.brandName} for ${fileName}`);
+            }
+          } else {
+            console.log(`⚠️  No confident brand detection for ${fileName} (confidence: ${brandDetection.confidence})`);
+          }
+          
+          // Generate unique reference for this product
+          const reference = await generateUniqueReferenceForProduct();
+          
+          // Generate auto-description based on brand
+          const autoDescription = brandDetection.brandName 
+            ? `Producto ${brandDetection.brandName} de alta calidad con diseño moderno y máximo confort.`
+            : "Producto deportivo de calidad premium con estilo único y comodidad excepcional.";
+          
+          const productData = {
+            name: productName, // Brand name as requested
+            nameNormalized: productName.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(),
+            description: autoDescription,
+            price: DEFAULT_PRICE,
+            imageUrl: url,
+            reference: reference,
+            categoryId: DEFAULT_CATEGORY_ID, // Always use default category for intelligent upload
+            brandId: brandId,
+            isFlashSale: false,
+            isFeatured: true, // Always featured for maximum visibility
+            images: [url], // Single image per product
+            sizes: ["38", "39", "40", "41", "42", "43"], // Standard size range
+            colors: [],
+          };
+          
+          const product = await storage.createProduct(productData);
+          createdProducts.push(product);
+          results.success++;
+          
+          console.log(`🚀 Product created: ${product.name} (${product.reference}) from ${fileName}`);
+          
+        } catch (error) {
+          results.failed++;
+          const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+          results.errors.push(`${detection.fileName}: ${errorMessage}`);
+          console.error(`❌ Error processing ${detection.fileName}:`, error);
+        }
+      }
+      
+      console.log(`🎯 Intelligent upload completed: ${results.success} success, ${results.failed} failed`);
+      
+      res.status(201).json({
+        message: `Procesamiento inteligente completado: ${results.success} productos creados`,
+        results,
+        products: createdProducts
+      });
+      
+    } catch (error) {
+      console.error("💥 Error in intelligent upload:", error);
+      res.status(500).json({ 
+        message: "Error en la carga inteligente", 
+        error: error instanceof Error ? error.message : "Error desconocido" 
+      });
     }
   });
 

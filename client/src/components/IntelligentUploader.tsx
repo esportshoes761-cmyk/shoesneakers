@@ -1,0 +1,481 @@
+import { useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Upload, X, FileImage, AlertTriangle, Check, Loader2, Package, Sparkles, Eye, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
+import { useQuery } from "@tanstack/react-query";
+import type { Brand, Category } from "@shared/schema";
+import CryptoJS from 'crypto-js';
+
+// Brand detection mappings - comprehensive list
+const BRAND_MAPPINGS = {
+  // Nike variants
+  'nike': 'Nike',
+  'niike': 'Nike', 
+  'nke': 'Nike',
+  'swoosh': 'Nike',
+  'air': 'Nike',
+  'jordan': 'Jordan Air',
+  'aj': 'Jordan Air',
+  'airjordan': 'Jordan Air',
+  
+  // Adidas variants
+  'adidas': 'Adidas',
+  'addidas': 'Adidas',
+  'adi': 'Adidas',
+  'trefoil': 'Adidas',
+  'boost': 'Adidas',
+  'ultraboost': 'Adidas',
+  'nmd': 'Adidas',
+  'yeezy': 'Adidas',
+  
+  // Puma variants
+  'puma': 'Puma',
+  'pma': 'Puma',
+  
+  // Converse variants
+  'converse': 'Converse',
+  'conv': 'Converse',
+  'allstar': 'Converse',
+  'chucks': 'Converse',
+  
+  // Vans variants
+  'vans': 'Vans',
+  'van': 'Vans',
+  'oldskool': 'Vans',
+  
+  // New Balance variants
+  'newbalance': 'New Balance',
+  'nb': 'New Balance',
+  '990': 'New Balance',
+  '574': 'New Balance',
+  
+  // Reebok variants
+  'reebok': 'Reebok',
+  'rbk': 'Reebok',
+  'classic': 'Reebok',
+  
+  // Fila variants
+  'fila': 'Fila',
+  'disruptor': 'Fila',
+  
+  // Under Armour variants
+  'underarmour': 'Under Armour',
+  'ua': 'Under Armour',
+  'curry': 'Under Armour',
+  
+  // Other brands
+  'asics': 'Asics',
+  'skechers': 'Skechers',
+  'timberland': 'Timberland',
+  'caterpillar': 'Caterpillar',
+  'cat': 'Caterpillar',
+  'dc': 'DC',
+  'etnies': 'Etnies',
+  'champion': 'Champion',
+  'kappa': 'Kappa',
+  'lotto': 'Lotto',
+  'umbro': 'Umbro',
+  'diadora': 'Diadora',
+  'le_coq_sportif': 'Le Coq Sportif',
+  'lecoq': 'Le Coq Sportif'
+};
+
+interface DetectedImage {
+  id: string;
+  file: File;
+  url: string;
+  fileName: string;
+  detectedBrand?: string;
+  confidence: 'high' | 'medium' | 'low' | 'none';
+  brandId?: string;
+  isUploading?: boolean;
+  error?: string;
+  uploadedUrl?: string;
+}
+
+interface IntelligentUploaderProps {
+  onDetectionComplete: (detections: DetectedImage[]) => void;
+  maxImages?: number;
+}
+
+export function IntelligentUploader({
+  onDetectionComplete,
+  maxImages = 50
+}: IntelligentUploaderProps) {
+  const [detectedImages, setDetectedImages] = useState<DetectedImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string>("");
+  const { toast } = useToast();
+
+  // Fetch brands and categories for mapping
+  const { data: brands = [] } = useQuery<Brand[]>({
+    queryKey: ["/api/brands/admin"]
+  });
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"]
+  });
+
+  // Detect brand from filename
+  const detectBrandFromFilename = (fileName: string): { brand?: string; confidence: 'high' | 'medium' | 'low' | 'none'; brandId?: string } => {
+    const normalizedName = fileName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const words = normalizedName.split('_').filter(word => word.length > 1);
+    
+    // Check for direct brand matches
+    for (const word of words) {
+      if (BRAND_MAPPINGS[word]) {
+        const detectedBrandName = BRAND_MAPPINGS[word];
+        const brandMatch = brands.find(brand => 
+          brand.name.toLowerCase() === detectedBrandName.toLowerCase()
+        );
+        
+        if (brandMatch) {
+          return {
+            brand: detectedBrandName,
+            confidence: 'high',
+            brandId: brandMatch.id
+          };
+        } else {
+          return {
+            brand: detectedBrandName,
+            confidence: 'medium'
+          };
+        }
+      }
+    }
+    
+    // Check for partial matches
+    const partialMatches = Object.keys(BRAND_MAPPINGS).filter(key =>
+      words.some(word => word.includes(key) || key.includes(word))
+    );
+    
+    if (partialMatches.length > 0) {
+      const detectedBrandName = BRAND_MAPPINGS[partialMatches[0]];
+      const brandMatch = brands.find(brand => 
+        brand.name.toLowerCase() === detectedBrandName.toLowerCase()
+      );
+      
+      return {
+        brand: detectedBrandName,
+        confidence: brandMatch ? 'medium' : 'low',
+        brandId: brandMatch?.id
+      };
+    }
+    
+    return { confidence: 'none' };
+  };
+
+  // Convert HEIC to JPEG
+  const convertHeicToJpeg = async (file: File): Promise<File> => {
+    try {
+      const heic2any = await import('heic2any');
+      const convertedBlob = await heic2any.default({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.85
+      }) as Blob;
+      
+      const fileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+      return new File([convertedBlob], fileName, {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
+    } catch (error) {
+      throw new Error('Error al convertir imagen HEIC. Guarda la imagen como JPG.');
+    }
+  };
+
+  // Handle file selection
+  const handleFileSelect = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const newDetectedImages: DetectedImage[] = [];
+
+    for (const file of fileArray) {
+      if (!file.type.startsWith('image/')) continue;
+      if (detectedImages.length + newDetectedImages.length >= maxImages) {
+        toast({
+          title: "Límite alcanzado",
+          description: `Máximo ${maxImages} imágenes permitidas`,
+          variant: "destructive"
+        });
+        break;
+      }
+
+      try {
+        // Convert HEIC if needed
+        let processedFile = file;
+        if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+          processedFile = await convertHeicToJpeg(file);
+        }
+
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(processedFile);
+        
+        // Detect brand
+        const detection = detectBrandFromFilename(processedFile.name);
+        
+        const detectedImage: DetectedImage = {
+          id: crypto.randomUUID(),
+          file: processedFile,
+          url: previewUrl,
+          fileName: processedFile.name,
+          detectedBrand: detection.brand,
+          confidence: detection.confidence,
+          brandId: detection.brandId
+        };
+
+        newDetectedImages.push(detectedImage);
+      } catch (error) {
+        console.error('Error processing file:', file.name, error);
+        toast({
+          title: "Error",
+          description: `Error procesando ${file.name}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          variant: "destructive"
+        });
+      }
+    }
+
+    if (newDetectedImages.length > 0) {
+      const updatedImages = [...detectedImages, ...newDetectedImages];
+      setDetectedImages(updatedImages);
+      onDetectionComplete(updatedImages);
+      
+      toast({
+        title: "¡Detección completada!",
+        description: `${newDetectedImages.length} imagen(es) procesadas. ${newDetectedImages.filter(img => img.detectedBrand).length} marca(s) detectadas.`,
+      });
+    }
+  }, [detectedImages, maxImages, toast, onDetectionComplete, brands]);
+
+  // Handle drag and drop
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    handleFileSelect(files);
+  }, [handleFileSelect]);
+
+  // Remove image
+  const removeImage = (imageId: string) => {
+    const updatedImages = detectedImages.filter(img => img.id !== imageId);
+    setDetectedImages(updatedImages);
+    onDetectionComplete(updatedImages);
+  };
+
+  // Clear all images
+  const clearAll = () => {
+    setDetectedImages([]);
+    onDetectionComplete([]);
+  };
+
+  // Get confidence color
+  const getConfidenceColor = (confidence: string) => {
+    switch (confidence) {
+      case 'high': return 'bg-green-100 text-green-800 border-green-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-orange-100 text-orange-800 border-orange-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Get confidence icon
+  const getConfidenceIcon = (confidence: string) => {
+    switch (confidence) {
+      case 'high': return <Check className="w-3 h-3" />;
+      case 'medium': return <Eye className="w-3 h-3" />;
+      case 'low': return <AlertTriangle className="w-3 h-3" />;
+      default: return <AlertCircle className="w-3 h-3" />;
+    }
+  };
+
+  // Statistics
+  const stats = {
+    total: detectedImages.length,
+    detected: detectedImages.filter(img => img.detectedBrand).length,
+    undetected: detectedImages.filter(img => !img.detectedBrand).length,
+    highConfidence: detectedImages.filter(img => img.confidence === 'high').length,
+    mediumConfidence: detectedImages.filter(img => img.confidence === 'medium').length,
+    lowConfidence: detectedImages.filter(img => img.confidence === 'low').length
+  };
+
+  return (
+    <div className="space-y-6" data-testid="intelligent-uploader">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-5 h-5 text-purple-600" />
+        <h3 className="text-lg font-semibold">Detección Inteligente de Marcas</h3>
+        <Badge variant="secondary">BETA</Badge>
+      </div>
+
+      {/* Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Configuración</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">
+              Categoría por defecto para productos detectados
+            </label>
+            <Select value={defaultCategoryId} onValueChange={setDefaultCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una categoría..." />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.emoji} {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Upload Area */}
+      <div
+        className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors"
+        onDrop={handleDrop}
+        onDragOver={(e) => e.preventDefault()}
+        data-testid="intelligent-drop-zone"
+      >
+        <FileImage className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-lg font-semibold mb-2">
+          Arrastra y suelta imágenes con marcas mixtas
+        </h3>
+        <p className="text-muted-foreground mb-4">
+          Sube hasta {maxImages} imágenes. El sistema detectará automáticamente las marcas desde los nombres de archivo.
+        </p>
+        <input
+          type="file"
+          multiple
+          accept="image/*,.heic,.heif"
+          onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
+          className="hidden"
+          id="intelligent-file-input"
+          data-testid="intelligent-file-input"
+        />
+        <Button asChild size="lg">
+          <label htmlFor="intelligent-file-input" className="cursor-pointer" data-testid="button-intelligent-upload">
+            <Upload className="w-4 h-4 mr-2" />
+            Seleccionar imágenes
+          </label>
+        </Button>
+      </div>
+
+      {/* Statistics */}
+      {detectedImages.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Estadísticas de Detección
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+                <div className="text-xs text-muted-foreground">Total</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.detected}</div>
+                <div className="text-xs text-muted-foreground">Detectadas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.undetected}</div>
+                <div className="text-xs text-muted-foreground">No detectadas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.highConfidence}</div>
+                <div className="text-xs text-muted-foreground">Alta confianza</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Images Grid */}
+      {detectedImages.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Imágenes detectadas ({detectedImages.length})</h4>
+            <Button variant="outline" size="sm" onClick={clearAll} data-testid="button-clear-all">
+              <X className="w-4 h-4 mr-2" />
+              Limpiar todo
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {detectedImages.map((image) => (
+              <Card key={image.id} className="overflow-hidden">
+                <div className="aspect-square relative">
+                  <img
+                    src={image.url}
+                    alt={image.fileName}
+                    className="w-full h-full object-cover"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="absolute top-2 right-2"
+                    onClick={() => removeImage(image.id)}
+                    data-testid={`button-remove-${image.id}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+                <CardContent className="p-3 space-y-2">
+                  <div className="text-xs font-mono truncate" title={image.fileName}>
+                    {image.fileName}
+                  </div>
+                  
+                  {image.detectedBrand ? (
+                    <div className="space-y-1">
+                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border ${getConfidenceColor(image.confidence)}`}>
+                        {getConfidenceIcon(image.confidence)}
+                        {image.detectedBrand}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Confianza: {image.confidence}
+                      </div>
+                    </div>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      Sin marca detectada
+                    </Badge>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Validation Alerts */}
+      {detectedImages.length > 0 && !defaultCategoryId && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Selecciona una categoría por defecto antes de proceder con la carga masiva.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {stats.undetected > 0 && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {stats.undetected} imagen(es) no tienen marca detectada. Estas se crearán como productos sin marca específica.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
