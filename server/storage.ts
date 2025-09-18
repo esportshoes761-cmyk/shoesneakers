@@ -715,7 +715,7 @@ export class DatabaseStorage implements IStorage {
       const updatedOrder = await db.update(orders)
         .set({
           ...updateData,
-          updatedAt: Math.floor(Date.now() / 1000)
+          updatedAt: new Date()
         })
         .where(eq(orders.id, orderId))
         .returning();
@@ -769,7 +769,7 @@ export class DatabaseStorage implements IStorage {
 
   async getActivePromotions(): Promise<Promotion[]> {
     try {
-      const now = Math.floor(Date.now() / 1000);
+      const now = new Date();
       return await db.select().from(promotions)
         .where(and(
           eq(promotions.isActive, true),
@@ -842,7 +842,7 @@ export class DatabaseStorage implements IStorage {
 
   async getActiveEvents(): Promise<Event[]> {
     try {
-      const now = Math.floor(Date.now() / 1000);
+      const now = new Date();
       return await db.select().from(events)
         .where(and(
           eq(events.isActive, true),
@@ -906,44 +906,26 @@ export class DatabaseStorage implements IStorage {
   // Cart methods
   async getCartItems(userId: string): Promise<CartItemWithProduct[]> {
     try {
-      const cartItemsList = await db.select({
-        id: cartItems.id,
-        userId: cartItems.userId,
-        productId: cartItems.productId,
-        quantity: cartItems.quantity,
-        createdAt: cartItems.createdAt,
-        product: {
-          id: products.id,
-          name: products.name,
-          nameNormalized: products.nameNormalized,
-          description: products.description,
-          price: products.price,
-          originalPrice: products.originalPrice,
-          discountPercentage: products.discountPercentage,
-          categoryId: products.categoryId,
-          brandId: products.brandId,
-          sellerId: products.sellerId,
-          imageUrl: products.imageUrl,
-          images: products.images,
-          reference: products.reference,
-          sizes: products.sizes,
-          colors: products.colors,
-          rating: products.rating,
-          reviewCount: products.reviewCount,
-          isFlashSale: products.isFlashSale,
-          isFeatured: products.isFeatured,
-          createdAt: products.createdAt,
-          category: categories,
-          brand: brands
-        }
-      })
-      .from(cartItems)
-      .leftJoin(products, eq(cartItems.productId, products.id))
-      .leftJoin(categories, eq(products.categoryId, categories.id))
-      .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(eq(cartItems.userId, userId));
+      const cartItemsList = await db.select()
+        .from(cartItems)
+        .leftJoin(products, eq(cartItems.productId, products.id))
+        .leftJoin(categories, eq(products.categoryId, categories.id))
+        .leftJoin(brands, eq(products.brandId, brands.id))
+        .where(eq(cartItems.userId, userId));
 
-      return cartItemsList;
+      // Transform the result to match CartItemWithProduct type
+      return cartItemsList.map((item) => ({
+        id: item.cart_items.id,
+        userId: item.cart_items.userId,
+        productId: item.cart_items.productId,
+        quantity: item.cart_items.quantity,
+        createdAt: item.cart_items.createdAt,
+        product: item.products ? {
+          ...item.products,
+          category: item.categories,
+          brand: item.brands
+        } : null
+      }));
     } catch (error) {
       console.error('Error getting cart items:', error);
       return [];
@@ -1027,7 +1009,7 @@ export class DatabaseStorage implements IStorage {
       const updatedCustomerSavings = await db.update(customerSavings)
         .set({
           ...updateData,
-          updatedAt: Math.floor(Date.now() / 1000)
+          updatedAt: new Date()
         })
         .where(eq(customerSavings.customerId, customerId))
         .returning();

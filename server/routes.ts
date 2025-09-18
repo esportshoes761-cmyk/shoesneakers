@@ -257,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientBrandsWithProducts = await storage.getBrandsWithProductsByLocation('client');
       // Return only brand info (without products) to maintain compatibility
-      const clientBrands = clientBrandsWithProducts.map(({ products, productCount, ...brand }) => brand);
+      const clientBrands = clientBrandsWithProducts.map(({ products, ...brand }) => brand);
       res.json(clientBrands);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands" });
@@ -449,6 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const productData = {
             name: `${brand.name} Tallas ${sizeRangeString}`, // Include size range in name
+            nameNormalized: `${brand.name} Tallas ${sizeRangeString}`.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(),
             description: AUTO_DESCRIPTION, // ✅ Auto-generated description
             price: DEFAULT_PRICE, // ✅ Default price - editable later
             imageUrl: packageData.images[i],
