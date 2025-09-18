@@ -183,7 +183,7 @@ export function MultiImageUploader({
         imageData: fileData,
         fileName: processedFile.name,
         mimeType: processedFile.type,
-        skipDuplicateCheck: true // Permitir "duplicados" en packages
+        skipDuplicateCheck: false // Activar alertas de duplicados (informativo, no bloqueante)
       }),
     });
 
