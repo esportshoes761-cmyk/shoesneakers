@@ -26,7 +26,7 @@ import { useLocation } from "wouter";
 import { useAuth, logout } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { MultiImageUploader } from "@/components/MultiImageUploader";
-import { IntelligentUploader } from "@/components/IntelligentUploader";
+import IntelligentUploader from "@/components/IntelligentUploader";
 import { formatCurrency } from "@/lib/currency";
 import { getBrandLogoType } from "@/lib/brand-utils";
 import AdminOrders from "@/components/admin-orders";
