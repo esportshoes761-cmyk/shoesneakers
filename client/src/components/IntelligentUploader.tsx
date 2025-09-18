@@ -62,18 +62,9 @@ export function IntelligentUploader({
     }
   };
 
-  // 🛡️ CRITICAL FUNCTION: Validate file reference (copied from MultiImageUploader)
-  const validateFileReference = async (file: File): Promise<boolean> => {
-    try {
-      // Intentar leer una pequeña parte del archivo para verificar accesibilidad
-      const slice = file.slice(0, 1024); // Primeros 1KB
-      await slice.arrayBuffer();
-      return true;
-    } catch (error) {
-      console.warn(`⚠️ File reference invalid for ${file.name}:`, error);
-      return false;
-    }
-  };
+  // 🛡️ REMOVED: validateFileReference was causing ALL files to fail
+  // MultiImageUploader que funciona NO tiene esta verificación
+  // Procede directamente con arrayBuffer() sin problemas
 
   // 📤 PROVEN FUNCTION: Upload single image (copied from MultiImageUploader)
   const uploadSingleImage = async (file: File, retryCount = 0): Promise<string> => {
@@ -88,11 +79,8 @@ export function IntelligentUploader({
       processedFile = await convertHeicToJpeg(file);
     }
 
-    // 🛡️ CRITICAL: Validate file reference before processing
-    const isFileValid = await validateFileReference(processedFile);
-    if (!isFileValid) {
-      throw new Error('Archivo no accesible - referencia inválida');
-    }
+    // 🛡️ REMOVED: validateFileReference was the cause of ALL failures
+    // Proceed directly like MultiImageUploader que funciona
 
     // Validar tipo de imagen
     if (!processedFile.type.startsWith('image/')) {
