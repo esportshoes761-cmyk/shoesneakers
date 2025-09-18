@@ -42,7 +42,8 @@ export async function initializeDatabase() {
         logo TEXT NOT NULL,
         description TEXT,
         catalog_url TEXT,
-        is_active BOOLEAN DEFAULT true
+        is_active BOOLEAN DEFAULT true,
+        display_location TEXT DEFAULT 'client'
       )
     `);
 
@@ -202,22 +203,25 @@ export async function initializeDatabase() {
       `);
     }
 
-    // Insert default brands
+    // Insert default brands - Split between admin and client
     const defaultBrands = [
-      { name: "Nike", logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png", description: "Just Do It - Marca líder en deportivos", catalogUrl: "https://nike.com/catalog" },
-      { name: "Adidas", logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png", description: "Impossible is Nothing - Deportivos de alta calidad", catalogUrl: "https://adidas.com/catalog" },
-      { name: "Puma", logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png", description: "Forever Faster - Estilo deportivo innovador", catalogUrl: "https://puma.com/catalog" },
-      { name: "Jordan", logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png", description: "Jumpman - Calzado de baloncesto premium", catalogUrl: "https://jordan.com/catalog" },
-      { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog" },
-      { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null },
-      { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null },
-      { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null },
+      // Admin brands (brands without products - for admin only)
+      { name: "Nike", logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png", description: "Just Do It - Marca líder en deportivos", catalogUrl: "https://nike.com/catalog", displayLocation: "admin" },
+      { name: "Adidas", logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png", description: "Impossible is Nothing - Deportivos de alta calidad", catalogUrl: "https://adidas.com/catalog", displayLocation: "admin" },
+      { name: "Puma", logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png", description: "Forever Faster - Estilo deportivo innovador", catalogUrl: "https://puma.com/catalog", displayLocation: "admin" },
+      { name: "Jordan", logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png", description: "Jumpman - Calzado de baloncesto premium", catalogUrl: "https://jordan.com/catalog", displayLocation: "admin" },
+      
+      // Client brands (brands that will have products)
+      { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog", displayLocation: "client" },
+      { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null, displayLocation: "client" },
+      { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null, displayLocation: "client" },
+      { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null, displayLocation: "client" },
     ];
 
     for (const brand of defaultBrands) {
       await db.run(sql`
-        INSERT OR IGNORE INTO brands (name, logo, description, catalog_url, is_active) 
-        VALUES (${brand.name}, ${brand.logo}, ${brand.description}, ${brand.catalogUrl}, true)
+        INSERT OR IGNORE INTO brands (name, logo, description, catalog_url, is_active, display_location) 
+        VALUES (${brand.name}, ${brand.logo}, ${brand.description}, ${brand.catalogUrl}, true, ${brand.displayLocation})
       `);
     }
 

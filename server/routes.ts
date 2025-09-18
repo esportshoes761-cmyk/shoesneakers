@@ -252,10 +252,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Client brands (STRICT: only brands with displayLocation 'client')
+  // Client brands (STRICT: only brands with displayLocation 'client' AND with products)
   app.get("/api/brands/client", async (req, res) => {
     try {
-      const clientBrands = await storage.getBrandsByLocation('client');
+      const clientBrandsWithProducts = await storage.getBrandsWithProductsByLocation('client');
+      // Return only brand info (without products) to maintain compatibility
+      const clientBrands = clientBrandsWithProducts.map(({ products, productCount, ...brand }) => brand);
       res.json(clientBrands);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands" });

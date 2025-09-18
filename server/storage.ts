@@ -1296,7 +1296,8 @@ export class DatabaseStorage implements IStorage {
       };
     }));
     
-    return brandsWithProducts;
+    // ONLY BRANDS WITH PRODUCTS (same as MemStorage implementation)
+    return brandsWithProducts.filter(brand => brand.productCount > 0);
   }
 
   // Product methods
