@@ -1,192 +1,175 @@
-import { db } from './db';
-import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from '@shared/schema';
-import { sql } from 'drizzle-orm';
+import { db, sqlite } from './db';
+import { users, categories, brands } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 
 export async function initializeDatabase() {
   try {
     console.log('🗄️ Initializing SQLite database...');
 
-    // Create tables manually using SQL
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        username TEXT NOT NULL UNIQUE,
-        email TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL,
-        first_name TEXT,
-        last_name TEXT,
-        phone TEXT,
-        is_seller BOOLEAN DEFAULT false,
-        is_admin BOOLEAN DEFAULT false,
-        credits REAL DEFAULT 0,
-        total_purchases REAL DEFAULT 0,
-        loyalty_level TEXT DEFAULT 'bronze',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // Create tables using manual SQL to ensure they exist
+    // This prevents errors if tables don't exist yet
+    const createTablesSQL = `
+      CREATE TABLE IF NOT EXISTS "categories" (
+        "id" text PRIMARY KEY NOT NULL,
+        "name" text NOT NULL,
+        "emoji" text NOT NULL,
+        "description" text
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS categories (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        name TEXT NOT NULL,
-        emoji TEXT NOT NULL,
-        description TEXT
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "brands" (
+        "id" text PRIMARY KEY NOT NULL,
+        "name" text NOT NULL,
+        "logo" text NOT NULL,
+        "description" text,
+        "catalog_url" text,
+        "is_active" integer DEFAULT 1,
+        "display_location" text DEFAULT 'client'
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS brands (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        name TEXT NOT NULL,
-        logo TEXT NOT NULL,
-        description TEXT,
-        catalog_url TEXT,
-        is_active BOOLEAN DEFAULT true,
-        display_location TEXT DEFAULT 'client'
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" text PRIMARY KEY NOT NULL,
+        "username" text NOT NULL UNIQUE,
+        "email" text NOT NULL UNIQUE,
+        "password" text NOT NULL,
+        "first_name" text,
+        "last_name" text,
+        "phone" text,
+        "is_seller" integer DEFAULT 0,
+        "is_admin" integer DEFAULT 0,
+        "credits" text DEFAULT '0',
+        "total_purchases" text DEFAULT '0',
+        "loyalty_level" text DEFAULT 'bronze',
+        "created_at" integer DEFAULT (unixepoch()),
+        "updated_at" integer DEFAULT (unixepoch())
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        name TEXT NOT NULL,
-        name_normalized TEXT NOT NULL,
-        description TEXT,
-        price REAL NOT NULL,
-        original_price REAL,
-        discount_percentage INTEGER DEFAULT 0,
-        category_id TEXT,
-        brand_id TEXT,
-        seller_id TEXT,
-        image_url TEXT,
-        images TEXT DEFAULT '[]',
-        reference TEXT,
-        sizes TEXT DEFAULT '[]',
-        colors TEXT DEFAULT '[]',
-        rating REAL DEFAULT 0,
-        review_count INTEGER DEFAULT 0,
-        is_flash_sale BOOLEAN DEFAULT false,
-        is_featured BOOLEAN DEFAULT false,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (category_id) REFERENCES categories(id),
-        FOREIGN KEY (brand_id) REFERENCES brands(id),
-        FOREIGN KEY (seller_id) REFERENCES users(id)
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "products" (
+        "id" text PRIMARY KEY NOT NULL,
+        "name" text NOT NULL,
+        "name_normalized" text NOT NULL,
+        "description" text,
+        "price" text NOT NULL,
+        "original_price" text,
+        "discount_percentage" integer DEFAULT 0,
+        "category_id" text,
+        "brand_id" text,
+        "seller_id" text,
+        "image_url" text,
+        "images" text DEFAULT '[]',
+        "reference" text,
+        "sizes" text DEFAULT '[]',
+        "colors" text DEFAULT '[]',
+        "rating" text DEFAULT '0',
+        "review_count" integer DEFAULT 0,
+        "is_flash_sale" integer DEFAULT 0,
+        "is_featured" integer DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch()),
+        FOREIGN KEY ("category_id") REFERENCES "categories" ("id"),
+        FOREIGN KEY ("brand_id") REFERENCES "brands" ("id"),
+        FOREIGN KEY ("seller_id") REFERENCES "users" ("id")
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS promotions (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        title TEXT NOT NULL,
-        description TEXT,
-        discount_percentage INTEGER,
-        discount_amount REAL,
-        code TEXT UNIQUE,
-        start_date DATETIME NOT NULL,
-        end_date DATETIME NOT NULL,
-        is_active BOOLEAN DEFAULT true,
-        min_purchase REAL,
-        max_uses INTEGER,
-        current_uses INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "customer_savings" (
+        "id" text PRIMARY KEY NOT NULL,
+        "customer_id" text NOT NULL UNIQUE,
+        "total_saved" text DEFAULT '0',
+        "achievements_unlocked" text DEFAULT '[]',
+        "last_purchase_amount" text DEFAULT '0',
+        "total_purchases" integer DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch()),
+        "updated_at" integer DEFAULT (unixepoch())
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS events (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        title TEXT NOT NULL,
-        description TEXT,
-        image_url TEXT,
-        start_date DATETIME NOT NULL,
-        end_date DATETIME NOT NULL,
-        is_active BOOLEAN DEFAULT true,
-        event_type TEXT NOT NULL,
-        priority INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "images" (
+        "id" text PRIMARY KEY NOT NULL,
+        "file_name" text NOT NULL,
+        "original_name" text NOT NULL,
+        "path" text NOT NULL,
+        "mime_type" text NOT NULL,
+        "size" integer NOT NULL,
+        "sha256" text NOT NULL,
+        "created_at" integer DEFAULT (unixepoch())
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS cart_items (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        user_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 1,
-        selected_size TEXT,
-        selected_color TEXT,
-        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (product_id) REFERENCES products(id)
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "reviews" (
+        "id" text PRIMARY KEY NOT NULL,
+        "product_id" text NOT NULL,
+        "customer_id" text NOT NULL,
+        "customer_name" text NOT NULL,
+        "customer_email" text,
+        "rating" integer NOT NULL,
+        "comment" text,
+        "is_verified" integer DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch()),
+        FOREIGN KEY ("product_id") REFERENCES "products" ("id")
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS customer_savings (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        customer_id TEXT NOT NULL UNIQUE,
-        total_saved REAL DEFAULT 0,
-        lifetime_purchases REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_id) REFERENCES users(id)
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "orders" (
+        "id" text PRIMARY KEY NOT NULL,
+        "customer_id" text NOT NULL,
+        "customer_name" text NOT NULL,
+        "customer_email" text NOT NULL,
+        "customer_phone" text NOT NULL,
+        "customer_address" text NOT NULL,
+        "product_id" text NOT NULL,
+        "quantity" integer DEFAULT 1,
+        "total_amount" text,
+        "status" text NOT NULL DEFAULT 'confirmed',
+        "delivery_time" text,
+        "notes" text,
+        "whatsapp_sent" integer DEFAULT 1,
+        "tracking_number" text,
+        "created_at" integer DEFAULT (unixepoch()),
+        "updated_at" integer DEFAULT (unixepoch()),
+        FOREIGN KEY ("product_id") REFERENCES "products" ("id")
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS reviews (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        product_id TEXT NOT NULL,
-        customer_id TEXT NOT NULL,
-        customer_name TEXT NOT NULL,
-        customer_email TEXT,
-        rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-        comment TEXT,
-        is_verified BOOLEAN DEFAULT false,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products(id)
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "promotions" (
+        "id" text PRIMARY KEY NOT NULL,
+        "title" text NOT NULL,
+        "description" text,
+        "discount_percentage" integer,
+        "discount_amount" text,
+        "code" text UNIQUE,
+        "start_date" integer NOT NULL,
+        "end_date" integer NOT NULL,
+        "is_active" integer DEFAULT 1,
+        "min_purchase" text,
+        "max_uses" integer,
+        "current_uses" integer DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch())
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        customer_id TEXT NOT NULL,
-        customer_name TEXT NOT NULL,
-        customer_email TEXT NOT NULL,
-        customer_phone TEXT NOT NULL,
-        customer_address TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        quantity INTEGER DEFAULT 1,
-        total_amount TEXT,
-        status TEXT NOT NULL DEFAULT 'confirmed',
-        delivery_time TEXT,
-        notes TEXT,
-        whatsapp_sent BOOLEAN DEFAULT true,
-        tracking_number TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products(id)
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "events" (
+        "id" text PRIMARY KEY NOT NULL,
+        "title" text NOT NULL,
+        "description" text,
+        "image_url" text,
+        "start_date" integer NOT NULL,
+        "end_date" integer NOT NULL,
+        "is_active" integer DEFAULT 1,
+        "event_type" text NOT NULL,
+        "priority" integer DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch())
+      );
 
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS images (
-        id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
-        file_name TEXT NOT NULL,
-        original_name TEXT NOT NULL,
-        path TEXT NOT NULL,
-        mime_type TEXT NOT NULL,
-        size INTEGER NOT NULL,
-        sha256 TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "cart_items" (
+        "id" text PRIMARY KEY NOT NULL,
+        "user_id" text,
+        "product_id" text,
+        "quantity" integer DEFAULT 1,
+        "created_at" integer DEFAULT (unixepoch()),
+        FOREIGN KEY ("user_id") REFERENCES "users" ("id"),
+        FOREIGN KEY ("product_id") REFERENCES "products" ("id")
+      );
+    `;
 
-    console.log('✅ Database tables created successfully');
+    // Execute table creation SQL
+    sqlite.exec(createTablesSQL);
+    console.log('✅ SQLite tables created/verified');
 
-    // Insert default categories
+    // Insert default categories only if they don't exist
     const defaultCategories = [
       { name: "Tacones", emoji: "👠", description: "Elegantes tacones para toda ocasión" },
       { name: "Deportivos", emoji: "👟", description: "Zapatos deportivos y cómodos" },
@@ -197,21 +180,24 @@ export async function initializeDatabase() {
     ];
 
     for (const cat of defaultCategories) {
-      await db.run(sql`
-        INSERT OR IGNORE INTO categories (name, emoji, description) 
-        VALUES (${cat.name}, ${cat.emoji}, ${cat.description})
-      `);
+      try {
+        const existing = await db.select().from(categories).where(eq(categories.name, cat.name)).limit(1);
+        if (existing.length === 0) {
+          await db.insert(categories).values({
+            id: crypto.randomUUID(),
+            ...cat
+          });
+          console.log(`✅ Inserted category: ${cat.name}`);
+        }
+      } catch (error) {
+        console.log(`Category ${cat.name} might already exist:`, error);
+      }
     }
 
-    // Insert default brands - Split between admin and client
+    // Insert default brands
     const defaultBrands = [
-      // Admin brands (brands without products - for admin only)
       { name: "Nike", logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png", description: "Just Do It - Marca líder en deportivos", catalogUrl: "https://nike.com/catalog", displayLocation: "admin" },
       { name: "Adidas", logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png", description: "Impossible is Nothing - Deportivos de alta calidad", catalogUrl: "https://adidas.com/catalog", displayLocation: "admin" },
-      { name: "Puma", logo: "https://logos-world.net/wp-content/uploads/2020/04/Puma-Logo.png", description: "Forever Faster - Estilo deportivo innovador", catalogUrl: "https://puma.com/catalog", displayLocation: "admin" },
-      { name: "Jordan", logo: "https://logoeps.com/wp-content/uploads/2013/03/jordan-vector-logo.png", description: "Jumpman - Calzado de baloncesto premium", catalogUrl: "https://jordan.com/catalog", displayLocation: "admin" },
-      
-      // Client brands (brands that will have products)
       { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog", displayLocation: "client" },
       { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null, displayLocation: "client" },
       { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null, displayLocation: "client" },
@@ -219,19 +205,45 @@ export async function initializeDatabase() {
     ];
 
     for (const brand of defaultBrands) {
-      await db.run(sql`
-        INSERT OR IGNORE INTO brands (name, logo, description, catalog_url, is_active, display_location) 
-        VALUES (${brand.name}, ${brand.logo}, ${brand.description}, ${brand.catalogUrl}, true, ${brand.displayLocation})
-      `);
+      try {
+        const existing = await db.select().from(brands).where(eq(brands.name, brand.name)).limit(1);
+        if (existing.length === 0) {
+          await db.insert(brands).values({
+            id: crypto.randomUUID(),
+            name: brand.name,
+            logo: brand.logo,
+            description: brand.description,
+            catalogUrl: brand.catalogUrl,
+            isActive: true,
+            displayLocation: brand.displayLocation as "admin" | "client"
+          });
+          console.log(`✅ Inserted brand: ${brand.name}`);
+        }
+      } catch (error) {
+        console.log(`Brand ${brand.name} might already exist:`, error);
+      }
     }
 
     // Insert default admin user
-    await db.run(sql`
-      INSERT OR IGNORE INTO users (username, email, password, first_name, last_name, is_admin) 
-      VALUES ('admin', 'admin@zapashop.com', 'admin123', 'Administrador', 'ZapaShop', true)
-    `);
+    try {
+      const existingAdmin = await db.select().from(users).where(eq(users.username, 'admin')).limit(1);
+      if (existingAdmin.length === 0) {
+        await db.insert(users).values({
+          id: crypto.randomUUID(),
+          username: 'admin',
+          email: 'admin@zapashop.com',
+          password: 'admin123',
+          firstName: 'Administrador',
+          lastName: 'ZapaShop',
+          isAdmin: true
+        });
+        console.log('✅ Inserted admin user');
+      }
+    } catch (error) {
+      console.log('Admin user might already exist:', error);
+    }
 
-    console.log('✅ Default data inserted successfully');
+    console.log('✅ Default data insertion complete');
     console.log('🎉 SQLite database initialization complete!');
 
   } catch (error) {

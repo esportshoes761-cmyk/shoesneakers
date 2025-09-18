@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,8 +16,8 @@ export const users = sqliteTable("users", {
   credits: text("credits").default("0"),
   totalPurchases: text("total_purchases").default("0"),
   loyaltyLevel: text("loyalty_level").default("bronze"), // bronze, silver, gold, platinum
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const categories = sqliteTable("categories", {
@@ -50,7 +50,7 @@ export const promotions = sqliteTable("promotions", {
   minPurchase: text("min_purchase"),
   maxUses: integer("max_uses"),
   currentUses: integer("current_uses").default(0),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const events = sqliteTable("events", {
@@ -63,7 +63,7 @@ export const events = sqliteTable("events", {
   isActive: integer("is_active", { mode: "boolean" }).default(true),
   eventType: text("event_type").notNull(), // 'flash_sale', 'promotion', 'new_arrival', 'seasonal'
   priority: integer("priority").default(0),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Tabla para imágenes con hash único
@@ -74,8 +74,8 @@ export const images = sqliteTable("images", {
   path: text("path").notNull(),
   mimeType: text("mime_type").notNull(),
   size: integer("size").notNull(), // Tamaño en bytes
-  sha256: text("sha256", { length: 64 }).notNull(), // Hash SHA-256 (duplicates allowed)
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  sha256: text("sha256").notNull(), // Hash SHA-256 (duplicates allowed)
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const products = sqliteTable("products", {
@@ -90,15 +90,15 @@ export const products = sqliteTable("products", {
   brandId: text("brand_id").references(() => brands.id),
   sellerId: text("seller_id").references(() => users.id),
   imageUrl: text("image_url"),
-  images: text("images", { mode: "json" }).$type<string[]>().default([]), // Hasta 9 imágenes
+  images: text("images", { mode: "json" }).$type<string[]>().default(sql`'[]'`), // Hasta 9 imágenes
   reference: text("reference"), // Referencia del producto
-  sizes: text("sizes", { mode: "json" }).$type<string[]>().default([]), // Tallas disponibles
-  colors: text("colors", { mode: "json" }).$type<string[]>().default([]), // Colores disponibles
+  sizes: text("sizes", { mode: "json" }).$type<string[]>().default(sql`'[]'`), // Tallas disponibles
+  colors: text("colors", { mode: "json" }).$type<string[]>().default(sql`'[]'`), // Colores disponibles
   rating: text("rating").default("0"),
   reviewCount: integer("review_count").default(0),
   isFlashSale: integer("is_flash_sale", { mode: "boolean" }).default(false),
   isFeatured: integer("is_featured", { mode: "boolean" }).default(false),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const cartItems = sqliteTable("cart_items", {
@@ -106,7 +106,7 @@ export const cartItems = sqliteTable("cart_items", {
   userId: text("user_id").references(() => users.id),
   productId: text("product_id").references(() => products.id),
   quantity: integer("quantity").default(1),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Tabla para transacciones de créditos
@@ -117,7 +117,7 @@ export const creditTransactions = sqliteTable("credit_transactions", {
   type: text("type").notNull(), // 'earned', 'spent', 'bonus'
   description: text("description").notNull(),
   orderId: text("order_id"), // Referencia a orden si aplica
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Tabla para sesiones de usuario
@@ -126,7 +126,7 @@ export const userSessions = sqliteTable("user_sessions", {
   userId: text("user_id").references(() => users.id).notNull(),
   token: text("token").notNull().unique(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Tabla para ahorros por cliente (sin necesidad de login)
@@ -134,11 +134,11 @@ export const customerSavings = sqliteTable("customer_savings", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   customerId: text("customer_id").notNull().unique(), // UUID único por cliente
   totalSaved: text("total_saved").default("0"),
-  achievementsUnlocked: text("achievements_unlocked", { mode: "json" }).$type<string[]>().default([]),
+  achievementsUnlocked: text("achievements_unlocked", { mode: "json" }).$type<string[]>().default(sql`'[]'`),
   lastPurchaseAmount: text("last_purchase_amount").default("0"),
   totalPurchases: integer("total_purchases").default(0),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const reviews = sqliteTable("reviews", {
@@ -150,7 +150,7 @@ export const reviews = sqliteTable("reviews", {
   rating: integer("rating").notNull(), // 1-5 estrellas
   comment: text("comment"),
   isVerified: integer("is_verified", { mode: "boolean" }).default(false),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const orders = sqliteTable("orders", {
@@ -168,8 +168,8 @@ export const orders = sqliteTable("orders", {
   notes: text("notes"),
   whatsappSent: integer("whatsapp_sent", { mode: "boolean" }).default(true),
   trackingNumber: text("tracking_number"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -223,10 +223,9 @@ export const insertImageSchema = createInsertSchema(images).omit({
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
-  nameNormalized: true, // Se genera automáticamente en el servidor
   createdAt: true,
 }).extend({
-  images: z.array(z.string()).max(9, "Máximo 9 imágenes permitidas").optional(),
+  images: z.array(z.string()).optional(),
   sizes: z.array(z.string()).optional(),
   colors: z.array(z.string()).optional(),
 });
@@ -250,15 +249,6 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-export type InsertCreditTransaction = z.infer<typeof insertCreditTransactionSchema>;
-export type CreditTransaction = typeof creditTransactions.$inferSelect;
-
-export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
-export type UserSession = typeof userSessions.$inferSelect;
-
-export type InsertCustomerSavings = z.infer<typeof insertCustomerSavingsSchema>;
-export type CustomerSavings = typeof customerSavings.$inferSelect;
-
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
@@ -271,41 +261,40 @@ export type Promotion = typeof promotions.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
 
+export type InsertImage = z.infer<typeof insertImageSchema>;
+export type Image = typeof images.$inferSelect;
+
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
 
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 
-export type ProductWithCategory = Product & {
-  category?: Category;
-  brand?: Brand;
-};
-
-export type BrandWithProducts = Brand & {
-  products: ProductWithCategory[];
-  productCount: number;
-};
+export type InsertCustomerSavings = z.infer<typeof insertCustomerSavingsSchema>;
+export type CustomerSavings = typeof customerSavings.$inferSelect;
 
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type Review = typeof reviews.$inferSelect;
 
-export type InsertImage = z.infer<typeof insertImageSchema>;
-export type Image = typeof images.$inferSelect;
-
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 
+// Derived types for complex queries
+export type ProductWithCategory = Product & {
+  category: Category | null;
+  brand: Brand | null;
+};
+
 export type CartItemWithProduct = CartItem & {
-  product: Product;
+  product: ProductWithCategory | null;
+};
+
+export type BrandWithProducts = Brand & {
+  products: Product[];
 };
 
 export type ProductWithReviews = Product & {
-  reviews?: Review[];
-  category?: Category;
-  brand?: Brand;
-};
-
-export type OrderWithProduct = Order & {
-  product: Product;
+  reviews: Review[];
+  category: Category | null;
+  brand: Brand | null;
 };
