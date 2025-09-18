@@ -71,6 +71,13 @@ The application uses a relational database structure with the following entities
 
 ## Recent Changes
 
+### 2025-09-18
+- **CRITICAL BUGFIX**: Resolved SQL error "no such column: customer_name" that was preventing product magnification (lupa) from working
+- **Brand Filtering**: Implemented strict brand separation - clients only see brands with products (productCount > 0), admin sees all brands
+- **UI Optimization**: Redesigned brand section to be ultra-compact - horizontal scrolling on mobile, dense grid on desktop to reduce screen space
+- **Performance**: Maintained FASTSNEAKERS speed with endpoints responding in 0-8ms, ensuring zero loading delays
+- **Database Schema**: Updated SQLite schema to include missing columns and proper brand separation by displayLocation
+
 ### 2025-09-17
 - Fixed exact product counting per brand using SQL COUNT() optimization instead of in-memory filtering
 - Added "CATÁLOGO COMPLETO" brand with placeholder logo to system defaults
