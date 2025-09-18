@@ -2264,14 +2264,13 @@ export default function AdminPanel() {
                         <FormItem>
                           <FormLabel>Fotografías ⚡ (Mínimo 1)</FormLabel>
                           <FormControl>
-                            <MultiImageUploader
-                              onImagesChange={(imageUrls) => {
+                            <IntelligentUploader 
+                              onImagesUploaded={(imageUrls) => {
                                 field.onChange(imageUrls);
                                 setBulkUploadImages(imageUrls);
                               }}
                               minImages={1}
                               maxImages={50}
-                              initialImages={field.value || []}
                             />
                           </FormControl>
                           <FormMessage />
