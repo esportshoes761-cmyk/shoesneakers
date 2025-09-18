@@ -7,6 +7,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { randomBytes } from "crypto";
 import fs from "fs-extra";
 import * as path from "path";
+import { detectBrandFromImage, combineDetectionResults } from "./ai-vision";
 
 // Helper functions
 function generateUniqueReference(): string {
@@ -68,12 +69,42 @@ function detectBrandFromFilename(filename: string): { brandName: string | null; 
   
   let bestMatch: { brandName: string | null; confidence: number } = { brandName: null, confidence: 0 };
   
+  // 🔧 IMPROVED: First try exact brand keyword matching
   for (const mapping of brandMappings) {
     for (const keyword of mapping.keywords) {
       if (normalizedName.includes(keyword)) {
         if (mapping.confidence > bestMatch.confidence) {
           bestMatch = { brandName: mapping.brand, confidence: mapping.confidence };
         }
+      }
+    }
+  }
+  
+  // 🆕 NEW: For numeric catalogs (like "1000474070.jpg"), use flexible pattern recognition
+  // This handles cases where suppliers send numbered catalogs without brand names in filenames
+  if (bestMatch.confidence === 0) {
+    // Check if filename is purely numeric (typical for supplier catalogs)
+    const isNumericCatalog = /^\d+\.(jpg|jpeg|png|webp)$/i.test(filename.trim());
+    if (isNumericCatalog) {
+      console.log(`📊 Detected numeric catalog filename: ${filename} - will use fallback brand`);
+      // Return confidence 0 to trigger fallback brand logic
+      // This ensures ALL numeric catalog items go to "CATÁLOGO GENERAL" for admin review
+      return { brandName: null, confidence: 0 };
+    }
+    
+    // Try partial matching for mixed filenames (letters + numbers)
+    const hasLetters = /[a-z]/.test(normalizedName);
+    if (hasLetters) {
+      // Try fuzzy matching with lower confidence for edge cases
+      for (const mapping of brandMappings) {
+        for (const keyword of mapping.keywords) {
+          // Check if any 3+ character substring of keyword appears
+          if (keyword.length >= 3 && normalizedName.includes(keyword.substring(0, 3))) {
+            bestMatch = { brandName: mapping.brand, confidence: 0.3 }; // Low confidence for fuzzy match
+            break;
+          }
+        }
+        if (bestMatch.confidence > 0) break;
       }
     }
   }
@@ -548,32 +579,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const { fileName, url, detectedBrand } = detection;
           
-          // Re-detect brand from filename using our algorithm
-          const brandDetection = detectBrandFromFilename(fileName);
-          let brandId = DEFAULT_CATEGORY_ID; // Default fallback
+          // 🤖 STEP 1: Detect brand from filename using existing algorithm
+          const filenameDetection = detectBrandFromFilename(fileName);
+          
+          // 🔍 STEP 2: Use AI Visual Analysis for brand detection
+          let visualDetection = null;
+          let finalBrandDetection = { brandName: filenameDetection.brandName, confidence: filenameDetection.confidence };
+          let detectionMethod = 'filename';
+          let aiReasoning = '';
+          
+          // Only run AI visual analysis if filename detection has low confidence
+          // This optimizes performance by avoiding unnecessary API calls
+          if (filenameDetection.confidence < 0.8) {
+            console.log(`🤖 Running AI visual analysis for ${fileName} (filename confidence: ${filenameDetection.confidence})`);
+            try {
+              visualDetection = await detectBrandFromImage(url);
+              
+              // 🎯 STEP 3: Combine both detection methods for best result
+              const combinedResult = combineDetectionResults(filenameDetection, visualDetection);
+              
+              // Update final detection with proper format
+              finalBrandDetection = { 
+                brandName: combinedResult.brand, 
+                confidence: combinedResult.confidence 
+              };
+              detectionMethod = combinedResult.method;
+              aiReasoning = combinedResult.reasoning;
+              
+              console.log(`🔬 Combined detection result: ${finalBrandDetection.brandName} (confidence: ${finalBrandDetection.confidence}, method: ${detectionMethod})`);
+            } catch (aiError) {
+              console.error(`❌ AI visual analysis failed for ${fileName}:`, aiError);
+              // Continue with filename detection if AI fails
+              finalBrandDetection = filenameDetection;
+              detectionMethod = 'filename';
+            }
+          } else {
+            console.log(`⚡ Skipping AI analysis - filename detection sufficient for ${fileName} (confidence: ${filenameDetection.confidence})`);
+          }
+          
+          // 🔧 STEP 4: Match detected brand to database brands
+          let brandId: string | null = null;
           let productName = "Zapato Deportivo"; // Default name
           
-          if (brandDetection.brandName && brandDetection.confidence > 0.7) {
+          if (finalBrandDetection.brandName && finalBrandDetection.confidence > 0.7) {
             // Find matching brand in database
-            const matchingBrand = brandMap.get(brandDetection.brandName.toLowerCase());
+            const matchingBrand = brandMap.get(finalBrandDetection.brandName.toLowerCase());
             if (matchingBrand) {
               brandId = matchingBrand.id;
               productName = matchingBrand.name; // Product name = Brand name as requested
-              console.log(`✅ Brand matched: ${fileName} → ${matchingBrand.name} (confidence: ${brandDetection.confidence})`);
+              console.log(`✅ Brand matched via ${detectionMethod}: ${fileName} → ${matchingBrand.name} (confidence: ${finalBrandDetection.confidence})`);
             } else {
-              console.log(`❌ Brand detected but not found in database: ${brandDetection.brandName} for ${fileName}`);
+              console.log(`❌ Brand detected but not found in database: ${finalBrandDetection.brandName} for ${fileName}`);
             }
           } else {
-            console.log(`⚠️  No confident brand detection for ${fileName} (confidence: ${brandDetection.confidence})`);
+            console.log(`⚠️  No confident brand detection for ${fileName} (confidence: ${finalBrandDetection.confidence})`);
+          }
+          
+          // 🛡️ CRITICAL FIX: Ensure fallback brand exists and use it when no specific brand detected
+          if (!brandId) {
+            // Find or create fallback brand "CATÁLOGO GENERAL"
+            let fallbackBrand = brandMap.get("catálogo general");
+            if (!fallbackBrand) {
+              // Create fallback brand if it doesn't exist
+              console.log("🔧 Creating fallback brand: CATÁLOGO GENERAL");
+              fallbackBrand = await storage.createBrand({
+                name: "CATÁLOGO GENERAL",
+                logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO",
+                description: "Productos sin marca específica detectada - Catálogo general",
+                catalogUrl: null,
+                displayLocation: "admin",
+                isActive: true
+              });
+              // Update brandMap for future iterations
+              brandMap.set("catálogo general", fallbackBrand);
+            }
+            brandId = fallbackBrand.id;
+            productName = `Calzado ${fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, ' ').trim()}`;
+            console.log(`🔧 Using fallback brand for ${fileName} → CATÁLOGO GENERAL`);
           }
           
           // Generate unique reference for this product
           const reference = await generateUniqueReferenceForProduct();
           
-          // Generate auto-description based on brand
-          const autoDescription = brandDetection.brandName 
-            ? `Producto ${brandDetection.brandName} de alta calidad con diseño moderno y máximo confort.`
-            : "Producto deportivo de calidad premium con estilo único y comodidad excepcional.";
+          // Generate auto-description based on final brand detection
+          let autoDescription = "Producto deportivo de calidad premium con estilo único y comodidad excepcional.";
+          if (finalBrandDetection.brandName) {
+            autoDescription = `Producto ${finalBrandDetection.brandName} de alta calidad con diseño moderno y máximo confort.`;
+            // Add AI reasoning if available and detection method was visual
+            if (detectionMethod === 'visual_ai' && aiReasoning) {
+              autoDescription += ` Detectado mediante análisis visual AI: ${aiReasoning}`;
+            }
+          }
           
           const productData = {
             name: productName, // Brand name as requested
