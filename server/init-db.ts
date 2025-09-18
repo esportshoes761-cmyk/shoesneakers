@@ -198,10 +198,10 @@ export async function initializeDatabase() {
     const defaultBrands = [
       { name: "Nike", logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png", description: "Just Do It - Marca líder en deportivos", catalogUrl: "https://nike.com/catalog", displayLocation: "admin" },
       { name: "Adidas", logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png", description: "Impossible is Nothing - Deportivos de alta calidad", catalogUrl: "https://adidas.com/catalog", displayLocation: "admin" },
-      { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog", displayLocation: "client" },
-      { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null, displayLocation: "client" },
-      { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null, displayLocation: "client" },
-      { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null, displayLocation: "client" },
+      { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog", displayLocation: "admin" },
+      { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null, displayLocation: "admin" },
+      { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null, displayLocation: "admin" },
+      { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null, displayLocation: "admin" },
     ];
 
     for (const brand of defaultBrands) {
@@ -222,6 +222,28 @@ export async function initializeDatabase() {
       } catch (error) {
         console.log(`Brand ${brand.name} might already exist:`, error);
       }
+    }
+
+    // 🔒 CRITICAL SECURITY FIX: Migrate existing brands from 'client' to 'admin' displayLocation
+    // This ensures admin has COMPLETE control over which brands clients can see
+    try {
+      const brandsToMigrate = await db.select().from(brands).where(eq(brands.displayLocation, 'client'));
+      if (brandsToMigrate.length > 0) {
+        console.log(`🔧 Migrating ${brandsToMigrate.length} brands from 'client' to 'admin' display location...`);
+        
+        for (const brand of brandsToMigrate) {
+          await db.update(brands)
+            .set({ displayLocation: 'admin' })
+            .where(eq(brands.id, brand.id));
+          console.log(`✅ Migrated brand "${brand.name}" to admin control`);
+        }
+        
+        console.log('🔒 Brand migration complete: Admin now has FULL control over all brand visibility');
+      } else {
+        console.log('✅ No brand migration needed: All brands already under admin control');
+      }
+    } catch (error) {
+      console.error('❌ Error migrating brands to admin control:', error);
     }
 
     // Insert default admin user
