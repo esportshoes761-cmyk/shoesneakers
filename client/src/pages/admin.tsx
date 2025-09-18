@@ -98,6 +98,9 @@ export default function AdminPanel() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   
+  // 🧹 CLEANUP: States for malformed URLs detection and cleanup
+  const [malformedUrlsDialogOpen, setMalformedUrlsDialogOpen] = useState(false);
+  
   // All state declarations first to prevent initialization order issues
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [imageZoomData, setImageZoomData] = useState<{product: Product; isOpen: boolean} | null>(null);
@@ -134,8 +137,8 @@ export default function AdminPanel() {
     results: { success: number; failed: number; errors: string[] };
   }>({ isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } });
 
-  // Intelligent upload states
-  const [intelligentDetections, setIntelligentDetections] = useState<any[]>([]);
+  // 🚀 NEW Intelligent upload states - Simple and robust
+  const [intelligentUploadedImages, setIntelligentUploadedImages] = useState<string[]>([]);
   const [intelligentUploadProgress, setIntelligentUploadProgress] = useState<{
     isProcessing: boolean;
     currentIndex: number;
@@ -601,62 +604,33 @@ export default function AdminPanel() {
     }
   };
 
-  // Intelligent upload handlers
-  const handleIntelligentDetectionComplete = (detections: any[]) => {
-    setIntelligentDetections(detections);
-    console.log("🔍 Detecciones completadas:", detections);
+  // 🚀 NEW Intelligent upload handlers - Simple and robust
+  const handleIntelligentImagesUploaded = (imageUrls: string[]) => {
+    setIntelligentUploadedImages(imageUrls);
+    console.log("✅ Images uploaded successfully:", imageUrls.length, "images");
+    console.log("🔗 Image URLs:", imageUrls);
   };
 
   const handleStartIntelligentUpload = () => {
-    if (intelligentDetections.length === 0) {
+    if (intelligentUploadedImages.length === 0) {
       toast({
         title: "Sin imágenes",
-        description: "No hay imágenes detectadas para procesar",
+        description: "Primero debes subir imágenes usando el componente de arriba",
         variant: "destructive"
       });
       return;
     }
 
-    // Check how many images are successfully uploaded
-    const uploadedImages = intelligentDetections.filter(detection => detection.isUploaded && detection.uploadedUrl);
-    const failedImages = intelligentDetections.filter(detection => detection.error);
-    const pendingImages = intelligentDetections.filter(detection => !detection.isUploaded && !detection.error);
-
-    if (uploadedImages.length === 0) {
-      toast({
-        title: "Sin imágenes subidas",
-        description: `Debes subir las imágenes primero. ${pendingImages.length} pendientes, ${failedImages.length} con errores.`,
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (pendingImages.length > 0) {
-      toast({
-        title: "Imágenes pendientes",
-        description: `${pendingImages.length} imágenes aún no han sido subidas. Solo se procesarán las ${uploadedImages.length} imágenes subidas correctamente.`,
-        variant: "default"
-      });
-    }
-
-    if (failedImages.length > 0) {
-      toast({
-        title: "Imágenes con errores",
-        description: `${failedImages.length} imágenes tuvieron errores de subida y serán omitidas.`,
-        variant: "destructive"
-      });
-    }
-
-    // Start the intelligent upload process with only uploaded images
+    // Start the intelligent upload process with uploaded image URLs
     setIntelligentUploadProgress({
       isProcessing: true,
       currentIndex: 0,
-      total: uploadedImages.length,
+      total: intelligentUploadedImages.length,
       results: { success: 0, failed: 0, errors: [] }
     });
 
-    console.log(`🚀 Starting intelligent upload with ${uploadedImages.length} uploaded images`);
-    intelligentUploadMutation.mutate(intelligentDetections);
+    console.log(`🚀 Starting intelligent upload processing with ${intelligentUploadedImages.length} uploaded images`);
+    intelligentUploadMutation.mutate(intelligentUploadedImages);
   };
 
   const updateProductMutation = useMutation({
@@ -832,46 +806,62 @@ export default function AdminPanel() {
     },
   });
 
-  // Intelligent upload mutation
+  // 🚀 NEW Intelligent upload mutation - Simple and robust
   const intelligentUploadMutation = useMutation({
-    mutationFn: async (detections: any[]) => {
-      // Filter only successfully uploaded images and transform data
-      const uploadedDetections = detections
-        .filter(detection => detection.isUploaded && detection.uploadedUrl)
-        .map(detection => ({
-          fileName: detection.fileName,
-          url: detection.uploadedUrl, // Use permanent URL instead of blob URL
-          detectedBrand: detection.detectedBrand,
-          confidence: detection.confidence,
-          brandId: detection.brandId
-        }));
-
-      console.log(`🔄 Sending ${uploadedDetections.length} uploaded images to intelligent-upload API`);
+    mutationFn: async (imageUrls: string[]) => {
+      console.log(`🚀 [NEW] Starting intelligent upload with ${imageUrls.length} successfully uploaded image URLs`);
+      console.log(`🔗 Image URLs:`, imageUrls);
       
-      if (uploadedDetections.length === 0) {
-        throw new Error('No hay imágenes subidas correctamente para procesar');
+      if (imageUrls.length === 0) {
+        throw new Error('No hay URLs de imágenes para procesar');
       }
       
-      return apiRequest("POST", "/api/products/intelligent-upload", { detections: uploadedDetections });
+      // 🎯 Simple payload: just the uploaded image URLs + optional defaults
+      const payload = {
+        imageUrls: imageUrls,
+        defaultCategoryId: categories.find(c => c.name === "Deportivos")?.id || "C3D950FF197A9F23FE76B2351508D4D7",
+        defaultPrice: 85000 // Number as required by Zod schema
+      };
+      
+      console.log(`🎯 Sending payload to server:`, payload);
+      return apiRequest("POST", "/api/products/intelligent-upload", payload);
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: { created: number; pendingReview: number; results: any[] }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
+      
+      const totalSuccessful = data.created + data.pendingReview;
+      const totalFailed = data.results.filter((r: any) => r.status === 'failed').length;
       
       setIntelligentUploadProgress(prev => ({
         ...prev,
         isProcessing: false,
-        results: data.results || { success: 0, failed: 0, errors: [] }
+        results: { 
+          success: totalSuccessful, 
+          failed: totalFailed, 
+          errors: data.results.filter((r: any) => r.status === 'failed').map((r: any) => r.reason || 'Error desconocido')
+        }
       }));
       
+      // Build descriptive message based on results
+      let description = `${totalSuccessful} productos procesados exitosamente`;
+      if (data.created > 0 && data.pendingReview > 0) {
+        description += ` (${data.created} auto-asignados, ${data.pendingReview} requieren revisión)`;
+      } else if (data.pendingReview > 0) {
+        description += ` (todos requieren revisión manual)`;
+      }
+      if (totalFailed > 0) {
+        description += `, ${totalFailed} fallaron`;
+      }
+      
       toast({ 
-        title: "¡Proceso completado!", 
-        description: `${data.results?.success || 0} productos creados exitosamente mediante detección inteligente` 
+        title: "¡Proceso de detección inteligente completado!", 
+        description
       });
       
-      // Clear detections after successful upload
+      // Clear uploaded images after successful upload
       setTimeout(() => {
-        setIntelligentDetections([]);
+        setIntelligentUploadedImages([]);
         setIntelligentUploadProgress({ 
           isProcessing: false, 
           currentIndex: 0, 
@@ -894,6 +884,38 @@ export default function AdminPanel() {
         title, 
         description, 
         variant: "destructive" 
+      });
+    }
+  });
+
+  // 🧹 CLEANUP: Query to detect malformed URLs
+  const { data: malformedUrlsData, isLoading: isLoadingMalformed, refetch: refetchMalformed } = useQuery({
+    queryKey: ["/api/products/malformed-urls"],
+    enabled: false // Only run when explicitly called
+  });
+
+  // 🧹 CLEANUP: Mutation to clean malformed URLs
+  const cleanupMalformedUrlsMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/products/cleanup-malformed", {}),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
+      
+      toast({
+        title: "¡Limpieza completada!",
+        description: data.message || `${data.cleaned || 0} productos con URLs corruptas eliminados`
+      });
+      
+      // Refetch malformed URLs to update the count
+      refetchMalformed();
+      setMalformedUrlsDialogOpen(false);
+    },
+    onError: async (error: any) => {
+      const { title, description } = await parseApiError(error, "Error en la limpieza");
+      toast({
+        title,
+        description,
+        variant: "destructive"
       });
     }
   });
@@ -1011,7 +1033,7 @@ export default function AdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
-        <TabsList className="grid w-full grid-cols-7 h-auto">
+        <TabsList className="grid w-full grid-cols-8 h-auto">
           <TabsTrigger value="products" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-products">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Productos</span>
@@ -1039,6 +1061,10 @@ export default function AdminPanel() {
           <TabsTrigger value="intelligent-upload" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-intelligent-upload">
             <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Carga Inteligente</span>
+          </TabsTrigger>
+          <TabsTrigger value="cleanup" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-cleanup">
+            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Limpieza</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2384,63 +2410,56 @@ export default function AdminPanel() {
           </div>
 
           <IntelligentUploader
-            onDetectionComplete={handleIntelligentDetectionComplete}
+            onImagesUploaded={handleIntelligentImagesUploaded}
             maxImages={50}
           />
 
-          {intelligentDetections.length > 0 && (
+          {intelligentUploadedImages.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Confirmación de Creación Masiva</CardTitle>
+                <CardTitle>🚀 Imágenes Listas para Procesamiento Inteligente</CardTitle>
                 <CardDescription>
-                  Revisa las detecciones antes de crear los productos automáticamente
+                  Creación automática de productos con detección de marcas por IA
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {intelligentDetections.length}
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="text-center p-6 bg-green-50 rounded-lg border-2 border-green-200">
+                    <div className="text-4xl font-bold text-green-600 mb-2">
+                      {intelligentUploadedImages.length}
                     </div>
-                    <div className="text-sm text-blue-800">Imágenes totales</div>
-                  </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {intelligentDetections.filter(d => d.detectedBrand).length}
+                    <div className="text-lg font-semibold text-green-800 mb-1">
+                      Imágenes Subidas Exitosamente
                     </div>
-                    <div className="text-sm text-green-800">Marcas detectadas</div>
-                  </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {intelligentDetections.filter(d => !d.detectedBrand).length}
+                    <div className="text-sm text-green-700">
+                      Listas para detección automática de marcas y creación de productos
                     </div>
-                    <div className="text-sm text-orange-800">Sin marca detectada</div>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
                   <Button 
                     onClick={handleStartIntelligentUpload}
-                    disabled={intelligentUploadProgress.isProcessing || intelligentDetections.length === 0}
+                    disabled={intelligentUploadProgress.isProcessing || intelligentUploadedImages.length === 0}
                     className="flex-1"
                     data-testid="button-start-intelligent-upload"
                   >
                     {intelligentUploadProgress.isProcessing ? (
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Creando productos... ({intelligentUploadProgress.currentIndex}/{intelligentUploadProgress.total})
+                        Procesando con IA... ({intelligentUploadProgress.currentIndex}/{intelligentUploadProgress.total})
                       </div>
                     ) : (
                       <>
-                        <Package className="h-4 w-4 mr-2" />
-                        Crear {intelligentDetections.length} Productos Automáticamente
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Crear {intelligentUploadedImages.length} Productos con IA
                       </>
                     )}
                   </Button>
                   <Button 
                     variant="outline"
                     onClick={() => {
-                      setIntelligentDetections([]);
+                      setIntelligentUploadedImages([]);
                       setIntelligentUploadProgress({ 
                         isProcessing: false, 
                         currentIndex: 0, 
@@ -2449,7 +2468,7 @@ export default function AdminPanel() {
                       });
                     }}
                     disabled={intelligentUploadProgress.isProcessing}
-                    data-testid="button-clear-intelligent-detections"
+                    data-testid="button-clear-intelligent-uploads"
                   >
                     <X className="h-4 w-4 mr-2" />
                     Limpiar
@@ -2524,7 +2543,166 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Panel de Limpieza */}
+        <TabsContent value="cleanup" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-semibold flex items-center gap-2">
+                <Trash2 className="h-6 w-6 text-red-600" />
+                Herramientas de Limpieza
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Detectar y limpiar datos corruptos del sistema
+              </p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                🧹 Limpieza de URLs Malformadas
+              </CardTitle>
+              <CardDescription>
+                Detecta y elimina productos con URLs corruptas (blob: y devblob:)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-4">
+                <Button
+                  onClick={() => {
+                    refetchMalformed();
+                    setMalformedUrlsDialogOpen(true);
+                  }}
+                  disabled={isLoadingMalformed}
+                  data-testid="button-detect-malformed-urls"
+                >
+                  {isLoadingMalformed ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Escaneando...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Detectar URLs Corruptas
+                    </>
+                  )}
+                </Button>
+                
+                {malformedUrlsData && malformedUrlsData.malformed > 0 && (
+                  <Badge variant="destructive" className="ml-2">
+                    {malformedUrlsData.malformed} URLs corruptas encontradas
+                  </Badge>
+                )}
+              </div>
+
+              {malformedUrlsData && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-blue-800">
+                    <strong>Estado del Sistema:</strong>
+                    <ul className="mt-2 space-y-1">
+                      <li>• Total de productos: {malformedUrlsData.total}</li>
+                      <li>• URLs corruptas: {malformedUrlsData.malformed}</li>
+                      <li>• URLs válidas: {malformedUrlsData.total - malformedUrlsData.malformed}</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Dialog para mostrar URLs malformadas */}
+      <Dialog open={malformedUrlsDialogOpen} onOpenChange={setMalformedUrlsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              URLs Malformadas Detectadas
+            </DialogTitle>
+            <DialogDescription>
+              {malformedUrlsData?.malformed || 0} productos con URLs corruptas encontrados
+            </DialogDescription>
+          </DialogHeader>
+          
+          {malformedUrlsData?.products && malformedUrlsData.products.length > 0 ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800">
+                  <strong>⚠️ Advertencia:</strong> Esta acción eliminará permanentemente todos los productos con URLs corruptas.
+                  No se puede deshacer.
+                </p>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto">
+                <div className="grid gap-3">
+                  {malformedUrlsData.products.map((product: any) => (
+                    <div key={product.id} className="p-3 bg-gray-50 border rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold">{product.name}</h4>
+                          <p className="text-sm text-gray-600">Ref: {product.reference}</p>
+                          <p className="text-sm text-gray-600">Marca: {product.brandName}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-red-600 font-mono break-all max-w-xs">
+                            {product.imageUrl}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setMalformedUrlsDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    cleanupMalformedUrlsMutation.mutate();
+                  }}
+                  disabled={cleanupMalformedUrlsMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-cleanup-malformed-urls"
+                >
+                  {cleanupMalformedUrlsMutation.isPending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Limpiando...
+                    </div>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Limpiar {malformedUrlsData.malformed} Productos
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-green-800 mb-2">
+                ¡Sistema Limpio!
+              </h3>
+              <p className="text-green-600">
+                No se encontraron URLs malformadas en el sistema
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de productos movido fuera de TabsContent para resolver problemas de z-index */}
       <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>

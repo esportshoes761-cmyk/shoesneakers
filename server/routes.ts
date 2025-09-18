@@ -489,96 +489,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 🤖 INTELLIGENT UPLOAD: AI-powered brand detection and automatic product creation
-  app.post("/api/products/intelligent-upload", requireAdminAuthHeaders, async (req, res) => {
+  // 🚀 NEW INTELLIGENT UPLOAD: Simple, robust system based on proven MultiImageUploader logic  
+  // ✅ NO File reference issues - Works with successfully uploaded image URLs only
+  // ✅ Server-side brand detection using proven brand-detection.ts
+  // ✅ Simple interface: just send array of uploaded image URLs
+  // 🔒 SECURE: Zod validation schema for intelligent upload payload
+  const intelligentUploadSchema = z.object({
+    imageUrls: z.array(z.string().url()).min(1, "Se requiere al menos una URL de imagen"),
+    defaultCategoryId: z.string().min(1, "Se requiere un ID de categoría válido"),
+    defaultPrice: z.number().positive().optional()
+  });
+
+  app.post("/api/products/intelligent-upload", requireAdminAuth, async (req, res) => {
     try {
-      const { detections } = req.body;
+      // 🛡️ Zod validation: Validate request payload
+      const validatedData = intelligentUploadSchema.parse(req.body);
+      const { imageUrls, defaultCategoryId, defaultPrice } = validatedData;
       
-      if (!detections || !Array.isArray(detections)) {
-        return res.status(400).json({ message: "Se requiere un array de detecciones" });
-      }
+      console.log("🚀 [NEW] Processing intelligent upload with", imageUrls.length, "successfully uploaded images");
       
-      const results = { success: 0, failed: 0, errors: [] as string[] };
-      const createdProducts = [];
+      const results: { imageUrl: string; status: 'created' | 'failed'; productId?: string; reason?: string }[] = [];
+      let created = 0;
+      let pendingReview = 0;
       
-      // Auto-generated defaults for intelligent upload
-      const DEFAULT_PRICE = "85000"; // $85,000 COP - competitive pricing
-      const DEFAULT_CATEGORY_ID = "C3D950FF197A9F23FE76B2351508D4D7"; // Fallback to "Deportivos"
+      // 🎯 Auto-generated defaults for intelligent upload
+      const DEFAULT_PRICE = defaultPrice ? defaultPrice.toString() : "85000"; // $85,000 COP - competitive pricing
+      const DEFAULT_CATEGORY_ID = defaultCategoryId;
       
-      // Get all brands to match detected brand names
+      // 🗂️ Get all brands to match detected brand names
       const allBrands = await storage.getBrands();
       const brandMap = new Map(allBrands.map(b => [b.name.toLowerCase(), b]));
       
-      console.log("🤖 Processing intelligent upload with", detections.length, "detections");
-      
-      for (let i = 0; i < detections.length; i++) {
-        const detection = detections[i];
+      // 🔧 Process each successfully uploaded image URL
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i];
+        
         try {
-          const { fileName, url, detectedBrand } = detection;
-          
-          // 🚨 STEP 1: Server-side brand detection using PRECISE algorithm (SINGLE SOURCE OF TRUTH)
-          // Client brandId is IGNORED to ensure server is 100% authoritative
-          const filenameDetection = detectBrandFromFilename(fileName);
-          
-          // 🔍 STEP 2: Use AI Visual Analysis for brand detection
-          let visualDetection = null;
-          let finalBrandDetection = { brandName: filenameDetection.brandName, confidence: filenameDetection.confidence };
-          let detectionMethod = 'filename';
-          let aiReasoning = '';
-          
-          // Only run AI visual analysis if filename detection has low confidence
-          // This optimizes performance by avoiding unnecessary API calls
-          if (filenameDetection.confidence < 0.8) {
-            console.log(`🤖 Running AI visual analysis for ${fileName} (filename confidence: ${filenameDetection.confidence})`);
-            try {
-              visualDetection = await detectBrandFromImage(url);
-              
-              // 🎯 STEP 3: Combine both detection methods for best result
-              const combinedResult = combineDetectionResults(filenameDetection, visualDetection);
-              
-              // Update final detection with proper format
-              finalBrandDetection = { 
-                brandName: combinedResult.brand, 
-                confidence: combinedResult.confidence 
-              };
-              detectionMethod = combinedResult.method;
-              aiReasoning = combinedResult.reasoning;
-              
-              console.log(`🔬 Combined detection result: ${finalBrandDetection.brandName} (confidence: ${finalBrandDetection.confidence}, method: ${detectionMethod})`);
-            } catch (aiError) {
-              console.error(`❌ AI visual analysis failed for ${fileName}:`, aiError);
-              // Continue with filename detection if AI fails
-              finalBrandDetection = filenameDetection;
-              detectionMethod = 'filename';
-            }
-          } else {
-            console.log(`⚡ Skipping AI analysis - filename detection sufficient for ${fileName} (confidence: ${filenameDetection.confidence})`);
+          // 🏷️ STEP 1: Extract filename from URL for brand detection
+          let fileName = 'unknown';
+          try {
+            // Handle both object storage URLs and local URLs
+            const urlObj = new URL(imageUrl);
+            fileName = urlObj.pathname.split('/').pop() || 'unknown';
+            // Remove any query parameters or extensions for cleaner detection
+            fileName = fileName.split('?')[0];
+            console.log(`🔍 Extracted filename from URL: ${imageUrl} → ${fileName}`);
+          } catch (urlError) {
+            console.warn(`⚠️  Could not extract filename from URL: ${imageUrl}, using fallback`);
+            fileName = `image_${i}`;
           }
           
-          // 🔧 STEP 4: Match detected brand to database brands
+          // 🤖 STEP 2: Server-side brand detection using proven brand-detection.ts
+          const brandDetection = detectBrandFromFilename(fileName);
+          console.log(`🔍 Brand detection result for ${fileName}:`, {
+            brand: brandDetection.brandName,
+            confidence: brandDetection.confidence,
+            reasoning: brandDetection.reasoning,
+            requiresReview: brandDetection.requiresReview
+          });
+          
+          // 🏪 STEP 3: Match detected brand to database brands
           let brandId: string | null = null;
           let productName = "Zapato Deportivo"; // Default name
           
-          if (finalBrandDetection.brandName && finalBrandDetection.confidence > 0.7) {
+          if (brandDetection.brandName && 
+              brandDetection.brandName !== PENDING_REVIEW_BRAND && 
+              brandDetection.confidence >= MIN_CONFIDENCE_THRESHOLD) {
+            
             // Find matching brand in database
-            const matchingBrand = brandMap.get(finalBrandDetection.brandName.toLowerCase());
+            const matchingBrand = brandMap.get(brandDetection.brandName.toLowerCase());
             if (matchingBrand) {
               brandId = matchingBrand.id;
-              productName = matchingBrand.name; // Product name = Brand name as requested
-              console.log(`✅ Brand matched via ${detectionMethod}: ${fileName} → ${matchingBrand.name} (confidence: ${finalBrandDetection.confidence})`);
+              productName = matchingBrand.name; // Product name = Brand name
+              console.log(`✅ Brand matched: ${fileName} → ${matchingBrand.name} (confidence: ${brandDetection.confidence})`);
             } else {
-              console.log(`❌ Brand detected but not found in database: ${finalBrandDetection.brandName} for ${fileName}`);
+              console.log(`❌ Brand detected but not found in database: ${brandDetection.brandName} for ${fileName}`);
             }
           } else {
-            console.log(`⚠️  No confident brand detection for ${fileName} (confidence: ${finalBrandDetection.confidence})`);
+            console.log(`⚠️  Low confidence or pending review for ${fileName} (confidence: ${brandDetection.confidence})`);
           }
           
-          // 🛡️ CRITICAL FIX: Ensure fallback brand exists and use it when no specific brand detected
+          // 🛡️ STEP 4: Ensure fallback brand exists for unmatched items
           if (!brandId) {
             // Find or create fallback brand "CATÁLOGO GENERAL"
             let fallbackBrand = brandMap.get("catálogo general");
             if (!fallbackBrand) {
-              // Create fallback brand if it doesn't exist
               console.log("🔧 Creating fallback brand: CATÁLOGO GENERAL");
               fallbackBrand = await storage.createBrand({
                 name: "CATÁLOGO GENERAL",
@@ -596,61 +591,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`🔧 Using fallback brand for ${fileName} → CATÁLOGO GENERAL`);
           }
           
-          // Generate unique reference for this product
+          // 🏗️ STEP 5: Generate unique reference and create product
           const reference = await generateUniqueReferenceForProduct();
           
-          // Generate auto-description based on final brand detection
+          // Generate auto-description based on brand detection
           let autoDescription = "Producto deportivo de calidad premium con estilo único y comodidad excepcional.";
-          if (finalBrandDetection.brandName) {
-            autoDescription = `Producto ${finalBrandDetection.brandName} de alta calidad con diseño moderno y máximo confort.`;
-            // Add AI reasoning if available and detection method was visual
-            if (detectionMethod === 'visual_ai' && aiReasoning) {
-              autoDescription += ` Detectado mediante análisis visual AI: ${aiReasoning}`;
-            }
+          if (brandDetection.brandName && brandDetection.brandName !== PENDING_REVIEW_BRAND) {
+            autoDescription = `Producto ${brandDetection.brandName} de alta calidad con diseño moderno y máximo confort. ${brandDetection.reasoning}`;
           }
           
           const productData = {
-            name: productName, // Brand name as requested
+            name: productName,
             nameNormalized: productName.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(),
             description: autoDescription,
             price: DEFAULT_PRICE,
-            imageUrl: url,
+            imageUrl: imageUrl, // Use successfully uploaded URL
             reference: reference,
-            categoryId: DEFAULT_CATEGORY_ID, // Always use default category for intelligent upload
+            categoryId: DEFAULT_CATEGORY_ID,
             brandId: brandId,
             isFlashSale: false,
             isFeatured: true, // Always featured for maximum visibility
-            images: [url], // Single image per product
+            images: [imageUrl], // Single image per product
             sizes: ["38", "39", "40", "41", "42", "43"], // Standard size range
             colors: [],
           };
           
+          // 🚀 Create product in database
           const product = await storage.createProduct(productData);
-          createdProducts.push(product);
-          results.success++;
           
-          console.log(`🚀 Product created: ${product.name} (${product.reference}) from ${fileName}`);
+          // Check if this is a pending review case
+          const isPendingReview = brandDetection.requiresReview || 
+                                  brandDetection.brandName === PENDING_REVIEW_BRAND ||
+                                  brandDetection.confidence < MIN_CONFIDENCE_THRESHOLD;
+          
+          if (isPendingReview) {
+            pendingReview++;
+          } else {
+            created++;
+          }
+          
+          results.push({
+            imageUrl,
+            status: 'created',
+            productId: product.id,
+            reason: isPendingReview ? `Baja confianza (${brandDetection.confidence.toFixed(2)}) - Requiere revisión manual` : `Producto creado exitosamente: ${product.name}`
+          });
+          
+          console.log(`🎉 SUCCESS: Product created ${product.name} (${product.reference}) from URL: ${imageUrl}`);
           
         } catch (error) {
-          results.failed++;
           const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-          results.errors.push(`${detection.fileName}: ${errorMessage}`);
-          console.error(`❌ Error processing ${detection.fileName}:`, error);
+          results.push({
+            imageUrl,
+            status: 'failed',
+            reason: errorMessage
+          });
+          console.error(`❌ FAILED to process image URL ${imageUrl}:`, error);
         }
       }
       
-      console.log(`🎯 Intelligent upload completed: ${results.success} success, ${results.failed} failed`);
+      // 📊 Report final results
+      const totalSuccessful = created + pendingReview;
+      const totalFailed = results.filter(r => r.status === 'failed').length;
+      console.log(`🎯 [NEW] Intelligent upload completed: ${totalSuccessful} products created (${created} auto-assigned, ${pendingReview} pending review), ${totalFailed} failed`);
       
-      res.status(201).json({
-        message: `Procesamiento inteligente completado: ${results.success} productos creados`,
-        results,
-        products: createdProducts
-      });
+      // Return response in the exact format specified in requirements
+      const response = {
+        created,
+        pendingReview, 
+        results
+      };
+      
+      res.status(201).json(response);
       
     } catch (error) {
-      console.error("💥 Error in intelligent upload:", error);
+      // Handle Zod validation errors specifically
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Datos inválidos", 
+          errors: error.errors 
+        });
+      }
+      
+      console.error("💥 [NEW] Error in intelligent upload:", error);
       res.status(500).json({ 
         message: "Error en la carga inteligente", 
+        error: error instanceof Error ? error.message : "Error desconocido" 
+      });
+    }
+  });
+
+  // 🧹 CLEANUP: Detect and clean malformed URLs (blob: and devblob:)
+  app.get("/api/products/malformed-urls", requireAdminAuth, async (req, res) => {
+    try {
+      console.log("🔍 [CLEANUP] Scanning for products with malformed URLs...");
+      
+      const allProducts = await storage.getProducts();
+      const malformedProducts = allProducts.filter(product => {
+        const hasBlob = product.imageUrl?.startsWith('blob:') || product.imageUrl?.includes('devblob:');
+        const hasMalformedImages = product.images?.some(img => 
+          img.startsWith('blob:') || img.includes('devblob:')
+        );
+        return hasBlob || hasMalformedImages;
+      });
+      
+      console.log(`🔍 [CLEANUP] Found ${malformedProducts.length} products with malformed URLs`);
+      
+      res.json({
+        total: allProducts.length,
+        malformed: malformedProducts.length,
+        products: malformedProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          reference: p.reference,
+          imageUrl: p.imageUrl,
+          images: p.images,
+          brandName: p.brandName || 'Sin marca'
+        }))
+      });
+    } catch (error) {
+      console.error("💥 [CLEANUP] Error detecting malformed URLs:", error);
+      res.status(500).json({ 
+        message: "Error al detectar URLs malformadas", 
+        error: error instanceof Error ? error.message : "Error desconocido" 
+      });
+    }
+  });
+
+  // 🧹 CLEANUP: Clean malformed URLs by removing affected products
+  app.post("/api/products/cleanup-malformed", requireAdminAuth, async (req, res) => {
+    try {
+      console.log("🧹 [CLEANUP] Starting cleanup of products with malformed URLs...");
+      
+      const allProducts = await storage.getProducts();
+      const malformedProducts = allProducts.filter(product => {
+        const hasBlob = product.imageUrl?.startsWith('blob:') || product.imageUrl?.includes('devblob:');
+        const hasMalformedImages = product.images?.some(img => 
+          img.startsWith('blob:') || img.includes('devblob:')
+        );
+        return hasBlob || hasMalformedImages;
+      });
+      
+      console.log(`🧹 [CLEANUP] Found ${malformedProducts.length} products to clean`);
+      
+      let cleanedCount = 0;
+      const errors: string[] = [];
+      
+      for (const product of malformedProducts) {
+        try {
+          const success = await storage.deleteProduct(product.id);
+          if (success) {
+            cleanedCount++;
+            console.log(`🗑️  [CLEANUP] Removed product: ${product.name} (${product.reference})`);
+          } else {
+            errors.push(`Failed to delete product: ${product.name} (${product.reference})`);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Error deleting product ${product.name}: ${errorMsg}`);
+          console.error(`❌ [CLEANUP] Error deleting product ${product.name}:`, error);
+        }
+      }
+      
+      console.log(`🎉 [CLEANUP] Cleanup completed: ${cleanedCount} products removed`);
+      
+      res.json({
+        message: `Limpieza completada: ${cleanedCount} productos con URLs corruptas eliminados`,
+        cleaned: cleanedCount,
+        total: malformedProducts.length,
+        errors: errors
+      });
+    } catch (error) {
+      console.error("💥 [CLEANUP] Error in cleanup process:", error);
+      res.status(500).json({ 
+        message: "Error en el proceso de limpieza", 
         error: error instanceof Error ? error.message : "Error desconocido" 
       });
     }
