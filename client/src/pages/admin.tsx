@@ -1851,7 +1851,7 @@ export default function AdminPanel() {
                   </CardHeader>
                   <CardContent>
                     <Button 
-                      onClick={() => openModal("brandProducts")}
+                      onClick={() => openModal("brandPackage")}
                       data-testid="button-brand-packages"
                     >
                       <Layers className="h-4 w-4 mr-2" />
