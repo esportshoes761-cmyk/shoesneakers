@@ -1,5 +1,5 @@
 import { db, sqlite } from './db';
-import { users, categories, brands } from '@shared/schema';
+import { users, categories, brands, themeSettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -163,6 +163,18 @@ export async function initializeDatabase() {
         FOREIGN KEY ("user_id") REFERENCES "users" ("id"),
         FOREIGN KEY ("product_id") REFERENCES "products" ("id")
       );
+
+      CREATE TABLE IF NOT EXISTS "theme_settings" (
+        "id" text PRIMARY KEY NOT NULL,
+        "theme_type" text NOT NULL,
+        "is_active" integer DEFAULT 0,
+        "title" text NOT NULL,
+        "description" text,
+        "primary_color" text NOT NULL,
+        "secondary_color" text NOT NULL,
+        "animation_config" text,
+        "updated_at" integer DEFAULT (unixepoch())
+      );
     `;
 
     // Execute table creation SQL
@@ -264,6 +276,79 @@ export async function initializeDatabase() {
       }
     } catch (error) {
       console.log('Admin user might already exist:', error);
+    }
+
+    // Insert default theme settings
+    const defaultThemes = [
+      {
+        themeType: 'halloween',
+        isActive: false,
+        title: '🎃 Halloween',
+        description: 'Tema oscuro y misterioso para Halloween',
+        primaryColor: '#ff6600',
+        secondaryColor: '#000000',
+        animationConfig: JSON.stringify({ 
+          enablePumpkins: true, 
+          ghostEffects: true,
+          spookyTransitions: true 
+        })
+      },
+      {
+        themeType: 'christmas',
+        isActive: false,
+        title: '🎄 Navidad',
+        description: 'Tema festivo navideño con colores tradicionales',
+        primaryColor: '#dc2626',
+        secondaryColor: '#16a34a',
+        animationConfig: JSON.stringify({ 
+          snowfall: true, 
+          sparkles: true,
+          festiveLights: true 
+        })
+      },
+      {
+        themeType: 'newyear',
+        isActive: false,
+        title: '🎆 Año Nuevo',
+        description: 'Tema elegante para celebrar el año nuevo',
+        primaryColor: '#fbbf24',
+        secondaryColor: '#6b7280',
+        animationConfig: JSON.stringify({ 
+          fireworks: true, 
+          goldSparkles: true,
+          countdownEffects: true 
+        })
+      },
+      {
+        themeType: 'default',
+        isActive: true, // Solo el tema por defecto estará activo inicialmente
+        title: '🏪 Tema Original',
+        description: 'Tema original de la tienda con colores corporativos',
+        primaryColor: '#3b82f6',
+        secondaryColor: '#1f2937',
+        animationConfig: JSON.stringify({ 
+          subtleAnimations: true, 
+          modernTransitions: true 
+        })
+      }
+    ];
+
+    for (const theme of defaultThemes) {
+      try {
+        const existing = await db.select().from(themeSettings)
+          .where(eq(themeSettings.themeType, theme.themeType))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(themeSettings).values({
+            id: crypto.randomUUID(),
+            ...theme
+          });
+          console.log(`✅ Inserted theme: ${theme.title}`);
+        }
+      } catch (error) {
+        console.log(`Theme ${theme.title} might already exist:`, error);
+      }
     }
 
     console.log('✅ Default data insertion complete');

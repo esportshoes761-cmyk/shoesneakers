@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews, type Image, type InsertImage } from "@shared/schema";
+import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews, type Image, type InsertImage, type SelectThemeSettings, type InsertThemeSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images } from "@shared/schema";
+import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images, themeSettings } from "@shared/schema";
 import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -95,6 +95,15 @@ export interface IStorage {
   getDuplicateProductsByNameBrand(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
   getDuplicateProductsByImageHash(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
   mergeProducts(primaryId: string, duplicateIds: string[], strategy: 'keep_primary' | 'merge_data'): Promise<Product | undefined>;
+
+  // Theme Settings methods
+  getThemeSettings(): Promise<SelectThemeSettings[]>;
+  getActiveTheme(): Promise<SelectThemeSettings | undefined>;
+  getThemeById(id: string): Promise<SelectThemeSettings | undefined>;
+  createTheme(theme: InsertThemeSettings): Promise<SelectThemeSettings>;
+  updateTheme(id: string, theme: Partial<InsertThemeSettings>): Promise<SelectThemeSettings | undefined>;
+  deleteTheme(id: string): Promise<boolean>;
+  activateTheme(id: string): Promise<SelectThemeSettings | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1296,6 +1305,105 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error merging products:', error);
       throw error;
+    }
+  }
+
+  // Theme Settings methods
+  async getThemeSettings(): Promise<SelectThemeSettings[]> {
+    try {
+      return await db.select().from(themeSettings);
+    } catch (error) {
+      console.error('Error getting theme settings:', error);
+      return [];
+    }
+  }
+
+  async getActiveTheme(): Promise<SelectThemeSettings | undefined> {
+    try {
+      const activeTheme = await db.select().from(themeSettings)
+        .where(eq(themeSettings.isActive, true))
+        .limit(1);
+      return activeTheme[0];
+    } catch (error) {
+      console.error('Error getting active theme:', error);
+      return undefined;
+    }
+  }
+
+  async getThemeById(id: string): Promise<SelectThemeSettings | undefined> {
+    try {
+      const theme = await db.select().from(themeSettings)
+        .where(eq(themeSettings.id, id))
+        .limit(1);
+      return theme[0];
+    } catch (error) {
+      console.error('Error getting theme by id:', error);
+      return undefined;
+    }
+  }
+
+  async createTheme(theme: InsertThemeSettings): Promise<SelectThemeSettings> {
+    try {
+      const newTheme = await db.insert(themeSettings).values({
+        id: randomUUID(),
+        ...theme
+      }).returning();
+      return newTheme[0];
+    } catch (error) {
+      console.error('Error creating theme:', error);
+      throw error;
+    }
+  }
+
+  async updateTheme(id: string, theme: Partial<InsertThemeSettings>): Promise<SelectThemeSettings | undefined> {
+    try {
+      const updatedTheme = await db.update(themeSettings)
+        .set({
+          ...theme,
+          updatedAt: sql`(unixepoch())`
+        })
+        .where(eq(themeSettings.id, id))
+        .returning();
+      return updatedTheme[0];
+    } catch (error) {
+      console.error('Error updating theme:', error);
+      return undefined;
+    }
+  }
+
+  async deleteTheme(id: string): Promise<boolean> {
+    try {
+      await db.delete(themeSettings).where(eq(themeSettings.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting theme:', error);
+      return false;
+    }
+  }
+
+  async activateTheme(id: string): Promise<SelectThemeSettings | undefined> {
+    try {
+      // Critical business logic: Only one theme can be active at a time
+      return await db.transaction(async (tx) => {
+        // First, deactivate all themes
+        await tx.update(themeSettings)
+          .set({ isActive: false })
+          .where(sql`1=1`); // Update all rows
+
+        // Then activate the specified theme
+        const activatedTheme = await tx.update(themeSettings)
+          .set({ 
+            isActive: true,
+            updatedAt: sql`(unixepoch())`
+          })
+          .where(eq(themeSettings.id, id))
+          .returning();
+        
+        return activatedTheme[0];
+      });
+    } catch (error) {
+      console.error('Error activating theme:', error);
+      return undefined;
     }
   }
 }

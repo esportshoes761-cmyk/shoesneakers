@@ -172,6 +172,22 @@ export const orders = sqliteTable("orders", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
+// Enum para tipos de tema
+export const ThemeType = z.enum(["halloween", "christmas", "newyear", "default"]);
+
+// Tabla para configuración de temas estacionales
+export const themeSettings = sqliteTable("theme_settings", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  themeType: text("theme_type").notNull(), // 'halloween', 'christmas', 'newyear', 'default'
+  isActive: integer("is_active", { mode: "boolean" }).default(false),
+  title: text("title").notNull(),
+  description: text("description"),
+  primaryColor: text("primary_color").notNull(),
+  secondaryColor: text("secondary_color").notNull(),
+  animationConfig: text("animation_config", { mode: "json" }).$type<Record<string, any>>(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -246,6 +262,14 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updatedAt: true,
 });
 
+export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit({
+  id: true,
+  updatedAt: true,
+}).extend({
+  themeType: ThemeType,
+  animationConfig: z.record(z.any()).optional(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -278,6 +302,9 @@ export type Review = typeof reviews.$inferSelect;
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
+
+export type InsertThemeSettings = z.infer<typeof insertThemeSettingsSchema>;
+export type SelectThemeSettings = typeof themeSettings.$inferSelect;
 
 // Derived types for complex queries
 export type ProductWithCategory = Product & {

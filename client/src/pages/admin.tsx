@@ -1237,7 +1237,7 @@ export default function AdminPanel() {
       
       console.log(`🎯 Sending payload to server:`, payload);
       const response = await apiRequest("POST", "/api/products/intelligent-upload", payload);
-      return response as { created: number; pendingReview: number; results: any[] };
+      return response.json();
     },
     onSuccess: (data: { created: number; pendingReview: number; results: any[] }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
@@ -1389,7 +1389,7 @@ export default function AdminPanel() {
       const parsedError = await parseApiError(error);
       toast({
         title: parsedError.title,
-        description: parsedError.message,
+        description: parsedError.description,
         variant: "destructive",
       });
     },
@@ -1415,7 +1415,7 @@ export default function AdminPanel() {
       const parsedError = await parseApiError(error);
       toast({
         title: parsedError.title,
-        description: parsedError.message,
+        description: parsedError.description,
         variant: "destructive",
       });
     },
@@ -2150,7 +2150,7 @@ export default function AdminPanel() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedBrandId(brand.id);
-                          setBrandProductsDialogOpen(true);
+                          setActiveModal('brandProducts');
                         }}
                         data-testid={`button-view-brand-products-${brand.id}`}
                       >
@@ -2254,8 +2254,8 @@ export default function AdminPanel() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="">Todas las marcas</SelectItem>
-                                  {brandsQuery.data?.map((brand) => (
+                                  <SelectItem value="all">Todas las marcas</SelectItem>
+                                  {brands?.map((brand) => (
                                     <SelectItem key={brand.id} value={brand.id}>
                                       {brand.name}
                                     </SelectItem>
@@ -2502,7 +2502,7 @@ export default function AdminPanel() {
             <div className="flex justify-end gap-2 mt-6">
               <Button 
                 variant="outline" 
-                onClick={() => setBrandProductsDialogOpen(false)}
+                onClick={closeModal}
               >
                 Cerrar
               </Button>
@@ -2671,7 +2671,7 @@ export default function AdminPanel() {
                       )}
                     />
                     <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={() => setPromotionDialogOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => closeModal()}>
                         Cancelar
                       </Button>
                       <Button type="submit" disabled={createPromotionMutation.isPending} data-testid="button-submit-promotion">
@@ -2916,7 +2916,7 @@ export default function AdminPanel() {
                       )}
                     />
                     <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={() => setEventDialogOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => closeModal()}>
                         Cancelar
                       </Button>
                       <Button type="submit" disabled={createEventMutation.isPending} data-testid="button-submit-event">
@@ -3100,7 +3100,10 @@ export default function AdminPanel() {
                             <IntelligentUploader 
                               onImagesUploaded={(imageUrls) => {
                                 field.onChange(imageUrls);
-                                setBulkUploadImages(imageUrls);
+                                setBulkOperations(prev => ({
+                                  ...prev,
+                                  brandPackage: { ...prev.brandPackage, images: imageUrls }
+                                }));
                               }}
                             />
                           </FormControl>
@@ -3160,7 +3163,10 @@ export default function AdminPanel() {
                         onClick={() => {
                           closeModal();
                           brandPackageForm.reset();
-                          setBulkUploadImages([]);
+                          setBulkOperations(prev => ({
+                            ...prev,
+                            brandPackage: { ...prev.brandPackage, images: [] }
+                          }));
                           setBulkOperations(prev => ({
                             ...prev,
                             brandPackage: { ...prev.brandPackage, progress: { isProcessing: false, currentIndex: 0, total: 0, results: { success: 0, failed: 0, errors: [] } } }
@@ -4245,7 +4251,7 @@ export default function AdminPanel() {
                       <FormItem>
                         <FormLabel>Referencia</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Referencia del producto" data-testid="input-edit-product-reference" />
+                          <Input {...field} value={field.value || ""} placeholder="Referencia del producto" data-testid="input-edit-product-reference" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
