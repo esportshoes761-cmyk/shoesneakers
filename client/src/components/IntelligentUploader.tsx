@@ -11,79 +11,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { Brand, Category } from "@shared/schema";
 import CryptoJS from 'crypto-js';
 
-// Brand detection mappings - comprehensive list
-const BRAND_MAPPINGS = {
-  // Nike variants
-  'nike': 'Nike',
-  'niike': 'Nike', 
-  'nke': 'Nike',
-  'swoosh': 'Nike',
-  'air': 'Nike',
-  'jordan': 'Jordan Air',
-  'aj': 'Jordan Air',
-  'airjordan': 'Jordan Air',
-  
-  // Adidas variants
-  'adidas': 'Adidas',
-  'addidas': 'Adidas',
-  'adi': 'Adidas',
-  'trefoil': 'Adidas',
-  'boost': 'Adidas',
-  'ultraboost': 'Adidas',
-  'nmd': 'Adidas',
-  'yeezy': 'Adidas',
-  
-  // Puma variants
-  'puma': 'Puma',
-  'pma': 'Puma',
-  
-  // Converse variants
-  'converse': 'Converse',
-  'conv': 'Converse',
-  'allstar': 'Converse',
-  'chucks': 'Converse',
-  
-  // Vans variants
-  'vans': 'Vans',
-  'van': 'Vans',
-  'oldskool': 'Vans',
-  
-  // New Balance variants
-  'newbalance': 'New Balance',
-  'nb': 'New Balance',
-  '990': 'New Balance',
-  '574': 'New Balance',
-  
-  // Reebok variants
-  'reebok': 'Reebok',
-  'rbk': 'Reebok',
-  'classic': 'Reebok',
-  
-  // Fila variants
-  'fila': 'Fila',
-  'disruptor': 'Fila',
-  
-  // Under Armour variants
-  'underarmour': 'Under Armour',
-  'ua': 'Under Armour',
-  'curry': 'Under Armour',
-  
-  // Other brands
-  'asics': 'Asics',
-  'skechers': 'Skechers',
-  'timberland': 'Timberland',
-  'caterpillar': 'Caterpillar',
-  'cat': 'Caterpillar',
-  'dc': 'DC',
-  'etnies': 'Etnies',
-  'champion': 'Champion',
-  'kappa': 'Kappa',
-  'lotto': 'Lotto',
-  'umbro': 'Umbro',
-  'diadora': 'Diadora',
-  'le_coq_sportif': 'Le Coq Sportif',
-  'lecoq': 'Le Coq Sportif'
-};
+// 🚨 CLIENT-SIDE BRAND DETECTION COMPLETELY ELIMINATED
+// Server is now 100% authoritative for brand detection using brand-detection.ts
+// Client only handles file upload - NO brand detection logic
 
 interface DetectedImage {
   id: string;
@@ -123,54 +53,8 @@ export function IntelligentUploader({
     queryKey: ["/api/categories"]
   });
 
-  // Detect brand from filename
-  const detectBrandFromFilename = (fileName: string): { brand?: string; confidence: 'high' | 'medium' | 'low' | 'none'; brandId?: string } => {
-    const normalizedName = fileName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const words = normalizedName.split('_').filter(word => word.length > 1);
-    
-    // Check for direct brand matches
-    for (const word of words) {
-      if (word in BRAND_MAPPINGS) {
-        const detectedBrandName = BRAND_MAPPINGS[word as keyof typeof BRAND_MAPPINGS];
-        const brandMatch = brands.find(brand => 
-          brand.name.toLowerCase() === detectedBrandName.toLowerCase()
-        );
-        
-        if (brandMatch) {
-          return {
-            brand: detectedBrandName,
-            confidence: 'high',
-            brandId: brandMatch.id
-          };
-        } else {
-          return {
-            brand: detectedBrandName,
-            confidence: 'medium'
-          };
-        }
-      }
-    }
-    
-    // Check for partial matches
-    const partialMatches = Object.keys(BRAND_MAPPINGS).filter(key =>
-      words.some(word => word.includes(key) || key.includes(word))
-    );
-    
-    if (partialMatches.length > 0) {
-      const detectedBrandName = BRAND_MAPPINGS[partialMatches[0] as keyof typeof BRAND_MAPPINGS];
-      const brandMatch = brands.find(brand => 
-        brand.name.toLowerCase() === detectedBrandName.toLowerCase()
-      );
-      
-      return {
-        brand: detectedBrandName,
-        confidence: brandMatch ? 'medium' : 'low',
-        brandId: brandMatch?.id
-      };
-    }
-    
-    return { confidence: 'none' };
-  };
+  // 🚨 BRAND DETECTION ELIMINATED - Server handles ALL brand detection
+  // Client now only processes files for upload without any brand analysis
 
   // Convert HEIC to JPEG
   const convertHeicToJpeg = async (file: File): Promise<File> => {
@@ -257,18 +141,18 @@ export function IntelligentUploader({
         // Create preview URL
         const previewUrl = URL.createObjectURL(processedFile);
         
-        // Detect brand
-        const detection = detectBrandFromFilename(processedFile.name);
+        // 🚨 NO CLIENT-SIDE BRAND DETECTION - Server will handle this
         
         // Create initial detected image with preview URL
+        // 🚨 NO CLIENT-SIDE BRAND DATA - Server will detect brands
         const detectedImage: DetectedImage = {
           id: crypto.randomUUID(),
           file: processedFile,
           url: previewUrl,
           fileName: processedFile.name,
-          detectedBrand: detection.brand,
-          confidence: detection.confidence,
-          brandId: detection.brandId,
+          // detectedBrand: undefined, // Server will handle detection
+          confidence: 'none', // Client doesn't detect brands
+          // brandId: undefined, // Server will assign brand
           isUploading: true,
           isUploaded: false
         };

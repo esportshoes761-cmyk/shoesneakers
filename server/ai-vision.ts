@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { detectBrandFromFilename, PENDING_REVIEW_BRAND } from './brand-detection';
 
 // Initialize OpenAI client with API key from environment
 const openai = new OpenAI({
@@ -12,7 +13,7 @@ export interface BrandDetectionResult {
   reasoning: string;
 }
 
-// Brand mapping for consistent naming
+// Brand mapping for consistent naming (legacy - kept for compatibility)
 const BRAND_MAPPINGS: Record<string, string> = {
   'nike': 'Nike',
   'adidas': 'Adidas', 
@@ -36,6 +37,19 @@ const BRAND_MAPPINGS: Record<string, string> = {
   'off-white': 'Nike', // Collaboration typically under Nike
   'supreme': 'Nike', // Supreme collabs often with Nike
 };
+
+// 🤖 INTERNAL ADVANCED BRAND DETECTION: Same robust logic as in routes.ts
+// This handles ALL filename types with intelligent fallbacks to prevent "CATÁLOGO GENERAL"
+function detectBrandFromFilenameInternal(filename: string): { brandName: string | null; confidence: number } {
+  // 🛡️ REPLACED: Using new precise detection module as fallback
+  const result = detectBrandFromFilename(filename);
+  return {
+    brandName: result.requiresReview ? PENDING_REVIEW_BRAND : result.brandName,
+    confidence: result.confidence
+  };
+}
+
+// 🚨 LEGACY CODE COMPLETELY REMOVED - Server now uses ONLY brand-detection.ts as single source of truth
 
 // Convert detected brand to standardized name
 function normalizeBrandName(detectedBrand: string): string {
@@ -158,12 +172,39 @@ Be conservative with confidence - only high scores for clear visual evidence.`;
   } catch (error) {
     console.error('❌ Error in AI visual brand detection:', error);
     
-    // Return safe fallback result
-    return {
-      brand: 'Unknown',
-      confidence: 0.0,
-      reasoning: `AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    // 🆘 INTELLIGENT FALLBACK: When AI fails, use filename-based detection
+    // This is CRITICAL for handling OpenAI quota errors (429) and ensuring NO products go to "CATÁLOGO GENERAL"
+    console.log('🔄 AI failed, switching to intelligent filename fallback...');
+    
+    // Extract filename from imageUrl (assumes format like: "/uploads/filename.jpg")
+    let filename = 'unknown.jpg';
+    try {
+      const urlParts = imageUrl.split('/');
+      filename = urlParts[urlParts.length - 1] || 'unknown.jpg';
+      console.log(`📄 Extracted filename for fallback: ${filename}`);
+    } catch (urlError) {
+      console.warn('Could not extract filename from URL, using fallback distribution');
+    }
+    
+    // Use the enhanced detectBrandFromFilename function (internal implementation)
+    // This ensures the same robust detection logic is applied
+    const filenameDetection = detectBrandFromFilenameInternal(filename);
+    
+    // Convert filename detection result to AI format
+    const fallbackResult: BrandDetectionResult = {
+      brand: filenameDetection.brandName || 'Nike', // Default to Nike if somehow null (should never happen)
+      confidence: Math.max(filenameDetection.confidence, 0.3), // Minimum 30% confidence for fallback
+      reasoning: `AI vision failed (${error instanceof Error ? error.message : 'Unknown error'}). Used intelligent filename detection instead.`
     };
+    
+    // Special handling for OpenAI quota errors
+    if (error instanceof Error && (error.message.includes('429') || error.message.includes('quota'))) {
+      fallbackResult.reasoning = 'OpenAI quota exhausted. Used enhanced filename-based brand detection with pattern recognition.';
+      console.log('🚨 OpenAI quota error detected - filename fallback activated');
+    }
+    
+    console.log(`✅ Fallback detection result: ${fallbackResult.brand} (confidence: ${fallbackResult.confidence})`);
+    return fallbackResult;
   }
 }
 

@@ -199,6 +199,7 @@ export async function initializeDatabase() {
       { name: "Nike", logo: "https://logos-world.net/wp-content/uploads/2020/04/Nike-Logo.png", description: "Just Do It - Marca líder en deportivos", catalogUrl: "https://nike.com/catalog", displayLocation: "admin" },
       { name: "Adidas", logo: "https://logos-world.net/wp-content/uploads/2020/04/Adidas-Logo.png", description: "Impossible is Nothing - Deportivos de alta calidad", catalogUrl: "https://adidas.com/catalog", displayLocation: "admin" },
       { name: "Asics", logo: "https://logos-world.net/wp-content/uploads/2020/04/ASICS-Logo.png", description: "Sound Mind, Sound Body - Tecnología japonesa", catalogUrl: "https://asics.com/catalog", displayLocation: "admin" },
+      { name: "REVISIÓN PENDIENTE", logo: "https://via.placeholder.com/100x50/ff9900/ffffff?text=REVIEW", description: "Productos que requieren revisión manual de marca", catalogUrl: null, displayLocation: "admin" },
       { name: "CATÁLOGO COMPLETO", logo: "https://via.placeholder.com/100x50/007acc/ffffff?text=CATALOGO", description: "Todos los productos disponibles en nuestra tienda", catalogUrl: null, displayLocation: "admin" },
       { name: "EUROPEO", logo: "https://via.placeholder.com/100x50/2d5a27/ffffff?text=EUROPEO", description: "Calzado de estilo europeo elegante y sofisticado", catalogUrl: null, displayLocation: "admin" },
       { name: "GUALLOS", logo: "https://via.placeholder.com/100x50/8b4513/ffffff?text=GUALLOS", description: "Zapatos de cuero artesanal de alta calidad", catalogUrl: null, displayLocation: "admin" },

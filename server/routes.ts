@@ -8,6 +8,7 @@ import { randomBytes } from "crypto";
 import fs from "fs-extra";
 import * as path from "path";
 import { detectBrandFromImage, combineDetectionResults } from "./ai-vision";
+import { detectBrandFromFilename, PENDING_REVIEW_BRAND, MIN_CONFIDENCE_THRESHOLD } from "./brand-detection";
 
 // Helper functions
 function generateUniqueReference(): string {
@@ -44,74 +45,10 @@ async function generateUniqueReferenceForProduct(): Promise<string> {
   throw new Error('No se pudo generar una referencia única después de múltiples intentos');
 }
 
-// 🤖 INTELLIGENT BRAND DETECTION: Advanced algorithm for brand recognition from filenames
-function detectBrandFromFilename(filename: string): { brandName: string | null; confidence: number } {
-  const normalizedName = filename.toLowerCase().replace(/[^a-z0-9]/g, ' ');
-  
-  // Comprehensive brand mapping with variations and confidence scoring
-  const brandMappings = [
-    { keywords: ['nike', 'air', 'jordan', 'airmax', 'airforce'], brand: 'Nike', confidence: 0.95 },
-    { keywords: ['adidas', 'ultraboost', 'gazelle', 'stan smith', 'originals'], brand: 'Adidas', confidence: 0.95 },
-    { keywords: ['jordan', 'retro', 'jumpman'], brand: 'Jordan Air', confidence: 0.90 },
-    { keywords: ['puma', 'suede', 'speed', 'rs'], brand: 'Puma', confidence: 0.90 },
-    { keywords: ['converse', 'chuck', 'allstar', 'all star'], brand: 'Converse', confidence: 0.90 },
-    { keywords: ['vans', 'authentic', 'old skool', 'oldskool'], brand: 'Vans', confidence: 0.90 },
-    { keywords: ['newbalance', 'new balance', 'nb'], brand: 'New Balance', confidence: 0.85 },
-    { keywords: ['reebok', 'classic', 'instapump'], brand: 'Reebok', confidence: 0.85 },
-    { keywords: ['fila', 'disruptor'], brand: 'Fila', confidence: 0.80 },
-    { keywords: ['underarmour', 'under armour', 'ua'], brand: 'Under Armour', confidence: 0.80 },
-    { keywords: ['asics', 'gel', 'tiger'], brand: 'Asics', confidence: 0.80 },
-    { keywords: ['skechers', 'shape ups'], brand: 'Skechers', confidence: 0.75 },
-    { keywords: ['timberland', 'timber'], brand: 'Timberland', confidence: 0.75 },
-    { keywords: ['balenciaga', 'triple s'], brand: 'Balenciaga', confidence: 0.85 },
-    { keywords: ['gucci', 'ace'], brand: 'Gucci', confidence: 0.85 }
-  ];
-  
-  let bestMatch: { brandName: string | null; confidence: number } = { brandName: null, confidence: 0 };
-  
-  // 🔧 IMPROVED: First try exact brand keyword matching
-  for (const mapping of brandMappings) {
-    for (const keyword of mapping.keywords) {
-      if (normalizedName.includes(keyword)) {
-        if (mapping.confidence > bestMatch.confidence) {
-          bestMatch = { brandName: mapping.brand, confidence: mapping.confidence };
-        }
-      }
-    }
-  }
-  
-  // 🆕 NEW: For numeric catalogs (like "1000474070.jpg"), use flexible pattern recognition
-  // This handles cases where suppliers send numbered catalogs without brand names in filenames
-  if (bestMatch.confidence === 0) {
-    // Check if filename is purely numeric (typical for supplier catalogs)
-    const isNumericCatalog = /^\d+\.(jpg|jpeg|png|webp)$/i.test(filename.trim());
-    if (isNumericCatalog) {
-      console.log(`📊 Detected numeric catalog filename: ${filename} - will use fallback brand`);
-      // Return confidence 0 to trigger fallback brand logic
-      // This ensures ALL numeric catalog items go to "CATÁLOGO GENERAL" for admin review
-      return { brandName: null, confidence: 0 };
-    }
-    
-    // Try partial matching for mixed filenames (letters + numbers)
-    const hasLetters = /[a-z]/.test(normalizedName);
-    if (hasLetters) {
-      // Try fuzzy matching with lower confidence for edge cases
-      for (const mapping of brandMappings) {
-        for (const keyword of mapping.keywords) {
-          // Check if any 3+ character substring of keyword appears
-          if (keyword.length >= 3 && normalizedName.includes(keyword.substring(0, 3))) {
-            bestMatch = { brandName: mapping.brand, confidence: 0.3 }; // Low confidence for fuzzy match
-            break;
-          }
-        }
-        if (bestMatch.confidence > 0) break;
-      }
-    }
-  }
-  
-  console.log(`🔍 Brand detection for "${filename}": ${bestMatch.brandName || 'No match'} (confidence: ${bestMatch.confidence})`);
-  return bestMatch;
-}
+// 🛡️ REPLACED: Using new precise brand detection module
+// This eliminates false positives and implements proper review queue
+// 🚨 LEGACY FUNCTION REMOVED - Now using detectBrandFromFilename directly
+// This ensures server is 100% authoritative with single source of truth
 
 // 🔒 SECURE: Session-based admin authorization middleware
 async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
@@ -579,7 +516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const { fileName, url, detectedBrand } = detection;
           
-          // 🤖 STEP 1: Detect brand from filename using existing algorithm
+          // 🚨 STEP 1: Server-side brand detection using PRECISE algorithm (SINGLE SOURCE OF TRUTH)
+          // Client brandId is IGNORED to ensure server is 100% authoritative
           const filenameDetection = detectBrandFromFilename(fileName);
           
           // 🔍 STEP 2: Use AI Visual Analysis for brand detection
