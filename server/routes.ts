@@ -891,7 +891,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // HASH CHECKING ENDPOINT REMOVED - NO DUPLICATE DETECTION (user request)
+  // 🔍 Check for duplicate images before upload
+  app.get("/api/images/check-duplicates", async (req, res) => {
+    try {
+      const { fileName, size, hash } = req.query;
+      
+      if (!fileName || !size) {
+        return res.status(400).json({
+          error: "fileName and size are required",
+          details: "Both fileName and size parameters must be provided"
+        });
+      }
+
+      const fileSizeNumber = parseInt(size as string, 10);
+      if (isNaN(fileSizeNumber)) {
+        return res.status(400).json({
+          error: "size must be a valid number",
+          details: "The size parameter must be a valid integer"
+        });
+      }
+
+      // Check for duplicates by different criteria
+      let duplicates = [];
+      
+      // 1. Check by hash if provided (most accurate)
+      if (hash) {
+        const hashDuplicate = await storage.getImageByHash(hash as string);
+        if (hashDuplicate) {
+          duplicates.push({
+            type: 'hash',
+            match: hashDuplicate,
+            reason: 'Imagen idéntica (mismo contenido)'
+          });
+        }
+      }
+      
+      // 2. Check by filename and size combination (good indicator)
+      const allImages = await storage.getAllImages();
+      const nameAndSizeMatches = allImages.filter(img => 
+        img.originalName === fileName && img.size === fileSizeNumber
+      );
+      
+      nameAndSizeMatches.forEach(match => {
+        // Avoid duplicate entries if already found by hash
+        const alreadyFoundByHash = duplicates.some(dup => dup.match.id === match.id);
+        if (!alreadyFoundByHash) {
+          duplicates.push({
+            type: 'name_and_size',
+            match: match,
+            reason: 'Mismo nombre y tamaño de archivo'
+          });
+        }
+      });
+
+      // 3. Check by filename only (potential duplicate)
+      const nameMatches = allImages.filter(img => 
+        img.originalName === fileName && 
+        !duplicates.some(dup => dup.match.id === img.id)
+      );
+      
+      nameMatches.forEach(match => {
+        duplicates.push({
+          type: 'name_only',
+          match: match,
+          reason: 'Mismo nombre de archivo'
+        });
+      });
+
+      // Return response
+      const hasDuplicates = duplicates.length > 0;
+      const exactDuplicate = duplicates.find(dup => dup.type === 'hash');
+      const likelyDuplicate = duplicates.find(dup => dup.type === 'name_and_size');
+
+      res.json({
+        isDuplicate: hasDuplicates,
+        isExactDuplicate: !!exactDuplicate,
+        isLikelyDuplicate: !!likelyDuplicate,
+        duplicateCount: duplicates.length,
+        duplicates: duplicates,
+        recommendation: exactDuplicate 
+          ? 'Esta imagen ya existe exactamente igual en el sistema'
+          : likelyDuplicate 
+            ? 'Posiblemente sea un duplicado (mismo nombre y tamaño)'
+            : hasDuplicates
+              ? 'Existe una imagen con el mismo nombre'
+              : 'Imagen nueva, lista para subir',
+        message: exactDuplicate
+          ? '⚠️ Esta imagen ya existe en el sistema'
+          : hasDuplicates
+            ? '⚠️ Posible imagen duplicada detectada'
+            : '✅ Imagen nueva, lista para subir'
+      });
+
+    } catch (error) {
+      console.error("Error checking for duplicate images:", error);
+      res.status(500).json({ 
+        error: "Error checking for duplicates",
+        details: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
 
   // Endpoint para verificar nombre de producto duplicado - AHORA SIEMPRE PERMITE DUPLICADOS
   app.get("/api/products/check-name", async (req, res) => {

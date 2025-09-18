@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, X, FileImage, AlertTriangle, Check, Loader2, Plus } from "lucide-react";
+import { Upload, X, FileImage, AlertTriangle, Check, Loader2, Plus, Clock, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import CryptoJS from 'crypto-js';
 
 interface UploadedImage {
   id: string;
@@ -10,6 +11,26 @@ interface UploadedImage {
   fileName: string;
   isUploading?: boolean;
   error?: string;
+  isDuplicate?: boolean;
+  duplicateInfo?: {
+    type: 'hash' | 'name_and_size' | 'name_only';
+    reason: string;
+    message: string;
+  };
+}
+
+interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  isExactDuplicate: boolean;
+  isLikelyDuplicate: boolean;
+  duplicateCount: number;
+  duplicates: Array<{
+    type: 'hash' | 'name_and_size' | 'name_only';
+    match: any;
+    reason: string;
+  }>;
+  recommendation: string;
+  message: string;
 }
 
 interface MultiImageUploaderProps {
@@ -53,6 +74,56 @@ export function MultiImageUploader({
       });
     } catch (error) {
       throw new Error('Error al convertir imagen HEIC. Guarda la imagen como JPG.');
+    }
+  };
+
+  // Función para calcular SHA-256 hash de una imagen
+  const calculateImageHash = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const arrayBuffer = reader.result as ArrayBuffer;
+          const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+          const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+          resolve(hash);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('Error reading file for hash calculation'));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Función para verificar duplicados usando la API
+  const checkForDuplicates = async (file: File): Promise<DuplicateCheckResult> => {
+    try {
+      // Calcular hash para verificación exacta
+      const hash = await calculateImageHash(file);
+      
+      // Hacer request a la API de verificación
+      const response = await fetch(`/api/images/check-duplicates?fileName=${encodeURIComponent(file.name)}&size=${file.size}&hash=${hash}`);
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
+      const result: DuplicateCheckResult = await response.json();
+      return result;
+      
+    } catch (error) {
+      console.error('Error checking for duplicates:', error);
+      // Return a safe default - allow upload but warn user
+      return {
+        isDuplicate: false,
+        isExactDuplicate: false,
+        isLikelyDuplicate: false,
+        duplicateCount: 0,
+        duplicates: [],
+        recommendation: 'No se pudo verificar duplicados, pero se puede subir',
+        message: '⚠️ No se pudo verificar duplicados - continuar con cuidado'
+      };
     }
   };
 
@@ -137,7 +208,7 @@ export function MultiImageUploader({
     return result.imageUrl;
   };
 
-  // Manejar selección de múltiples archivos
+  // Manejar selección de múltiples archivos con verificación de duplicados
   const handleFilesSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
@@ -155,101 +226,194 @@ export function MultiImageUploader({
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Crear entradas temporales para mostrar el progreso
-    const tempImages = files.map((file, index) => ({
+    // 🔍 PASO 1: Verificar duplicados antes de subir (RÁPIDO)
+    console.log('🔍 Verificando duplicados para', files.length, 'imágenes...');
+    
+    const duplicateResults: { file: File; result: DuplicateCheckResult; index: number }[] = [];
+    let duplicateCheckProgress = 0;
+
+    // Verificar duplicados en paralelo
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const duplicateResult = await checkForDuplicates(file);
+        duplicateResults.push({ file, result: duplicateResult, index: i });
+        
+        duplicateCheckProgress++;
+        setUploadProgress((duplicateCheckProgress / files.length) * 30); // 30% del progreso total
+        
+        // Log de verificación de duplicados
+        if (duplicateResult.isDuplicate) {
+          console.log(`⚠️ Duplicado detectado: ${file.name} - ${duplicateResult.message}`);
+        } else {
+          console.log(`✅ Imagen nueva: ${file.name}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error verificando duplicados para ${file.name}:`, error);
+        // Continuar con imagen si falla la verificación
+        duplicateResults.push({
+          file,
+          result: {
+            isDuplicate: false,
+            isExactDuplicate: false,
+            isLikelyDuplicate: false,
+            duplicateCount: 0,
+            duplicates: [],
+            recommendation: 'Error en verificación - continuar',
+            message: '⚠️ No se pudo verificar duplicados'
+          },
+          index: i
+        });
+        duplicateCheckProgress++;
+        setUploadProgress((duplicateCheckProgress / files.length) * 30);
+      }
+    }
+
+    // 🔍 PASO 2: Mostrar resultados de verificación y proceder según configuración
+    const exactDuplicates = duplicateResults.filter(dr => dr.result.isExactDuplicate);
+    const likelyDuplicates = duplicateResults.filter(dr => dr.result.isLikelyDuplicate && !dr.result.isExactDuplicate);
+    const newImages = duplicateResults.filter(dr => !dr.result.isDuplicate);
+
+    // Mostrar resumen de verificación
+    if (exactDuplicates.length > 0) {
+      toast({
+        title: "🚨 Duplicados Exactos Detectados",
+        description: `${exactDuplicates.length} imagen(es) ya existen en el sistema. Se saltarán automáticamente.`,
+        duration: 5000,
+        variant: "destructive"
+      });
+    }
+
+    if (likelyDuplicates.length > 0) {
+      toast({
+        title: "⚠️ Posibles Duplicados Detectados",
+        description: `${likelyDuplicates.length} imagen(es) probablemente ya existen. Se subirán con advertencia.`,
+        duration: 4000,
+      });
+    }
+
+    if (newImages.length > 0) {
+      toast({
+        title: "✅ Imágenes Nuevas",
+        description: `${newImages.length} imagen(es) son nuevas y se subirán normalmente.`,
+        duration: 3000,
+      });
+    }
+
+    // 🔍 PASO 3: Crear entradas temporales incluyendo información de duplicados
+    const tempImages = duplicateResults.map((dr, index) => ({
       id: `temp-${Date.now()}-${index}`,
       url: '',
-      fileName: file.name,
-      isUploading: true,
+      fileName: dr.file.name,
+      isUploading: !dr.result.isExactDuplicate, // No subir duplicados exactos
+      isDuplicate: dr.result.isDuplicate,
+      duplicateInfo: dr.result.isDuplicate ? {
+        type: dr.result.isExactDuplicate ? 'hash' as const : 
+              dr.result.isLikelyDuplicate ? 'name_and_size' as const : 'name_only' as const,
+        reason: dr.result.recommendation,
+        message: dr.result.message
+      } : undefined,
+      error: dr.result.isExactDuplicate ? 'Duplicado exacto - saltado' : undefined
     }));
 
     setImages(prev => [...prev, ...tempImages]);
 
+    // 🔍 PASO 4: Subir solo las imágenes que no son duplicados exactos
+    const filesToUpload = duplicateResults.filter(dr => !dr.result.isExactDuplicate);
     let completedUploads = 0;
     const newImageUrls: string[] = [];
 
-    // Subir imágenes en paralelo (máximo 3 simultáneas)
-    const uploadPromises = files.map(async (file, index) => {
+    if (filesToUpload.length > 0) {
+      // Subir imágenes en paralelo (máximo 3 simultáneas)
+      const uploadPromises = filesToUpload.map(async (dr) => {
+        try {
+          const imageUrl = await uploadSingleImage(dr.file);
+          newImageUrls.push(imageUrl);
+          
+          // Actualizar el estado de la imagen
+          setImages(prev => prev.map(img => 
+            img.id === tempImages[dr.index].id 
+              ? { ...img, url: imageUrl, isUploading: false }
+              : img
+          ));
+
+          completedUploads++;
+          setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70); // 70% restante del progreso
+
+          // 🔔 Notificación específica por cada imagen subida
+          const duplicateStatus = dr.result.isDuplicate ? 
+            (dr.result.isLikelyDuplicate ? ' (⚠️ posible duplicado)' : ' (⚠️ nombre duplicado)') : 
+            '';
+          console.log(`✅ Imagen cargada correctamente para producto: ${dr.file.name}${duplicateStatus}`);
+
+          return imageUrl;
+        } catch (error) {
+          // Marcar como error
+          setImages(prev => prev.map(img => 
+            img.id === tempImages[dr.index].id 
+              ? { ...img, error: error instanceof Error ? error.message : 'Error desconocido', isUploading: false }
+              : img
+          ));
+          
+          completedUploads++;
+          setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70);
+          
+          // Log detallado del error para debugging
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`❌ Error uploading ${dr.file.name}:`, {
+            error: errorMsg,
+            fileName: dr.file.name,
+            fileSize: dr.file.size,
+            fileType: dr.file.type,
+            wasDuplicate: dr.result.isDuplicate
+          });
+          return null;
+        }
+      });
+
       try {
-        const imageUrl = await uploadSingleImage(file);
-        newImageUrls.push(imageUrl);
+        await Promise.all(uploadPromises);
         
-        // Actualizar el estado de la imagen
-        setImages(prev => prev.map(img => 
-          img.id === tempImages[index].id 
-            ? { ...img, url: imageUrl, isUploading: false }
-            : img
-        ));
-
-        completedUploads++;
-        setUploadProgress((completedUploads / files.length) * 100);
-
-        // 🔔 Notificación específica por cada imagen subida
-        console.log(`✅ Imagen cargada correctamente para producto: ${file.name}`);
+        const successfulUploads = newImageUrls.filter(Boolean);
+        const skippedDuplicates = exactDuplicates.length;
         
-        // Mostrar progreso detallado cada 5 imágenes o al final
-        if (completedUploads % 5 === 0 || completedUploads === files.length) {
+        // Notificación final
+        if (successfulUploads.length > 0 || skippedDuplicates > 0) {
           toast({
-            title: "📸 Progreso de Subida",
-            description: `${completedUploads} de ${files.length} imágenes procesadas correctamente`,
-            duration: 2000,
+            title: "🎯 Proceso Completado",
+            description: `✅ ${successfulUploads.length} subidas • ⚠️ ${skippedDuplicates} duplicados saltados • ${likelyDuplicates.length} con advertencias`,
+            duration: 6000,
           });
         }
 
-        return imageUrl;
+        // Notificar cambios
+        const allUrls = images
+          .filter(img => img.url && !img.error)
+          .map(img => img.url)
+          .concat(successfulUploads);
+        onImagesChange(allUrls);
+
       } catch (error) {
-        // Marcar como error
-        setImages(prev => prev.map(img => 
-          img.id === tempImages[index].id 
-            ? { ...img, error: error instanceof Error ? error.message : 'Error desconocido', isUploading: false }
-            : img
-        ));
-        
-        completedUploads++;
-        setUploadProgress((completedUploads / files.length) * 100);
-        
-        // Log detallado del error para debugging
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error(`❌ Error uploading ${file.name}:`, {
-          error: errorMsg,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type
-        });
-        return null;
-      }
-    });
-
-    try {
-      await Promise.all(uploadPromises);
-      
-      const successfulUploads = newImageUrls.filter(Boolean);
-      if (successfulUploads.length > 0) {
         toast({
-          title: "¡Imágenes subidas!",
-          description: `${successfulUploads.length} de ${files.length} imágenes subidas correctamente`,
+          title: "Error en la subida",
+          description: "Algunas imágenes no se pudieron subir",
+          variant: "destructive",
         });
       }
-
-      // Notificar cambios
-      const allUrls = images
-        .filter(img => img.url && !img.error)
-        .map(img => img.url)
-        .concat(successfulUploads);
-      onImagesChange(allUrls);
-
-    } catch (error) {
+    } else {
+      // Todas las imágenes son duplicados exactos
       toast({
-        title: "Error en la subida",
-        description: "Algunas imágenes no se pudieron subir",
+        title: "🚫 Todas las Imágenes son Duplicados",
+        description: "Todas las imágenes seleccionadas ya existen en el sistema.",
         variant: "destructive",
+        duration: 6000,
       });
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-      // Limpiar el input
-      event.target.value = '';
     }
+
+    setIsUploading(false);
+    setUploadProgress(0);
+    // Limpiar el input
+    event.target.value = '';
   }, [images, maxImages, onImagesChange, toast]);
 
   // Eliminar imagen
@@ -349,71 +513,219 @@ export function MultiImageUploader({
           )}
         </div>
         
-        {/* Contador detallado de estado */}
-        <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-2 rounded">
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1">
-              <Check className="h-3 w-3 text-green-500" />
-              Subidas: <strong className="text-green-600">{validImages.length}</strong>
-            </span>
-            <span className="flex items-center gap-1">
-              <Loader2 className="h-3 w-3 text-blue-500" />
-              Cargando: <strong className="text-blue-600">{images.filter(img => img.isUploading).length}</strong>
-            </span>
-            <span className="flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3 text-red-500" />
-              Errores: <strong className="text-red-600">{images.filter(img => img.error).length}</strong>
+        {/* Contador detallado de estado con información de duplicados */}
+        <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg space-y-2">
+          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+            <div className="flex gap-4">
+              <span className="flex items-center gap-1">
+                <Check className="h-3 w-3 text-green-500" />
+                Válidas: <strong className="text-green-600">{validImages.length}</strong>
+              </span>
+              <span className="flex items-center gap-1">
+                <Loader2 className="h-3 w-3 text-blue-500" />
+                Cargando: <strong className="text-blue-600">{images.filter(img => img.isUploading).length}</strong>
+              </span>
+              <span className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 text-red-500" />
+                Errores: <strong className="text-red-600">{images.filter(img => img.error).length}</strong>
+              </span>
+              {images.some(img => img.isDuplicate) && (
+                <span className="flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 text-orange-500" />
+                  Duplicados: <strong className="text-orange-600">{images.filter(img => img.isDuplicate).length}</strong>
+                </span>
+              )}
+            </div>
+            <span className="text-gray-400">
+              Total: {images.length}/{maxImages}
             </span>
           </div>
-          <span className="text-gray-400">
-            Total: {images.length}/{maxImages}
-          </span>
+
+          {/* Leyenda de colores para duplicados */}
+          {images.some(img => img.isDuplicate) && (
+            <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">🎨 Leyenda de Estados:</p>
+              <div className="flex flex-wrap gap-3 text-xs">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-green-400 rounded border border-gray-300"></div>
+                  <span className="text-gray-600 dark:text-gray-300">✅ Nueva</span>
+                </div>
+                {images.some(img => img.duplicateInfo?.type === 'hash') && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-red-500 rounded border border-gray-300"></div>
+                    <span className="text-gray-600 dark:text-gray-300">🚫 Exacta</span>
+                  </div>
+                )}
+                {images.some(img => img.duplicateInfo?.type === 'name_and_size') && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-orange-500 rounded border border-gray-300"></div>
+                    <span className="text-gray-600 dark:text-gray-300">⚠️ Probable</span>
+                  </div>
+                )}
+                {images.some(img => img.duplicateInfo?.type === 'name_only') && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-yellow-500 rounded border border-gray-300"></div>
+                    <span className="text-gray-600 dark:text-gray-300">⚠️ Nombre</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                💡 Pasa el cursor sobre las imágenes con borde de color para ver detalles del duplicado
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Grid de imágenes */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {images.map((image) => (
-            <div
-              key={image.id}
-              className="relative aspect-square border rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800"
-            >
-              {image.isUploading ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-800/80">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                </div>
-              ) : image.error ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50 dark:bg-red-900/20 p-2">
-                  <AlertTriangle className="h-6 w-6 text-red-500 mb-1" />
-                  <p className="text-xs text-red-600 text-center">{image.error}</p>
-                </div>
-              ) : image.url ? (
-                <img
-                  src={image.url}
-                  alt={image.fileName}
-                  className="w-full h-full object-cover"
-                />
-              ) : null}
-              
-              {/* Botón de eliminar */}
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="absolute top-1 right-1 h-6 w-6 p-0"
-                onClick={() => removeImage(image.id)}
-                disabled={image.isUploading}
-              >
-                <X className="h-3 w-3" />
-              </Button>
+          {images.map((image) => {
+            // Determinar estilos y íconos basados en el estado de duplicado
+            const getBorderColor = () => {
+              if (image.isDuplicate && image.duplicateInfo) {
+                switch (image.duplicateInfo.type) {
+                  case 'hash': return 'border-red-500 border-2'; // Duplicado exacto
+                  case 'name_and_size': return 'border-orange-400 border-2'; // Probable duplicado
+                  case 'name_only': return 'border-yellow-400 border-2'; // Mismo nombre
+                  default: return 'border-gray-300';
+                }
+              }
+              return image.url && !image.error ? 'border-green-400' : 'border-gray-300';
+            };
 
-              {/* Nombre del archivo */}
-              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
-                {image.fileName}
+            const getStatusIcon = () => {
+              if (image.isUploading) return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+              if (image.error) return <AlertTriangle className="h-4 w-4 text-red-500" />;
+              if (image.isDuplicate && image.duplicateInfo) {
+                switch (image.duplicateInfo.type) {
+                  case 'hash': return <AlertCircle className="h-4 w-4 text-red-500" />; // Duplicado exacto
+                  case 'name_and_size': return <AlertTriangle className="h-4 w-4 text-orange-500" />; // Probable duplicado
+                  case 'name_only': return <Clock className="h-4 w-4 text-yellow-500" />; // Mismo nombre
+                  default: return <Check className="h-4 w-4 text-green-500" />;
+                }
+              }
+              if (image.url) return <Check className="h-4 w-4 text-green-500" />;
+              return <FileImage className="h-4 w-4 text-gray-400" />;
+            };
+
+            const getBackgroundColor = () => {
+              if (image.isDuplicate && image.duplicateInfo) {
+                switch (image.duplicateInfo.type) {
+                  case 'hash': return 'bg-red-50 dark:bg-red-900/10'; // Duplicado exacto
+                  case 'name_and_size': return 'bg-orange-50 dark:bg-orange-900/10'; // Probable duplicado  
+                  case 'name_only': return 'bg-yellow-50 dark:bg-yellow-900/10'; // Mismo nombre
+                  default: return 'bg-gray-100 dark:bg-gray-800';
+                }
+              }
+              return 'bg-gray-100 dark:bg-gray-800';
+            };
+
+            return (
+              <div
+                key={image.id}
+                className={`relative aspect-square border rounded-lg overflow-hidden ${getBorderColor()} ${getBackgroundColor()}`}
+                data-testid={`image-card-${image.id}`}
+              >
+                {image.isUploading ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 dark:bg-gray-800/90 p-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
+                    <p className="text-xs text-blue-600 text-center font-medium">Subiendo...</p>
+                  </div>
+                ) : image.error ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/95 dark:bg-red-900/40 p-2">
+                    <AlertTriangle className="h-6 w-6 text-red-500 mb-2" />
+                    <p className="text-xs text-red-600 text-center font-medium">Error</p>
+                    <p className="text-xs text-red-500 text-center">{image.error}</p>
+                  </div>
+                ) : image.isDuplicate && image.duplicateInfo ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
+                    {/* Mostrar imagen si existe, sino fondo informativo */}
+                    {image.url ? (
+                      <img
+                        src={image.url}
+                        alt={image.fileName}
+                        className="w-full h-full object-cover opacity-80"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        {getStatusIcon()}
+                        <p className="text-xs text-center font-medium mt-2">
+                          {image.duplicateInfo.type === 'hash' ? '🚫 Duplicado Exacto' : 
+                           image.duplicateInfo.type === 'name_and_size' ? '⚠️ Probable Duplicado' : 
+                           '⚠️ Nombre Duplicado'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Overlay con información de duplicado */}
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center ${
+                      image.duplicateInfo.type === 'hash' ? 'bg-red-500/80' :
+                      image.duplicateInfo.type === 'name_and_size' ? 'bg-orange-500/70' :
+                      'bg-yellow-500/60'
+                    } text-white text-xs p-2 opacity-0 hover:opacity-100 transition-opacity`}>
+                      <div className="text-center">
+                        <p className="font-semibold mb-1">{image.duplicateInfo.message}</p>
+                        <p className="text-xs">{image.duplicateInfo.reason}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : image.url ? (
+                  <img
+                    src={image.url}
+                    alt={image.fileName}
+                    className="w-full h-full object-cover"
+                    data-testid={`uploaded-image-${image.id}`}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <FileImage className="h-12 w-12 text-gray-400" />
+                  </div>
+                )}
+                
+                {/* Indicador de estado en la esquina superior izquierda */}
+                <div className={`absolute top-1 left-1 p-1 rounded-full ${
+                  image.isDuplicate && image.duplicateInfo 
+                    ? image.duplicateInfo.type === 'hash' ? 'bg-red-500' :
+                      image.duplicateInfo.type === 'name_and_size' ? 'bg-orange-500' :
+                      'bg-yellow-500'
+                    : image.url && !image.error ? 'bg-green-500' : 'bg-gray-400'
+                }`}>
+                  {getStatusIcon()}
+                </div>
+                
+                {/* Botón de eliminar */}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-1 right-1 h-6 w-6 p-0"
+                  onClick={() => removeImage(image.id)}
+                  disabled={image.isUploading}
+                  data-testid={`remove-image-${image.id}`}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+
+                {/* Nombre del archivo con indicador de estado */}
+                <div className={`absolute bottom-0 left-0 right-0 text-white text-xs p-1 truncate ${
+                  image.isDuplicate && image.duplicateInfo 
+                    ? image.duplicateInfo.type === 'hash' ? 'bg-red-600/90' :
+                      image.duplicateInfo.type === 'name_and_size' ? 'bg-orange-600/90' :
+                      'bg-yellow-600/90'
+                    : 'bg-black/50'
+                }`}>
+                  {image.fileName}
+                  {image.isDuplicate && image.duplicateInfo && (
+                    <span className="ml-1">
+                      {image.duplicateInfo.type === 'hash' ? '🚫' : 
+                       image.duplicateInfo.type === 'name_and_size' ? '⚠️' : '⚠️'}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

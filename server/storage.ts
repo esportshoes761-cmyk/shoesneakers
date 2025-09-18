@@ -43,6 +43,7 @@ export interface IStorage {
   getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
 
   // Image methods
+  getAllImages(): Promise<Image[]>;
   getImageByHash(hash: string): Promise<Image | undefined>;
   createImage(image: InsertImage): Promise<Image>;
   isImageUsedByProducts(imageUrl: string): Promise<boolean>;
@@ -686,6 +687,10 @@ export class MemStorage implements IStorage {
   }
 
   // Image methods
+  async getAllImages(): Promise<Image[]> {
+    return Array.from(this.images.values());
+  }
+
   async getImageByHash(hash: string): Promise<Image | undefined> {
     for (const image of Array.from(this.images.values())) {
       if (image.sha256 === hash) {
@@ -1580,6 +1585,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Image methods
+  async getAllImages(): Promise<Image[]> {
+    return await db.select().from(images);
+  }
+
   async getImageByHash(hash: string): Promise<Image | undefined> {
     const [image] = await db.select().from(images).where(eq(images.sha256, hash));
     return image;
