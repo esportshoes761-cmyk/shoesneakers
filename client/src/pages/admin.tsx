@@ -359,7 +359,7 @@ const DuplicateGroupsList: React.FC<DuplicateGroupsListProps> = ({
                                   </p>
                                 )}
                                 
-                                {(product.sizes?.length > 0 || product.colors?.length > 0) && (
+                                {((product.sizes?.length ?? 0) > 0 || (product.colors?.length ?? 0) > 0) && (
                                   <div className="flex flex-wrap gap-1 mt-2">
                                     {product.sizes?.map((size) => (
                                       <Badge key={size} variant="outline" className="text-xs">
