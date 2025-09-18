@@ -119,6 +119,12 @@ export default function IntelligentUploader({
       }
 
       try {
+        // ✅ ENHANCED: Better file validation first
+        if (!file.size || file.size === 0) {
+          console.warn(`⚠️ Skipping empty file: ${file.name}`);
+          continue;
+        }
+
         // Process HEIC files
         let processedFile = file;
         const isHeic = file.type?.toLowerCase() === 'image/heic' || 
@@ -129,11 +135,35 @@ export default function IntelligentUploader({
           processedFile = await convertHeicToJpeg(file);
         }
 
-        // Convert to base64 IMMEDIATELY - This prevents ALL file reference issues
-        const arrayBuffer = await processedFile.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
-        const base64 = btoa(binaryString);
+        // ✅ ENHANCED: Better error handling for arrayBuffer conversion
+        let arrayBuffer;
+        try {
+          arrayBuffer = await processedFile.arrayBuffer();
+        } catch (arrayBufferError) {
+          console.error(`❌ Failed to read array buffer for ${file.name}:`, arrayBufferError);
+          continue; // Skip this file and continue with others
+        }
+
+        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+          console.warn(`⚠️ Empty array buffer for file: ${file.name}`);
+          continue;
+        }
+
+        // ✅ ENHANCED: Robust base64 conversion with error handling
+        let base64;
+        try {
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+          base64 = btoa(binaryString);
+        } catch (base64Error) {
+          console.error(`❌ Failed to convert to base64 for ${file.name}:`, base64Error);
+          continue; // Skip this file and continue with others
+        }
+
+        if (!base64 || base64.length === 0) {
+          console.warn(`⚠️ Empty base64 result for file: ${file.name}`);
+          continue;
+        }
         
         const imageId = crypto.randomUUID();
         const convertedImage: UploadedImage = {
@@ -146,14 +176,21 @@ export default function IntelligentUploader({
           maxRetries: 3,
           base64Data: base64, // ✅ CRITICAL: Store base64 data immediately
           fileSize: processedFile.size,
-          fileType: processedFile.type
+          fileType: processedFile.type || 'image/jpeg' // Default fallback
         };
         
         convertedImages.push(convertedImage);
-        console.log(`✅ Converted to base64: ${file.name} (${i + 1}/${files.length}) - Size: ${processedFile.size} bytes`);
+        console.log(`✅ Converted to base64: ${file.name} (${i + 1}/${files.length}) - Size: ${processedFile.size} bytes - Base64 length: ${base64.length}`);
         
       } catch (error) {
         console.error(`❌ Failed to convert ${file.name} to base64:`, error);
+        console.error('❌ Error details:', {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified,
+          error: error
+        });
         // Skip problematic files rather than failing entirely
       }
     }

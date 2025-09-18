@@ -204,8 +204,14 @@ export class DatabaseStorage implements IStorage {
       const brandsWithProducts: BrandWithProducts[] = [];
       
       for (const brand of allBrands) {
+        // 🔍 DEBUG: Log the brand being processed
+        console.log(`🔍 Processing brand: ${brand.name} (ID: ${brand.id})`);
+        
         const brandProducts = await db.select().from(products)
           .where(eq(products.brandId, brand.id));
+        
+        // 🔍 DEBUG: Log products found
+        console.log(`🔍 Found ${brandProducts.length} products for brand: ${brand.name}`);
         
         brandsWithProducts.push({
           ...brand,

@@ -281,11 +281,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Client brands with products
+  // Client brands with products - FIXED: Show all brands with products to clients  
   app.get("/api/brands/client/with-products", async (req, res) => {
     try {
-      const clientBrandsWithProducts = await storage.getBrandsWithProductsByLocation('client');
-      res.json(clientBrandsWithProducts);
+      // ✅ CRITICAL FIX: Clients should see ALL brands that have products, not just displayLocation='client'
+      const allBrandsWithProducts = await storage.getBrandsWithProducts();
+      // Filter to only include brands that have products (productCount > 0)
+      const brandsWithProductsFiltered = allBrandsWithProducts.filter(brand => brand.products.length > 0);
+      res.json(brandsWithProductsFiltered);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands with products" });
     }
