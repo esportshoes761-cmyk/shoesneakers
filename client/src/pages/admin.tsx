@@ -773,7 +773,7 @@ export default function AdminPanel() {
   };
 
   // ✨ CENTRALIZED: Modal handlers
-  const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls", data?: any) => {
+  const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct", data?: any) => {
     setActiveModal({ type, data });
   };
 
