@@ -395,33 +395,33 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Brand Catalogs Section - MOVIDA A LA PARTE SUPERIOR */}
-        <section className="mb-6 sm:mb-8">
-          <h3 className="text-lg sm:text-2xl font-bold mb-3 sm:mb-4" data-testid="text-brand-catalogs-title">👟 Catálogos por Marca</h3>
+        {/* Brand Catalogs Section - COMPACTO */}
+        <section className="mb-4 sm:mb-6">
+          <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3" data-testid="text-brand-catalogs-title">👟 Explorar por Marca</h3>
           
           {brandsLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-card border border-border rounded-lg sm:rounded-xl p-3 sm:p-6 animate-pulse">
-                  <div className="w-12 h-12 sm:w-20 sm:h-20 bg-muted rounded-lg mb-2 sm:mb-4"></div>
-                  <div className="h-4 sm:h-6 bg-muted rounded mb-1 sm:mb-2"></div>
-                  <div className="h-3 sm:h-4 bg-muted rounded mb-2 sm:mb-4"></div>
-                  <div className="h-8 sm:h-10 bg-muted rounded"></div>
+            <div className="flex gap-2 overflow-x-auto pb-2 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="shrink-0 w-20 sm:w-auto bg-card border border-border rounded-lg p-2 animate-pulse">
+                  <div className="w-8 h-8 sm:w-12 sm:h-12 bg-muted rounded mb-1 mx-auto"></div>
+                  <div className="h-3 bg-muted rounded"></div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+            <div className="flex gap-2 overflow-x-auto pb-2 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:gap-3">
               {brands.map((brand) => (
-                <div key={brand.id} className="bg-card border border-border rounded-lg sm:rounded-xl p-3 sm:p-6 hover:shadow-lg transition-shadow" data-testid={`card-brand-${brand.id}`}>
-                  {/* Nombre de la marca en la parte superior */}
-                  <h4 className="text-sm sm:text-xl font-bold text-center mb-2 sm:mb-3" data-testid={`text-brand-name-${brand.id}`}>{brand.name}</h4>
-                  
-                  {/* Logo centrado */}
-                  <div className="flex justify-center mb-2 sm:mb-3">
+                <div 
+                  key={brand.id} 
+                  className="shrink-0 w-20 sm:w-auto bg-card border border-border rounded-lg p-2 hover:shadow-md transition-all cursor-pointer hover:border-primary/50" 
+                  onClick={() => showBrandCatalog(brand)}
+                  data-testid={`card-brand-${brand.id}`}
+                >
+                  {/* Logo compacto */}
+                  <div className="flex justify-center mb-1">
                     {getBrandLogoType(brand.logo) === 'emoji' ? (
                       <div 
-                        className="w-12 h-12 sm:w-20 sm:h-20 flex items-center justify-center text-3xl sm:text-5xl"
+                        className="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl"
                         data-testid={`emoji-brand-logo-${brand.id}`}
                       >
                         {brand.logo}
@@ -430,12 +430,12 @@ export default function Home() {
                       <img 
                         src={brand.logo} 
                         alt={brand.name}
-                        className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
+                        className="w-8 h-8 sm:w-12 sm:h-12 object-contain"
                         data-testid={`img-brand-logo-${brand.id}`}
                       />
                     ) : (
                       <div 
-                        className="w-12 h-12 sm:w-20 sm:h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xl sm:text-3xl font-bold"
+                        className="w-8 h-8 sm:w-12 sm:h-12 bg-muted rounded flex items-center justify-center text-muted-foreground text-xs sm:text-sm font-bold"
                         data-testid={`placeholder-brand-logo-${brand.id}`}
                       >
                         {brand.name.charAt(0)}
@@ -443,36 +443,23 @@ export default function Home() {
                     )}
                   </div>
                   
-                  {/* Cantidad de productos */}
-                  <p className="text-xs sm:text-sm text-muted-foreground text-center mb-2 sm:mb-3" data-testid={`text-brand-product-count-${brand.id}`}>
-                    {brand.productCount} productos
-                  </p>
+                  {/* Nombre compacto */}
+                  <h4 className="text-xs sm:text-sm font-medium text-center truncate" data-testid={`text-brand-name-${brand.id}`}>
+                    {brand.name}
+                  </h4>
                   
-                  {/* Descripción */}
-                  <p className="text-muted-foreground mb-2 sm:mb-4 text-xs sm:text-sm line-clamp-2 text-center" data-testid={`text-brand-description-${brand.id}`}>
-                    {brand.description}
+                  {/* Cantidad solo en desktop */}
+                  <p className="hidden sm:block text-xs text-muted-foreground text-center mt-1" data-testid={`text-brand-product-count-${brand.id}`}>
+                    {brand.productCount}
                   </p>
-                  
-                  <div className="flex gap-1 sm:gap-2">
-                    <Button 
-                      size="sm"
-                      className="flex-1 h-8 sm:h-10 text-xs sm:text-sm"
-                      onClick={() => showBrandCatalog(brand)}
-                      data-testid={`button-view-catalog-${brand.id}`}
-                    >
-                      <Package className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Ver Catálogo</span>
-                      <span className="sm:hidden">Ver</span>
-                    </Button>
-                  </div>
                 </div>
               ))}
             </div>
           )}
 
           {!brandsLoading && brands.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-brands">
-              No hay marcas disponibles en este momento.
+            <div className="text-center py-6 text-muted-foreground" data-testid="text-no-brands">
+              No hay marcas disponibles.
             </div>
           )}
         </section>
