@@ -134,8 +134,8 @@ export function MultiImageUploader({
   // Esta función causaba que TODOS los archivos fallaran
   // Se procede directamente sin esta validación como hace el sistema que funciona
 
-  // Función para subir una imagen individual con retry logic
-  const uploadSingleImage = async (file: File, retryCount = 0): Promise<string> => {
+  // Función para convertir archivo a base64 inmediatamente (EVITA EXPIRACION DE REFERENCIAS)
+  const convertFileToBase64 = async (file: File): Promise<{ base64: string, processedFile: File }> => {
     let processedFile = file;
 
     // Detectar y convertir HEIC
@@ -146,9 +146,6 @@ export function MultiImageUploader({
     if (isHeic) {
       processedFile = await convertHeicToJpeg(file);
     }
-
-    // 🛡️ VALIDACIÓN PROBLEMÁTICA ELIMINADA
-    // Proceder directamente sin validación de file reference
 
     // Validar tipo de imagen
     if (!processedFile.type.startsWith('image/')) {
@@ -161,15 +158,21 @@ export function MultiImageUploader({
       throw new Error('El archivo es demasiado grande. Máximo 10MB');
     }
 
-    // Convertir a base64
+    // Convertir a base64 INMEDIATAMENTE
     const arrayBuffer = await processedFile.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
     const base64 = btoa(binaryString);
+    
+    return { base64, processedFile };
+  };
+
+  // Función para subir una imagen individual usando base64 pre-convertido
+  const uploadSingleImage = async (base64: string, processedFile: File, originalFileName: string, retryCount = 0): Promise<string> => {
     const fileData = `data:${processedFile.type};base64,${base64}`;
 
     // Subir al servidor con mejor logging para debug
-    console.log('📤 Uploading image:', processedFile.name, 'Size:', processedFile.size);
+    console.log('📤 Uploading image:', originalFileName, 'Size:', processedFile.size);
     
     const response = await fetch('/api/objects/upload-direct', {
       method: 'POST',
@@ -337,46 +340,74 @@ export function MultiImageUploader({
     const newImageUrls: string[] = [];
 
     if (filesToUpload.length > 0) {
-      // 🚀 NUEVA LÓGICA SECUENCIAL CON RETRY
-      // Subir imágenes de forma secuencial para evitar invalidación de file references
+      // 🚀 NUEVA ESTRATEGIA: CONVERTIR TODOS LOS ARCHIVOS A BASE64 PRIMERO
+      // Esto evita completamente la expiración de file references
       
       const maxRetries = 3;
-      const retryDelay = 1000; // 1 segundo entre reintentos
+      const retryDelay = 1000;
       const failedUploads: Array<{ dr: any, attempts: number, lastError?: string }> = [];
       
       // Función auxiliar para esperar
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       
-      // PASO 1: Subir archivos secuencialmente (OPTIMIZADO para evitar file reference expiry)
+      // PASO 0: CONVERTIR TODOS LOS ARCHIVOS A BASE64 INMEDIATAMENTE
+      console.log('🔄 Convirtiendo archivos a base64 para evitar expiracion de referencias...');
+      const convertedFiles: Array<{ base64: string, processedFile: File, originalName: string, index: number, result: any }> = [];
+      
       for (let i = 0; i < filesToUpload.length; i++) {
         const dr = filesToUpload[i];
+        try {
+          const { base64, processedFile } = await convertFileToBase64(dr.file);
+          convertedFiles.push({
+            base64,
+            processedFile,
+            originalName: dr.file.name,
+            index: dr.index,
+            result: dr.result
+          });
+          console.log(`✅ Convertido ${dr.file.name} (${i + 1}/${filesToUpload.length})`);
+        } catch (error) {
+          console.error(`❌ Error convirtiendo ${dr.file.name}:`, error);
+          failedUploads.push({ 
+            dr, 
+            attempts: 0, 
+            lastError: error instanceof Error ? error.message : String(error) 
+          });
+        }
+        
+        // Actualizar progreso de conversión
+        setUploadProgress(10 + (i / filesToUpload.length) * 20); // 10-30%
+      }
+      
+      console.log(`🎯 Archivos convertidos exitosamente: ${convertedFiles.length}/${filesToUpload.length}`);
+      
+      // PASO 1: Subir archivos usando base64 pre-convertido
+      for (let i = 0; i < convertedFiles.length; i++) {
+        const cf = convertedFiles[i];
         let uploadSuccess = false;
         let lastError: string = '';
         
-        // Intentar subir con retry logic reducido para archivos posteriores
-        const dynamicMaxRetries = i > 30 ? 1 : maxRetries; // Reducir retries para archivos tardíos
-        for (let attempt = 0; attempt < dynamicMaxRetries && !uploadSuccess; attempt++) {
+        // Intentar subir con retry logic normal (ya no necesitamos reducir retries)
+        for (let attempt = 0; attempt < maxRetries && !uploadSuccess; attempt++) {
           try {
-            console.log(`📤 Subiendo ${dr.file.name} (${i + 1}/${filesToUpload.length}) - Intento ${attempt + 1}/${dynamicMaxRetries}`);
+            console.log(`📤 Subiendo ${cf.originalName} (${i + 1}/${convertedFiles.length}) - Intento ${attempt + 1}/${maxRetries}`);
             
             // Actualizar UI para mostrar intento actual (solo si es necesario)
             if (attempt === 0) {
               setImages(prev => prev.map(img => 
-                img.id === tempImages[dr.index].id 
+                img.id === tempImages[cf.index].id 
                   ? { ...img, retryAttempt: attempt, isUploading: true, error: undefined }
                   : img
               ));
             }
             
-            // 🛡️ VALIDACIÓN PROBLEMÁTICA ELIMINADA
-            // Proceder directamente al upload sin validar file reference
-            
-            const imageUrl = await uploadSingleImage(dr.file, attempt);
+            // 🎯 USAR BASE64 PRE-CONVERTIDO - SIN PROBLEMAS DE FILE REFERENCE
+            const imageUrl = await uploadSingleImage(cf.base64, cf.processedFile, cf.originalName, attempt);
             newImageUrls.push(imageUrl);
             
             // Actualizar el estado de la imagen como exitosa
             setImages(prev => prev.map(img => 
-              img.id === tempImages[dr.index].id 
+              img.id === tempImages[cf.index].id 
                 ? { ...img, url: imageUrl, isUploading: false, error: undefined, retryAttempt: 0 }
                 : img
             ));
@@ -384,10 +415,10 @@ export function MultiImageUploader({
             uploadSuccess = true;
             
             // Log de éxito
-            const duplicateStatus = dr.result.isDuplicate ? 
-              (dr.result.isLikelyDuplicate ? ' (⚠️ posible duplicado)' : ' (⚠️ nombre duplicado)') : 
+            const duplicateStatus = cf.result.isDuplicate ? 
+              (cf.result.isLikelyDuplicate ? ' (⚠️ posible duplicado)' : ' (⚠️ nombre duplicado)') : 
               '';
-            console.log(`✅ Imagen subida exitosamente: ${dr.file.name}${duplicateStatus} (intento ${attempt + 1})`);
+            console.log(`✅ Imagen subida exitosamente: ${cf.originalName}${duplicateStatus} (intento ${attempt + 1})`);
             
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -408,25 +439,29 @@ export function MultiImageUploader({
             // Actualizar UI con error temporal si no es el último intento
             if (attempt < maxRetries - 1) {
               setImages(prev => prev.map(img => 
-                img.id === tempImages[dr.index].id 
+                img.id === tempImages[cf.index].id 
                   ? { ...img, retryAttempt: attempt + 1, lastErrorType: errorType, isUploading: false }
                   : img
               ));
             }
             
-            console.warn(`⚠️ Intento ${attempt + 1} falló para ${dr.file.name}: ${errorMsg}`);
+            console.warn(`⚠️ Intento ${attempt + 1} falló para ${cf.originalName}: ${errorMsg}`);
             
-            // Si no es el último intento, esperar antes del siguiente (reducido para archivos tardíos)
-            if (attempt < dynamicMaxRetries - 1) {
-              const shortDelay = i > 30 ? 200 : retryDelay * (attempt + 1); // Delay más corto para archivos tardíos
-              await delay(shortDelay);
+            // Si no es el último intento, esperar antes del siguiente
+            if (attempt < maxRetries - 1) {
+              await delay(retryDelay * (attempt + 1)); // Delay progresivo normal
             }
           }
         }
         
         // Si falló todos los intentos, marcar como error
         if (!uploadSuccess) {
-          failedUploads.push({ dr, attempts: dynamicMaxRetries, lastError });
+          const drForError = { 
+            file: { name: cf.originalName, size: cf.processedFile.size, type: cf.processedFile.type },
+            index: cf.index,
+            result: cf.result
+          };
+          failedUploads.push({ dr: drForError, attempts: maxRetries, lastError });
           
           // Categorizar tipo de error final
           let finalErrorType: 'permission' | 'network' | 'server' | 'validation' | 'unknown' = 'unknown';
@@ -441,33 +476,33 @@ export function MultiImageUploader({
           }
           
           setImages(prev => prev.map(img => 
-            img.id === tempImages[dr.index].id 
+            img.id === tempImages[cf.index].id 
               ? { 
                   ...img, 
-                  error: `Error después de ${dynamicMaxRetries} intentos: ${lastError}`, 
+                  error: `Error después de ${maxRetries} intentos: ${lastError}`, 
                   isUploading: false,
-                  retryAttempt: dynamicMaxRetries,
+                  retryAttempt: maxRetries,
                   lastErrorType: finalErrorType
                 }
               : img
           ));
           
-          console.error(`❌ FALLO DEFINITIVO para ${dr.file.name} después de ${dynamicMaxRetries} intentos:`, {
+          console.error(`❌ FALLO DEFINITIVO para ${cf.originalName} después de ${maxRetries} intentos:`, {
             error: lastError,
-            fileName: dr.file.name,
-            fileSize: dr.file.size,
-            fileType: dr.file.type,
-            wasDuplicate: dr.result.isDuplicate
+            fileName: cf.originalName,
+            fileSize: cf.processedFile.size,
+            fileType: cf.processedFile.type,
+            wasDuplicate: cf.result.isDuplicate
           });
         }
         
         // Actualizar progreso
         completedUploads++;
-        setUploadProgress(30 + (completedUploads / filesToUpload.length) * 70);
+        setUploadProgress(30 + (completedUploads / convertedFiles.length) * 70);
         
-        // Pausa mínima entre archivos (optimizada)
-        if (i < filesToUpload.length - 1) {
-          await delay(50); // 50ms entre archivos (reducido de 100ms)
+        // Pausa mínima entre archivos
+        if (i < convertedFiles.length - 1) {
+          await delay(50); // 50ms entre archivos
         }
       }
         
