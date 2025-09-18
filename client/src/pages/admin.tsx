@@ -617,14 +617,45 @@ export default function AdminPanel() {
       return;
     }
 
-    // Start the intelligent upload process
+    // Check how many images are successfully uploaded
+    const uploadedImages = intelligentDetections.filter(detection => detection.isUploaded && detection.uploadedUrl);
+    const failedImages = intelligentDetections.filter(detection => detection.error);
+    const pendingImages = intelligentDetections.filter(detection => !detection.isUploaded && !detection.error);
+
+    if (uploadedImages.length === 0) {
+      toast({
+        title: "Sin imágenes subidas",
+        description: `Debes subir las imágenes primero. ${pendingImages.length} pendientes, ${failedImages.length} con errores.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (pendingImages.length > 0) {
+      toast({
+        title: "Imágenes pendientes",
+        description: `${pendingImages.length} imágenes aún no han sido subidas. Solo se procesarán las ${uploadedImages.length} imágenes subidas correctamente.`,
+        variant: "default"
+      });
+    }
+
+    if (failedImages.length > 0) {
+      toast({
+        title: "Imágenes con errores",
+        description: `${failedImages.length} imágenes tuvieron errores de subida y serán omitidas.`,
+        variant: "destructive"
+      });
+    }
+
+    // Start the intelligent upload process with only uploaded images
     setIntelligentUploadProgress({
       isProcessing: true,
       currentIndex: 0,
-      total: intelligentDetections.length,
+      total: uploadedImages.length,
       results: { success: 0, failed: 0, errors: [] }
     });
 
+    console.log(`🚀 Starting intelligent upload with ${uploadedImages.length} uploaded images`);
     intelligentUploadMutation.mutate(intelligentDetections);
   };
 
@@ -804,7 +835,24 @@ export default function AdminPanel() {
   // Intelligent upload mutation
   const intelligentUploadMutation = useMutation({
     mutationFn: async (detections: any[]) => {
-      return apiRequest("POST", "/api/products/intelligent-upload", { detections });
+      // Filter only successfully uploaded images and transform data
+      const uploadedDetections = detections
+        .filter(detection => detection.isUploaded && detection.uploadedUrl)
+        .map(detection => ({
+          fileName: detection.fileName,
+          url: detection.uploadedUrl, // Use permanent URL instead of blob URL
+          detectedBrand: detection.detectedBrand,
+          confidence: detection.confidence,
+          brandId: detection.brandId
+        }));
+
+      console.log(`🔄 Sending ${uploadedDetections.length} uploaded images to intelligent-upload API`);
+      
+      if (uploadedDetections.length === 0) {
+        throw new Error('No hay imágenes subidas correctamente para procesar');
+      }
+      
+      return apiRequest("POST", "/api/products/intelligent-upload", { detections: uploadedDetections });
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });

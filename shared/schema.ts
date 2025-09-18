@@ -291,6 +291,7 @@ export type CartItemWithProduct = CartItem & {
 
 export type BrandWithProducts = Brand & {
   products: Product[];
+  productCount?: number;
 };
 
 export type ProductWithReviews = Product & {

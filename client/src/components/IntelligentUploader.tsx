@@ -96,6 +96,7 @@ interface DetectedImage {
   isUploading?: boolean;
   error?: string;
   uploadedUrl?: string;
+  isUploaded?: boolean;
 }
 
 interface IntelligentUploaderProps {
@@ -129,8 +130,8 @@ export function IntelligentUploader({
     
     // Check for direct brand matches
     for (const word of words) {
-      if (BRAND_MAPPINGS[word]) {
-        const detectedBrandName = BRAND_MAPPINGS[word];
+      if (word in BRAND_MAPPINGS) {
+        const detectedBrandName = BRAND_MAPPINGS[word as keyof typeof BRAND_MAPPINGS];
         const brandMatch = brands.find(brand => 
           brand.name.toLowerCase() === detectedBrandName.toLowerCase()
         );
@@ -156,7 +157,7 @@ export function IntelligentUploader({
     );
     
     if (partialMatches.length > 0) {
-      const detectedBrandName = BRAND_MAPPINGS[partialMatches[0]];
+      const detectedBrandName = BRAND_MAPPINGS[partialMatches[0] as keyof typeof BRAND_MAPPINGS];
       const brandMatch = brands.find(brand => 
         brand.name.toLowerCase() === detectedBrandName.toLowerCase()
       );
@@ -191,6 +192,45 @@ export function IntelligentUploader({
     }
   };
 
+  // Upload single image to get permanent URL
+  const uploadImageFile = async (file: File): Promise<string> => {
+    try {
+      // Convert file to base64
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+      const base64 = btoa(binaryString);
+      const fileData = `data:${file.type};base64,${base64}`;
+
+      console.log('🔄 Uploading image to permanent storage:', file.name);
+      
+      const response = await fetch('/api/objects/upload-direct', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageData: fileData,
+          fileName: file.name,
+          mimeType: file.type,
+          skipDuplicateCheck: true
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || errorData.message || `Upload failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Image uploaded successfully:', result.imageUrl);
+      return result.imageUrl;
+    } catch (error) {
+      console.error('❌ Image upload failed:', error);
+      throw error;
+    }
+  };
+
   // Handle file selection
   const handleFileSelect = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -220,6 +260,7 @@ export function IntelligentUploader({
         // Detect brand
         const detection = detectBrandFromFilename(processedFile.name);
         
+        // Create initial detected image with preview URL
         const detectedImage: DetectedImage = {
           id: crypto.randomUUID(),
           file: processedFile,
@@ -227,10 +268,26 @@ export function IntelligentUploader({
           fileName: processedFile.name,
           detectedBrand: detection.brand,
           confidence: detection.confidence,
-          brandId: detection.brandId
+          brandId: detection.brandId,
+          isUploading: true,
+          isUploaded: false
         };
 
         newDetectedImages.push(detectedImage);
+
+        // Upload image immediately to get permanent URL
+        try {
+          const permanentUrl = await uploadImageFile(processedFile);
+          detectedImage.uploadedUrl = permanentUrl;
+          detectedImage.isUploaded = true;
+          detectedImage.isUploading = false;
+          console.log(`✅ Image uploaded for ${processedFile.name}: ${permanentUrl}`);
+        } catch (uploadError) {
+          console.error(`❌ Failed to upload ${processedFile.name}:`, uploadError);
+          detectedImage.error = uploadError instanceof Error ? uploadError.message : 'Upload failed';
+          detectedImage.isUploading = false;
+          detectedImage.isUploaded = false;
+        }
       } catch (error) {
         console.error('Error processing file:', file.name, error);
         toast({
@@ -293,6 +350,46 @@ export function IntelligentUploader({
     }
   };
 
+  // Upload all remaining images that haven't been uploaded yet
+  const uploadRemainingImages = async () => {
+    const imagesToUpload = detectedImages.filter(img => !img.isUploaded && !img.isUploading && !img.error);
+    if (imagesToUpload.length === 0) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    for (let i = 0; i < imagesToUpload.length; i++) {
+      const image = imagesToUpload[i];
+      try {
+        setDetectedImages(prev => prev.map(img => 
+          img.id === image.id ? { ...img, isUploading: true } : img
+        ));
+
+        const permanentUrl = await uploadImageFile(image.file);
+        
+        setDetectedImages(prev => prev.map(img => 
+          img.id === image.id 
+            ? { ...img, uploadedUrl: permanentUrl, isUploaded: true, isUploading: false }
+            : img
+        ));
+
+        console.log(`✅ Image uploaded for ${image.fileName}: ${permanentUrl}`);
+      } catch (error) {
+        console.error(`❌ Failed to upload ${image.fileName}:`, error);
+        setDetectedImages(prev => prev.map(img => 
+          img.id === image.id 
+            ? { ...img, error: error instanceof Error ? error.message : 'Upload failed', isUploading: false }
+            : img
+        ));
+      }
+
+      setUploadProgress(((i + 1) / imagesToUpload.length) * 100);
+    }
+
+    setIsUploading(false);
+    setUploadProgress(0);
+  };
+
   // Statistics
   const stats = {
     total: detectedImages.length,
@@ -300,7 +397,10 @@ export function IntelligentUploader({
     undetected: detectedImages.filter(img => !img.detectedBrand).length,
     highConfidence: detectedImages.filter(img => img.confidence === 'high').length,
     mediumConfidence: detectedImages.filter(img => img.confidence === 'medium').length,
-    lowConfidence: detectedImages.filter(img => img.confidence === 'low').length
+    lowConfidence: detectedImages.filter(img => img.confidence === 'low').length,
+    uploaded: detectedImages.filter(img => img.isUploaded).length,
+    failed: detectedImages.filter(img => img.error).length,
+    pending: detectedImages.filter(img => !img.isUploaded && !img.error).length
   };
 
   return (
@@ -379,21 +479,29 @@ export function IntelligentUploader({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
                 <div className="text-xs text-muted-foreground">Total</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{stats.detected}</div>
-                <div className="text-xs text-muted-foreground">Detectadas</div>
+                <div className="text-2xl font-bold text-green-600">{stats.uploaded}</div>
+                <div className="text-xs text-muted-foreground">Subidas</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">{stats.undetected}</div>
-                <div className="text-xs text-muted-foreground">No detectadas</div>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                <div className="text-xs text-muted-foreground">Pendientes</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{stats.highConfidence}</div>
+                <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+                <div className="text-xs text-muted-foreground">Fallidas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.detected}</div>
+                <div className="text-xs text-muted-foreground">Marcas detectadas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-indigo-600">{stats.highConfidence}</div>
                 <div className="text-xs text-muted-foreground">Alta confianza</div>
               </div>
             </div>
@@ -401,11 +509,36 @@ export function IntelligentUploader({
         </Card>
       )}
 
+      {/* Upload Progress */}
+      {isUploading && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Subiendo imágenes...</span>
+                <span className="text-sm text-muted-foreground">{Math.round(uploadProgress)}%</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Action Buttons */}
+      {stats.pending > 0 && !isUploading && (
+        <div className="flex gap-2">
+          <Button onClick={uploadRemainingImages} data-testid="button-upload-remaining">
+            <Upload className="w-4 h-4 mr-2" />
+            Subir {stats.pending} imagen(es) pendiente(s)
+          </Button>
+        </div>
+      )}
+
       {/* Images Grid */}
       {detectedImages.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium">Imágenes detectadas ({detectedImages.length})</h4>
+            <h4 className="font-medium">Imágenes procesadas ({detectedImages.length})</h4>
             <Button variant="outline" size="sm" onClick={clearAll} data-testid="button-clear-all">
               <X className="w-4 h-4 mr-2" />
               Limpiar todo
@@ -419,8 +552,27 @@ export function IntelligentUploader({
                   <img
                     src={image.url}
                     alt={image.fileName}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${image.isUploading ? 'opacity-50' : ''}`}
                   />
+                  {image.isUploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    </div>
+                  )}
+                  {image.isUploaded && (
+                    <div className="absolute top-2 left-2">
+                      <div className="bg-green-500 text-white p-1 rounded-full">
+                        <Check className="w-3 h-3" />
+                      </div>
+                    </div>
+                  )}
+                  {image.error && (
+                    <div className="absolute top-2 left-2">
+                      <div className="bg-red-500 text-white p-1 rounded-full">
+                        <AlertTriangle className="w-3 h-3" />
+                      </div>
+                    </div>
+                  )}
                   <Button
                     variant="destructive"
                     size="sm"
@@ -436,6 +588,31 @@ export function IntelligentUploader({
                     {image.fileName}
                   </div>
                   
+                  {/* Upload Status */}
+                  <div className="flex items-center gap-2">
+                    {image.isUploading ? (
+                      <Badge variant="outline" className="text-xs">
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Subiendo...
+                      </Badge>
+                    ) : image.isUploaded ? (
+                      <Badge variant="default" className="text-xs bg-green-600">
+                        <Check className="w-3 h-3 mr-1" />
+                        Subida
+                      </Badge>
+                    ) : image.error ? (
+                      <Badge variant="destructive" className="text-xs">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        Error
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">
+                        Pendiente
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Brand Detection */}
                   {image.detectedBrand ? (
                     <div className="space-y-1">
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border ${getConfidenceColor(image.confidence)}`}>
@@ -450,6 +627,13 @@ export function IntelligentUploader({
                     <Badge variant="secondary" className="text-xs">
                       Sin marca detectada
                     </Badge>
+                  )}
+                  
+                  {/* Error Message */}
+                  {image.error && (
+                    <div className="text-xs text-red-600 break-words">
+                      {image.error}
+                    </div>
                   )}
                 </CardContent>
               </Card>
