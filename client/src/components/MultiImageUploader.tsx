@@ -130,18 +130,9 @@ export function MultiImageUploader({
     }
   };
 
-  // Función para validar que el archivo aún sea accesible
-  const validateFileReference = async (file: File): Promise<boolean> => {
-    try {
-      // Intentar leer una pequeña parte del archivo para verificar accesibilidad
-      const slice = file.slice(0, 1024); // Primeros 1KB
-      await slice.arrayBuffer();
-      return true;
-    } catch (error) {
-      console.warn(`⚠️ File reference invalid for ${file.name}:`, error);
-      return false;
-    }
-  };
+  // 🛡️ FUNCIÓN PROBLEMÁTICA ELIMINADA: validateFileReference
+  // Esta función causaba que TODOS los archivos fallaran
+  // Se procede directamente sin esta validación como hace el sistema que funciona
 
   // Función para subir una imagen individual con retry logic
   const uploadSingleImage = async (file: File, retryCount = 0): Promise<string> => {
@@ -156,11 +147,8 @@ export function MultiImageUploader({
       processedFile = await convertHeicToJpeg(file);
     }
 
-    // Validar file reference antes de procesar
-    const isFileValid = await validateFileReference(processedFile);
-    if (!isFileValid) {
-      throw new Error('Archivo no accesible - referencia inválida');
-    }
+    // 🛡️ VALIDACIÓN PROBLEMÁTICA ELIMINADA
+    // Proceder directamente sin validación de file reference
 
     // Validar tipo de imagen
     if (!processedFile.type.startsWith('image/')) {
@@ -377,15 +365,8 @@ export function MultiImageUploader({
                 : img
             ));
             
-            // Validar file reference antes del intento
-            const isValid = await validateFileReference(dr.file);
-            if (!isValid && attempt === 0) {
-              throw new Error('Archivo no accesible desde el inicio');
-            } else if (!isValid) {
-              console.warn(`⚠️ File reference perdida para ${dr.file.name} en intento ${attempt + 1}, esperando...`);
-              await delay(retryDelay * attempt); // Delay progresivo
-              continue;
-            }
+            // 🛡️ VALIDACIÓN PROBLEMÁTICA ELIMINADA
+            // Proceder directamente al upload sin validar file reference
             
             const imageUrl = await uploadSingleImage(dr.file, attempt);
             newImageUrls.push(imageUrl);
