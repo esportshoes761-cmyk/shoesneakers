@@ -138,11 +138,13 @@ export async function initializeDatabase() {
         id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
         product_id TEXT NOT NULL,
         customer_id TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_email TEXT,
         rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
         comment TEXT,
+        is_verified BOOLEAN DEFAULT false,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products(id),
-        FOREIGN KEY (customer_id) REFERENCES users(id)
+        FOREIGN KEY (product_id) REFERENCES products(id)
       )
     `);
 
@@ -150,21 +152,20 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS orders (
         id TEXT PRIMARY KEY DEFAULT (hex(randomblob(16))),
         customer_id TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_email TEXT NOT NULL,
+        customer_phone TEXT NOT NULL,
+        customer_address TEXT NOT NULL,
         product_id TEXT NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 1,
-        unit_price REAL NOT NULL,
-        total_price REAL NOT NULL,
-        selected_size TEXT,
-        selected_color TEXT,
-        status TEXT DEFAULT 'pending',
-        tracking_number TEXT,
-        shipping_address TEXT,
-        payment_method TEXT,
+        quantity INTEGER DEFAULT 1,
+        total_amount TEXT,
+        status TEXT NOT NULL DEFAULT 'confirmed',
         delivery_time TEXT,
         notes TEXT,
+        whatsapp_sent BOOLEAN DEFAULT true,
+        tracking_number TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_id) REFERENCES users(id),
         FOREIGN KEY (product_id) REFERENCES products(id)
       )
     `);
