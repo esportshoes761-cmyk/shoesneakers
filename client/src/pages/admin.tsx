@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBrandSchema } from "@shared/schema";
-import type { Product, Promotion, Event, Category, Brand, BrandWithProducts } from "@shared/schema";
+import type { Product, Promotion, Event, Category, Brand, BrandWithProducts, ProductDuplicateAlert } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX } from "lucide-react";
@@ -528,6 +528,11 @@ export default function AdminPanel() {
   } | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  // 🔍 PACKAGE DUPLICATE DETECTION: Brand package duplicate detection states
+  const [packageDuplicates, setPackageDuplicates] = useState<ProductDuplicateAlert[]>([]);
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [pendingPackageData, setPendingPackageData] = useState<BrandPackageFormData | null>(null);
+
   // Forms initialization after all states
   const productForm = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
@@ -638,6 +643,36 @@ export default function AdminPanel() {
       setSelectedProducts(new Set());
     }
   }, [toolsSubTab, activeTab]);
+
+  // 🔍 DUPLICATE DETECTION: Package duplicates check mutation
+  const checkPackageDuplicatesMutation = useMutation({
+    mutationFn: async (imageUrls: string[]) => {
+      console.log('🔍 Checking for duplicate products with images:', imageUrls);
+      const response = await apiRequest('POST', '/api/products/check-package-duplicates', { imageUrls });
+      return response.json();
+    },
+    onSuccess: (data: { duplicates: ProductDuplicateAlert[]; hasDuplicates: boolean }) => {
+      console.log('✅ Duplicate check completed:', data);
+      setPackageDuplicates(data.duplicates);
+      
+      if (data.hasDuplicates) {
+        setShowDuplicateAlert(true);
+      } else {
+        // No duplicates, proceed directly with bulk creation
+        if (pendingPackageData) {
+          bulkCreateProductsMutation.mutate(pendingPackageData);
+        }
+      }
+    },
+    onError: async (error: Error) => {
+      const parsedError = await parseApiError(error);
+      toast({
+        title: "Error al verificar duplicados",
+        description: parsedError.description,
+        variant: "destructive",
+      });
+    },
+  });
 
   // ✨ REORGANIZED: Bulk product creation mutation
   const bulkCreateProductsMutation = useMutation({
@@ -3358,7 +3393,10 @@ export default function AdminPanel() {
           <Form {...brandPackageForm}>
             <form onSubmit={brandPackageForm.handleSubmit((data) => {
               console.log('🚀 Enviando paquete:', data);
-              bulkCreateProductsMutation.mutate(data);
+              // Store the package data for potential use after duplicate check
+              setPendingPackageData(data);
+              // First, check for duplicates
+              checkPackageDuplicatesMutation.mutate(data.images);
             })} className="space-y-6">
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3552,10 +3590,12 @@ export default function AdminPanel() {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 1}
+                  disabled={checkPackageDuplicatesMutation.isPending || bulkCreateProductsMutation.isPending || (brandPackageForm.watch('images')?.length || 0) < 1}
                   data-testid="button-submit-brand-package"
                 >
-                  {bulkCreateProductsMutation.isPending 
+                  {checkPackageDuplicatesMutation.isPending 
+                    ? "Verificando duplicados..." 
+                    : bulkCreateProductsMutation.isPending 
                     ? "Creando productos destacados..." 
                     : `Crear ${(brandPackageForm.watch('images')?.length || 0)} Productos Destacados`
                   }
@@ -3563,6 +3603,157 @@ export default function AdminPanel() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🔍 Modal de Alertas de Productos Duplicados - INFORMATIVO, NO BLOQUEANTE */}
+      <Dialog open={showDuplicateAlert} onOpenChange={(open) => {
+        if (!open) {
+          setShowDuplicateAlert(false);
+          setPackageDuplicates([]);
+          setPendingPackageData(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-5 w-5" />
+              Productos Duplicados Detectados
+            </DialogTitle>
+            <DialogDescription>
+              Se encontraron {packageDuplicates.length} imagen(es) que ya están siendo usadas en productos existentes.
+              Esta información es solo para tu conocimiento - puedes continuar con la creación si lo deseas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Información general */}
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-orange-800 mb-1">Información Importante</h4>
+                  <p className="text-orange-700 text-sm">
+                    Las siguientes imágenes ya están siendo utilizadas en productos existentes. 
+                    Crear productos duplicados puede confundir a los clientes y afectar la organización del inventario.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de productos duplicados */}
+            <div className="space-y-3">
+              <h4 className="font-semibold">Detalles de Productos Duplicados:</h4>
+              
+              {packageDuplicates.map((duplicate, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-start gap-4">
+                    {/* Vista previa de la imagen */}
+                    <div className="flex-shrink-0">
+                      <img 
+                        src={duplicate.imageUrl} 
+                        alt="Producto duplicado"
+                        className="w-16 h-16 object-cover rounded-lg border"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/placeholder-product.jpg';
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Información del producto */}
+                    <div className="flex-1 min-w-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-gray-600">Producto Existente:</p>
+                          <p className="font-semibold text-gray-900 truncate">{duplicate.existingProduct.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Referencia:</p>
+                          <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded inline-block">
+                            {duplicate.existingProduct.reference || 'Sin referencia'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Marca:</p>
+                          <p className="font-medium text-blue-700">{duplicate.existingProduct.brandName}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Categoría:</p>
+                          <p className="font-medium text-green-700">{duplicate.existingProduct.categoryName}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Total de usos de esta imagen:</p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-orange-700 bg-orange-100">
+                              {duplicate.duplicateCount} {duplicate.duplicateCount === 1 ? 'vez' : 'veces'}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">ID del producto:</p>
+                          <p className="font-mono text-xs text-gray-500 break-all">{duplicate.existingProduct.id}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Alerta descriptiva */}
+                      <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                        <p className="text-sm text-yellow-800">
+                          ⚠️ La imagen <code className="bg-yellow-100 px-1 rounded text-xs">{duplicate.imageUrl.split('/').pop()}</code> ya está usada en el producto 
+                          '<strong>{duplicate.existingProduct.name}</strong>' (REF: <strong>{duplicate.existingProduct.reference || 'N/A'}</strong>) 
+                          en categoría '<strong>{duplicate.existingProduct.categoryName}</strong>', marca '<strong>{duplicate.existingProduct.brandName}</strong>'. 
+                          Total usos: <strong>{duplicate.duplicateCount}</strong> {duplicate.duplicateCount === 1 ? 'vez' : 'veces'}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Acciones */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDuplicateAlert(false);
+                  setPackageDuplicates([]);
+                  setPendingPackageData(null);
+                }}
+                className="flex-1"
+                data-testid="button-cancel-duplicate-alert"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancelar Creación
+              </Button>
+              <Button
+                onClick={() => {
+                  // Usuario decide continuar a pesar de los duplicados
+                  if (pendingPackageData) {
+                    console.log('👤 Usuario decidió continuar con creación a pesar de duplicados');
+                    bulkCreateProductsMutation.mutate(pendingPackageData);
+                  }
+                  setShowDuplicateAlert(false);
+                  setPackageDuplicates([]);
+                  setPendingPackageData(null);
+                }}
+                disabled={bulkCreateProductsMutation.isPending}
+                className="flex-1 bg-orange-600 hover:bg-orange-700"
+                data-testid="button-continue-despite-duplicates"
+              >
+                {bulkCreateProductsMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Creando productos...
+                  </div>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Continuar Creación
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

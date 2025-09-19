@@ -3,6 +3,20 @@ import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core"
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Product duplicate alert interface for package verification
+export interface ProductDuplicateAlert {
+  imageUrl: string;
+  existingProduct: {
+    id: string;
+    name: string;
+    reference: string;
+    brandName: string;
+    categoryName: string;
+    imageUrl: string;
+  };
+  duplicateCount: number; // Total uses of this image
+}
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull().unique(),

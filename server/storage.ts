@@ -95,6 +95,9 @@ export interface IStorage {
   getDuplicateProductsByNameBrand(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
   getDuplicateProductsByImageHash(brandId?: string): Promise<Array<{ key: string; products: Product[]; count: number }>>;
   mergeProducts(primaryId: string, duplicateIds: string[], strategy: 'keep_primary' | 'merge_data'): Promise<Product | undefined>;
+  
+  // Package duplicate detection
+  checkPackageDuplicates(imageUrls: string[]): Promise<Array<{ imageUrl: string; existingProduct: { id: string; name: string; reference: string; brandName: string; categoryName: string; imageUrl: string; }; duplicateCount: number; }>>;
 
   // Theme Settings methods
   getThemeSettings(): Promise<SelectThemeSettings[]>;
@@ -1404,6 +1407,54 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error activating theme:', error);
       return undefined;
+    }
+  }
+
+  // Package duplicate detection
+  async checkPackageDuplicates(imageUrls: string[]): Promise<Array<{ imageUrl: string; existingProduct: { id: string; name: string; reference: string; brandName: string; categoryName: string; imageUrl: string; }; duplicateCount: number; }>> {
+    try {
+      const duplicates: Array<{ imageUrl: string; existingProduct: { id: string; name: string; reference: string; brandName: string; categoryName: string; imageUrl: string; }; duplicateCount: number; }> = [];
+
+      // Get all products with their brand and category information
+      const allProducts = await this.getProducts();
+
+      for (const imageUrl of imageUrls) {
+        // Find products that use this specific image URL
+        const productsWithImage = allProducts.filter(product => {
+          // Check main imageUrl
+          if (product.imageUrl === imageUrl) return true;
+          
+          // Check in images array if it exists
+          if (product.images && Array.isArray(product.images)) {
+            return product.images.includes(imageUrl);
+          }
+          
+          return false;
+        });
+
+        if (productsWithImage.length > 0) {
+          // Use the first product as the primary reference
+          const firstProduct = productsWithImage[0];
+          
+          duplicates.push({
+            imageUrl,
+            existingProduct: {
+              id: firstProduct.id,
+              name: firstProduct.name,
+              reference: firstProduct.reference || '',
+              brandName: typeof firstProduct.brand === 'object' ? firstProduct.brand?.name || 'Sin marca' : 'Sin marca',
+              categoryName: typeof firstProduct.category === 'object' ? firstProduct.category?.name || 'Sin categoría' : 'Sin categoría',
+              imageUrl: firstProduct.imageUrl,
+            },
+            duplicateCount: productsWithImage.length, // How many products use this image
+          });
+        }
+      }
+
+      return duplicates;
+    } catch (error) {
+      console.error('Error checking package duplicates:', error);
+      return [];
     }
   }
 }

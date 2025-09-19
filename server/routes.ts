@@ -435,6 +435,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk product creation endpoint - NO AUTH REQUIRED FOR IMMEDIATE PUBLISHING
+  // 🔍 DUPLICATE DETECTION: Check for duplicates before bulk creation
+  app.post("/api/products/check-package-duplicates", async (req, res) => {
+    try {
+      // Validate request body
+      const { imageUrls } = req.body;
+      
+      if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
+        return res.status(400).json({ message: "Se requiere un array de URLs de imágenes" });
+      }
+
+      // Check for duplicate products using the new storage method
+      const duplicates = await storage.checkPackageDuplicates(imageUrls);
+      
+      res.json({
+        duplicates,
+        hasDuplicates: duplicates.length > 0,
+        totalDuplicates: duplicates.length,
+        checkedImages: imageUrls.length
+      });
+    } catch (error) {
+      console.error("Error checking package duplicates:", error);
+      res.status(500).json({ message: "Error al verificar productos duplicados" });
+    }
+  });
+
   app.post("/api/products/bulk", async (req, res) => {
     try {
       const packageData = brandPackageSchema.parse(req.body);
