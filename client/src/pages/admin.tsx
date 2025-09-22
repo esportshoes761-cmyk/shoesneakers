@@ -2980,7 +2980,7 @@ export default function AdminPanel() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                 {brandProducts.map((product) => (
                   <Card key={product.id} className="relative">
                     <CardHeader className="pb-3">
