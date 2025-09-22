@@ -39,6 +39,7 @@ export interface IStorage {
   getProductByNameNormalized(nameNormalized: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
+  updateProductsBulk(productIds: string[], updates: Partial<InsertProduct>): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
   deleteProduct(id: string): Promise<boolean>;
   getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
 
@@ -600,6 +601,43 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error updating product:', error);
       return undefined;
+    }
+  }
+
+  async updateProductsBulk(productIds: string[], updates: Partial<InsertProduct>): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }> {
+    try {
+      // Use a transaction to update all products atomically
+      const result = await db.update(products)
+        .set(updates)
+        .where(inArray(products.id, productIds))
+        .returning();
+
+      return {
+        updated: result.length,
+        errors: []
+      };
+    } catch (error) {
+      console.error('Error updating products in bulk:', error);
+      
+      // If bulk update fails, try updating each product individually to identify which ones failed
+      const errors: Array<{ id: string; error: string }> = [];
+      let updated = 0;
+      
+      for (const productId of productIds) {
+        try {
+          await db.update(products)
+            .set(updates)
+            .where(eq(products.id, productId));
+          updated++;
+        } catch (individualError) {
+          errors.push({
+            id: productId,
+            error: individualError instanceof Error ? individualError.message : 'Unknown error'
+          });
+        }
+      }
+      
+      return { updated, errors };
     }
   }
 
@@ -1444,7 +1482,7 @@ export class DatabaseStorage implements IStorage {
               reference: firstProduct.reference || '',
               brandName: typeof firstProduct.brand === 'object' ? firstProduct.brand?.name || 'Sin marca' : 'Sin marca',
               categoryName: typeof firstProduct.category === 'object' ? firstProduct.category?.name || 'Sin categoría' : 'Sin categoría',
-              imageUrl: firstProduct.imageUrl,
+              imageUrl: firstProduct.imageUrl || '',
             },
             duplicateCount: productsWithImage.length, // How many products use this image
           });

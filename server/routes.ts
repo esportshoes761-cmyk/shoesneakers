@@ -123,6 +123,20 @@ const mergeProductsSchema = z.object({
 
 const updateProductSchema = insertProductSchema.partial();
 
+// 🔒 SECURE: Bulk product update schema
+const bulkUpdateProductsSchema = z.object({
+  productIds: z.array(z.string()).min(1, "At least one product ID is required"),
+  updates: updateProductSchema.refine(data => Object.keys(data).length > 0, {
+    message: "At least one field to update is required"
+  })
+});
+
+// 🔒 SECURE: Products by brand query schema
+const productsByBrandQuerySchema = z.object({
+  page: z.string().optional().transform(val => val ? parseInt(val, 10) : 1),
+  limit: z.string().optional().transform(val => val ? Math.min(parseInt(val, 10), 100) : 20) // Limit max to 100
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Crear directorio para las imágenes si no existe
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -1151,6 +1165,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Error updating product" });
+    }
+  });
+
+  // 🔒 SECURE: Get products by brand for admin (with pagination)
+  app.get("/api/admin/brands/:brandId/products", requireAdminAuth, async (req, res) => {
+    try {
+      const brandId = req.params.brandId;
+      const queryData = productsByBrandQuerySchema.parse(req.query);
+      
+      // Validate that brand exists
+      const brand = await storage.getBrand(brandId);
+      if (!brand) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+      
+      // Get all products for this brand (we'll implement pagination later if needed)
+      const products = await storage.getProductsByBrand(brandId);
+      
+      // Simple pagination
+      const { page, limit } = queryData;
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedProducts = products.slice(startIndex, endIndex);
+      
+      res.json({
+        success: true,
+        data: {
+          products: paginatedProducts,
+          pagination: {
+            page,
+            limit,
+            total: products.length,
+            totalPages: Math.ceil(products.length / limit),
+            hasMore: endIndex < products.length
+          },
+          brand: {
+            id: brand.id,
+            name: brand.name,
+            logo: brand.logo
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching products by brand:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid query parameters", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Error fetching products by brand" });
+    }
+  });
+
+  // 🔒 SECURE: Bulk update products
+  app.patch("/api/admin/products/bulk", requireAdminAuth, async (req, res) => {
+    try {
+      const { productIds, updates } = bulkUpdateProductsSchema.parse(req.body);
+      
+      // Validate that all products exist (security check)
+      const existingProducts = await Promise.all(
+        productIds.map(id => storage.getProduct(id))
+      );
+      
+      const nonExistentProducts = productIds.filter((id, index) => !existingProducts[index]);
+      if (nonExistentProducts.length > 0) {
+        return res.status(404).json({ 
+          message: "Some products not found", 
+          missingProducts: nonExistentProducts 
+        });
+      }
+      
+      // Perform bulk update
+      const result = await storage.updateProductsBulk(productIds, updates);
+      
+      res.json({
+        success: true,
+        message: `Successfully updated ${result.updated} products`,
+        data: {
+          updated: result.updated,
+          requested: productIds.length,
+          errors: result.errors,
+          updates: updates
+        }
+      });
+    } catch (error) {
+      console.error('Error updating products in bulk:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid bulk update data", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Error updating products in bulk" });
     }
   });
 
