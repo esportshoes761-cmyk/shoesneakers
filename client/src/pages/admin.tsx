@@ -20,7 +20,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts, ProductDuplicateAlert } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -479,30 +479,17 @@ const ProductsByBrandManager: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // State management
+  // Navigation state
+  const [currentView, setCurrentView] = useState<"brands" | "products" | "edit">("brands");
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
-  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [bulkEditMode, setBulkEditMode] = useState<"update" | "adjust" | null>(null);
-  const [showBulkDialog, setShowBulkDialog] = useState(false);
 
-  // Form management
-  const bulkUpdateForm = useForm<BulkUpdateData>({
-    resolver: zodResolver(bulkUpdateSchema),
-    defaultValues: {
-      productIds: [],
-      updates: {}
-    }
-  });
-
-  const priceAdjustmentForm = useForm<PriceAdjustmentData>({
-    resolver: zodResolver(priceAdjustmentSchema),
-    defaultValues: {
-      productIds: [],
-      adjustmentType: "percentage",
-      adjustmentValue: 0,
-      applyTo: "price"
-    }
+  // Form management for product editing
+  const editForm = useForm<EditProductData>({
+    resolver: zodResolver(editProductSchema),
+    defaultValues: {}
   });
 
   // Queries
@@ -521,205 +508,188 @@ const ProductsByBrandManager: React.FC = () => {
       const response = await apiRequest("GET", `/api/admin/brands/${selectedBrandId}/products?page=${currentPage}&limit=20`);
       return response.json();
     },
-    enabled: !!selectedBrandId,
+    enabled: !!selectedBrandId && currentView === "products",
+  });
+
+  const allBrandsQuery = useQuery({
+    queryKey: ["/api/brands"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/brands");
+      return response.json();
+    },
+    enabled: currentView === "edit",
   });
 
   // Mutations
-  const bulkUpdateMutation = useMutation({
-    mutationFn: async (data: BulkUpdateData) => {
-      const response = await apiRequest("PATCH", "/api/admin/products/bulk", {
+  const updateProductMutation = useMutation({
+    mutationFn: async (data: { id: string; updates: EditProductData }) => {
+      const response = await apiRequest("PATCH", `/api/products/${data.id}`, {
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(data.updates),
       });
       return response.json();
     },
     onSuccess: (response) => {
       toast({
-        title: "✅ Actualización Masiva Exitosa",
-        description: `${response.data.updated} productos actualizados correctamente`,
+        title: "✅ Producto Actualizado",
+        description: "El producto se ha actualizado correctamente",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/brands", selectedBrandId, "products"] });
-      setSelectedProducts(new Set());
-      setShowBulkDialog(false);
-      setBulkEditMode(null);
+      setCurrentView("products");
+      setEditingProduct(null);
     },
     onError: (error: any) => {
       toast({
-        title: "❌ Error en Actualización Masiva",
-        description: error.message || "No se pudieron actualizar los productos",
+        title: "❌ Error al Actualizar",
+        description: error.message || "No se pudo actualizar el producto",
         variant: "destructive",
       });
     },
   });
 
-  // Helper functions
-  const handleSelectAll = () => {
-    if (!productsQuery.data?.data.products) return;
-    
-    const allProductIds = new Set<string>(productsQuery.data.data.products.map((p: any) => String(p.id)));
-    if (selectedProducts.size === allProductIds.size) {
-      setSelectedProducts(new Set());
-    } else {
-      setSelectedProducts(allProductIds);
-    }
+  // Navigation handlers
+  const handleViewProducts = (brand: any) => {
+    setSelectedBrandId(brand.id);
+    setSelectedBrand(brand);
+    setCurrentView("products");
+    setCurrentPage(1);
   };
 
-  const handleProductSelect = (productId: string) => {
-    const newSelected = new Set(selectedProducts);
-    if (newSelected.has(productId)) {
-      newSelected.delete(productId);
-    } else {
-      newSelected.add(productId);
-    }
-    setSelectedProducts(newSelected);
+  const handleEditProduct = (product: any) => {
+    setEditingProduct(product);
+    editForm.reset({
+      name: product.name,
+      price: product.price,
+      salePrice: product.salePrice || "",
+      stock: product.stock,
+      reference: product.reference,
+      brandId: product.brandId,
+      categoryId: product.categoryId,
+      imageUrl: product.imageUrl,
+      description: product.description || "",
+    });
+    setCurrentView("edit");
   };
 
-  const handleBulkUpdate = (data: BulkUpdateData) => {
-    // Remove empty fields
-    const updates = Object.fromEntries(
-      Object.entries(data.updates).filter(([_, value]) => value !== undefined && value !== "")
-    );
+  const handleBackToBrands = () => {
+    setCurrentView("brands");
+    setSelectedBrandId("");
+    setSelectedBrand(null);
+  };
+
+  const handleBackToProducts = () => {
+    setCurrentView("products");
+    setEditingProduct(null);
+  };
+
+  const handleSaveProduct = (data: EditProductData) => {
+    if (!editingProduct) return;
     
-    bulkUpdateMutation.mutate({
-      productIds: Array.from(selectedProducts),
-      updates
+    updateProductMutation.mutate({
+      id: editingProduct.id,
+      updates: data
     });
   };
 
-  const handlePriceAdjustment = (data: PriceAdjustmentData) => {
-    if (!productsQuery.data?.data.products) return;
-
-    const selectedProductsData = productsQuery.data.data.products.filter((p: any) => 
-      selectedProducts.has(p.id)
-    );
-
-    const updates: any = {};
-    
-    selectedProductsData.forEach((product: any) => {
-      const { adjustmentType, adjustmentValue, applyTo } = data;
-      
-      if (applyTo === "price" || applyTo === "both") {
-        const currentPrice = parseFloat(parsePrice(product.price || "0"));
-        let newPrice = currentPrice;
-        
-        if (adjustmentType === "percentage") {
-          newPrice = currentPrice * (1 + adjustmentValue / 100);
-        } else {
-          newPrice = currentPrice + adjustmentValue;
-        }
-        
-        updates.price = formatPrice(Math.round(newPrice).toString());
-      }
-      
-      if (applyTo === "salePrice" || applyTo === "both") {
-        const currentSalePrice = parseFloat(parsePrice(product.salePrice || "0"));
-        let newSalePrice = currentSalePrice;
-        
-        if (adjustmentType === "percentage") {
-          newSalePrice = currentSalePrice * (1 + adjustmentValue / 100);
-        } else {
-          newSalePrice = currentSalePrice + adjustmentValue;
-        }
-        
-        updates.salePrice = formatPrice(Math.round(newSalePrice).toString());
-      }
-    });
-
-    bulkUpdateMutation.mutate({
-      productIds: Array.from(selectedProducts),
-      updates
-    });
-  };
-
-  const selectedBrand = brandsQuery.data?.find((brand: any) => brand.id === selectedBrandId);
   const products = productsQuery.data?.data.products || [];
   const pagination = productsQuery.data?.data.pagination;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Gestión de Productos por Marca</h3>
-        <Badge variant="outline">
-          {selectedProducts.size} productos seleccionados
-        </Badge>
-      </div>
+  // Brands View
+  if (currentView === "brands") {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Gestión de Productos por Marca</h3>
+          <Badge variant="outline">
+            {brandsQuery.data?.filter((b: any) => b.productCount > 0).length || 0} marcas con productos
+          </Badge>
+        </div>
 
-      {/* Brand Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5" />
-            Seleccionar Marca
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedBrandId} onValueChange={(value) => {
-            setSelectedBrandId(value);
-            setSelectedProducts(new Set());
-            setCurrentPage(1);
-          }}>
-            <SelectTrigger className="w-full" data-testid="select-brand">
-              <SelectValue placeholder="Selecciona una marca para gestionar sus productos" />
-            </SelectTrigger>
-            <SelectContent>
-              {brandsQuery.data?.map((brand: any) => (
-                <SelectItem key={brand.id} value={brand.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{brand.name}</span>
-                    <Badge variant="secondary">{brand.productCount} productos</Badge>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* Products Table */}
-      {selectedBrandId && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Productos de {selectedBrand?.name}
-                </CardTitle>
-                <CardDescription>
-                  {pagination ? `${pagination.total} productos encontrados` : "Cargando productos..."}
-                </CardDescription>
-              </div>
-              {selectedProducts.size > 0 && (
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setBulkEditMode("update");
-                      setShowBulkDialog(true);
-                    }}
-                    data-testid="button-bulk-update"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Editar Masivo
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setBulkEditMode("adjust");
-                      setShowBulkDialog(true);
-                    }}
-                    data-testid="button-price-adjustment"
-                  >
-                    <Hash className="h-4 w-4 mr-2" />
-                    Ajustar Precios
-                  </Button>
-                </div>
-              )}
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5" />
+              Marcas Disponibles
+            </CardTitle>
+            <CardDescription>
+              Selecciona una marca para ver y editar sus productos
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            {brandsQuery.isLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-muted-foreground">Cargando marcas...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {brandsQuery.data?.filter((brand: any) => brand.productCount > 0).map((brand: any) => (
+                  <Card key={brand.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-lg">{brand.name}</h4>
+                        {brand.logoUrl && (
+                          <img
+                            src={`/api/images/${brand.logoUrl}`}
+                            alt={brand.name}
+                            className="w-12 h-12 object-contain"
+                          />
+                        )}
+                      </div>
+                      
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Productos:</span>
+                          <Badge variant="secondary">{brand.productCount}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Ubicación:</span>
+                          <span className="capitalize">{brand.displayLocation}</span>
+                        </div>
+                      </div>
+
+                      <Button 
+                        onClick={() => handleViewProducts(brand)}
+                        className="w-full"
+                        data-testid={`button-view-products-${brand.id}`}
+                      >
+                        <Package className="h-4 w-4 mr-2" />
+                        Ver Productos
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Products View
+  if (currentView === "products") {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleBackToBrands}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver a Marcas
+            </Button>
+            <div>
+              <h3 className="text-lg font-semibold">Productos de {selectedBrand?.name}</h3>
+              <p className="text-sm text-muted-foreground">
+                {pagination ? `${pagination.total} productos encontrados` : "Cargando productos..."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Card>
+          <CardContent className="p-6">
             {productsQuery.isLoading ? (
               <div className="flex items-center justify-center p-8">
                 <div className="text-center">
@@ -734,80 +704,70 @@ const ProductsByBrandManager: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Table Header */}
-                <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    checked={selectedProducts.size === products.length && products.length > 0}
-                    onChange={handleSelectAll}
-                    className="rounded"
-                    data-testid="checkbox-select-all"
-                  />
-                  <div className="flex-1 grid grid-cols-12 gap-4 text-sm font-medium">
-                    <div className="col-span-3">Producto</div>
-                    <div className="col-span-2">Precio</div>
-                    <div className="col-span-2">Precio Oferta</div>
-                    <div className="col-span-2">Stock</div>
-                    <div className="col-span-2">Referencia</div>
-                    <div className="col-span-1">Acciones</div>
-                  </div>
-                </div>
-
-                {/* Product Rows */}
-                <div className="space-y-2">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {products.map((product: any) => (
-                    <div
-                      key={product.id}
-                      className={`flex items-center gap-4 p-4 border rounded-lg transition-colors ${
-                        selectedProducts.has(product.id) ? "bg-primary/5 border-primary/20" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedProducts.has(product.id)}
-                        onChange={() => handleProductSelect(product.id)}
-                        className="rounded"
-                        data-testid={`checkbox-product-${product.id}`}
-                      />
-                      <div className="flex-1 grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3 flex items-center gap-3">
-                          {product.imageUrl && (
+                    <Card key={product.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-0">
+                        {/* Product Image */}
+                        <div className="aspect-square relative">
+                          {product.imageUrl ? (
                             <img
                               src={`/api/images/${product.imageUrl}`}
                               alt={product.name}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-full h-full object-cover rounded-t-lg"
                             />
-                          )}
-                          <div>
-                            <p className="font-medium">{product.name}</p>
-                            <p className="text-sm text-muted-foreground">{product.category?.name}</p>
-                          </div>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-mono">${formatCurrency(product.price)}</span>
-                        </div>
-                        <div className="col-span-2">
-                          {product.salePrice ? (
-                            <span className="font-mono text-green-600">${formatCurrency(product.salePrice)}</span>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <div className="w-full h-full bg-muted flex items-center justify-center rounded-t-lg">
+                              <Package className="h-12 w-12 text-muted-foreground" />
+                            </div>
                           )}
                         </div>
-                        <div className="col-span-2">
-                          <Badge variant={product.stock > 0 ? "default" : "destructive"}>
-                            {product.stock} unidades
-                          </Badge>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-mono text-xs">{product.reference}</span>
-                        </div>
-                        <div className="col-span-1">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
+                        
+                        {/* Product Info */}
+                        <div className="p-4 space-y-3">
+                          <div>
+                            <h4 className="font-semibold text-sm leading-tight">{product.name}</h4>
+                            <p className="text-xs text-muted-foreground">{product.category?.name}</p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Precio:</span>
+                              <span className="font-mono text-sm">${formatCurrency(product.price)}</span>
+                            </div>
+                            
+                            {product.salePrice && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">Oferta:</span>
+                                <span className="font-mono text-sm text-green-600">${formatCurrency(product.salePrice)}</span>
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Stock:</span>
+                              <Badge variant={product.stock > 0 ? "default" : "destructive"} className="text-xs">
+                                {product.stock}
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Ref:</span>
+                              <span className="font-mono text-xs">{product.reference}</span>
+                            </div>
+                          </div>
+                          
+                          <Button 
+                            onClick={() => handleEditProduct(product)}
+                            size="sm"
+                            className="w-full"
+                            data-testid={`button-edit-product-${product.id}`}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar Producto
                           </Button>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
 
@@ -841,194 +801,232 @@ const ProductsByBrandManager: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      )}
+      </div>
+    );
+  }
 
-      {/* Bulk Edit Dialog */}
-      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {bulkEditMode === "update" ? "Actualización Masiva" : "Ajuste de Precios"}
-            </DialogTitle>
-            <DialogDescription>
-              {bulkEditMode === "update" 
-                ? `Actualizar ${selectedProducts.size} productos seleccionados`
-                : `Ajustar precios de ${selectedProducts.size} productos seleccionados`
-              }
-            </DialogDescription>
-          </DialogHeader>
+  // Edit Product View
+  if (currentView === "edit" && editingProduct) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleBackToProducts}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver a Productos
+            </Button>
+            <div>
+              <h3 className="text-lg font-semibold">Editar Producto</h3>
+              <p className="text-sm text-muted-foreground">{editingProduct.name}</p>
+            </div>
+          </div>
+        </div>
 
-          {bulkEditMode === "update" ? (
-            <Form {...bulkUpdateForm}>
-              <form onSubmit={bulkUpdateForm.handleSubmit(handleBulkUpdate)} className="space-y-4">
-                <FormField
-                  control={bulkUpdateForm.control}
-                  name="updates.price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nuevo Precio</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Ej: 50.000 (dejar vacío para no cambiar)"
-                          onChange={(e) => field.onChange(formatPrice(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Product Preview */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Vista Previa</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="aspect-square relative">
+                  {editingProduct.imageUrl ? (
+                    <img
+                      src={`/api/images/${editingProduct.imageUrl}`}
+                      alt={editingProduct.name}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center rounded-lg">
+                      <Package className="h-12 w-12 text-muted-foreground" />
+                    </div>
                   )}
-                />
-
-                <FormField
-                  control={bulkUpdateForm.control}
-                  name="updates.salePrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nuevo Precio de Oferta</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Ej: 45.000 (dejar vacío para no cambiar)"
-                          onChange={(e) => field.onChange(formatPrice(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={bulkUpdateForm.control}
-                  name="updates.stock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nuevo Stock</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          placeholder="Ej: 10 (dejar vacío para no cambiar)"
-                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowBulkDialog(false)}
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={bulkUpdateMutation.isPending}
-                    className="flex-1"
-                  >
-                    {bulkUpdateMutation.isPending ? "Actualizando..." : "Actualizar"}
-                  </Button>
                 </div>
-              </form>
-            </Form>
-          ) : (
-            <Form {...priceAdjustmentForm}>
-              <form onSubmit={priceAdjustmentForm.handleSubmit(handlePriceAdjustment)} className="space-y-4">
-                <FormField
-                  control={priceAdjustmentForm.control}
-                  name="adjustmentType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de Ajuste</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="percentage">Porcentaje</SelectItem>
-                          <SelectItem value="fixed">Valor Fijo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={priceAdjustmentForm.control}
-                  name="adjustmentValue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {priceAdjustmentForm.watch("adjustmentType") === "percentage" ? "Porcentaje (%)" : "Valor ($)"}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          placeholder={priceAdjustmentForm.watch("adjustmentType") === "percentage" ? "Ej: 10" : "Ej: 5000"}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={priceAdjustmentForm.control}
-                  name="applyTo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Aplicar A</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="price">Solo Precio Regular</SelectItem>
-                          <SelectItem value="salePrice">Solo Precio de Oferta</SelectItem>
-                          <SelectItem value="both">Ambos Precios</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowBulkDialog(false)}
-                    className="flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={bulkUpdateMutation.isPending}
-                    className="flex-1"
-                  >
-                    {bulkUpdateMutation.isPending ? "Ajustando..." : "Ajustar"}
-                  </Button>
+                
+                <div className="space-y-2">
+                  <h4 className="font-semibold">{editingProduct.name}</h4>
+                  <p className="text-sm text-muted-foreground">{editingProduct.category?.name}</p>
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono">${formatCurrency(editingProduct.price)}</span>
+                    {editingProduct.salePrice && (
+                      <span className="font-mono text-green-600">${formatCurrency(editingProduct.salePrice)}</span>
+                    )}
+                  </div>
+                  <Badge variant={editingProduct.stock > 0 ? "default" : "destructive"}>
+                    {editingProduct.stock} unidades
+                  </Badge>
                 </div>
-              </form>
-            </Form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Edit Form */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Editar Información</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...editForm}>
+                <form onSubmit={editForm.handleSubmit(handleSaveProduct)} className="space-y-4">
+                  <FormField
+                    control={editForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre del Producto</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nombre del producto" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Precio</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="50.000"
+                              onChange={(e) => field.onChange(formatPrice(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="salePrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Precio de Oferta</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="45.000"
+                              onChange={(e) => field.onChange(formatPrice(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={editForm.control}
+                      name="stock"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stock</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="number"
+                              placeholder="10"
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="reference"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Referencia</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="REF-001" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={editForm.control}
+                    name="brandId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Marca</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar marca" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {allBrandsQuery.data?.map((brand: any) => (
+                              <SelectItem key={brand.id} value={brand.id}>
+                                {brand.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descripción</FormLabel>
+                        <FormControl>
+                          <textarea
+                            {...field}
+                            className="w-full px-3 py-2 border border-input rounded-md"
+                            rows={3}
+                            placeholder="Descripción del producto..."
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleBackToProducts}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={updateProductMutation.isPending}
+                      className="flex-1"
+                    >
+                      {updateProductMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default function AdminPanel() {
