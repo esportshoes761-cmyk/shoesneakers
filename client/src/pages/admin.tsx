@@ -560,8 +560,7 @@ const ProductsByBrandManager: React.FC = () => {
     editForm.reset({
       name: product.name,
       price: product.price,
-      salePrice: product.salePrice || "",
-      stock: product.stock,
+      originalPrice: product.originalPrice || "",
       reference: product.reference,
       brandId: product.brandId,
       categoryId: product.categoryId,
@@ -736,19 +735,13 @@ const ProductsByBrandManager: React.FC = () => {
                               <span className="font-mono text-sm">${formatCurrency(product.price)}</span>
                             </div>
                             
-                            {product.salePrice && (
+                            {product.originalPrice && (
                               <div className="flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground">Oferta:</span>
-                                <span className="font-mono text-sm text-green-600">${formatCurrency(product.salePrice)}</span>
+                                <span className="text-xs text-muted-foreground">Precio Orig:</span>
+                                <span className="font-mono text-sm text-muted-foreground line-through">${formatCurrency(product.originalPrice)}</span>
                               </div>
                             )}
                             
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Stock:</span>
-                              <Badge variant={product.stock > 0 ? "default" : "destructive"} className="text-xs">
-                                {product.stock}
-                              </Badge>
-                            </div>
                             
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-muted-foreground">Ref:</span>
@@ -849,13 +842,10 @@ const ProductsByBrandManager: React.FC = () => {
                   <p className="text-sm text-muted-foreground">{editingProduct.category?.name}</p>
                   <div className="flex items-center gap-4">
                     <span className="font-mono">${formatCurrency(editingProduct.price)}</span>
-                    {editingProduct.salePrice && (
-                      <span className="font-mono text-green-600">${formatCurrency(editingProduct.salePrice)}</span>
+                    {editingProduct.originalPrice && (
+                      <span className="font-mono text-muted-foreground line-through">${formatCurrency(editingProduct.originalPrice)}</span>
                     )}
                   </div>
-                  <Badge variant={editingProduct.stock > 0 ? "default" : "destructive"}>
-                    {editingProduct.stock} unidades
-                  </Badge>
                 </div>
               </div>
             </CardContent>
@@ -904,13 +894,14 @@ const ProductsByBrandManager: React.FC = () => {
 
                     <FormField
                       control={editForm.control}
-                      name="salePrice"
+                      name="originalPrice"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Precio de Oferta</FormLabel>
+                          <FormLabel>Precio Original</FormLabel>
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value || ""}
                               placeholder="45.000"
                               onChange={(e) => field.onChange(formatPrice(e.target.value))}
                             />
@@ -921,40 +912,19 @@ const ProductsByBrandManager: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={editForm.control}
-                      name="stock"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Stock</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              placeholder="10"
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editForm.control}
-                      name="reference"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Referencia</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="REF-001" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={editForm.control}
+                    name="reference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Referencia</FormLabel>
+                        <FormControl>
+                          <Input {...field} value={field.value || ""} placeholder="REF-001" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={editForm.control}
@@ -990,6 +960,7 @@ const ProductsByBrandManager: React.FC = () => {
                         <FormControl>
                           <textarea
                             {...field}
+                            value={field.value || ""}
                             className="w-full px-3 py-2 border border-input rounded-md"
                             rows={3}
                             placeholder="Descripción del producto..."
