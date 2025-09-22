@@ -901,7 +901,7 @@ const ProductsByBrandManager: React.FC = () => {
                           <FormControl>
                             <Input
                               {...field}
-                              value={field.value || ""}
+                              value={field.value ?? ""}
                               placeholder="45.000"
                               onChange={(e) => field.onChange(formatPrice(e.target.value))}
                             />
@@ -932,7 +932,7 @@ const ProductsByBrandManager: React.FC = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Marca</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccionar marca" />
@@ -960,7 +960,7 @@ const ProductsByBrandManager: React.FC = () => {
                         <FormControl>
                           <textarea
                             {...field}
-                            value={field.value || ""}
+                            value={field.value ?? ""}
                             className="w-full px-3 py-2 border border-input rounded-md"
                             rows={3}
                             placeholder="Descripción del producto..."
@@ -3159,7 +3159,7 @@ export default function AdminPanel() {
                               <Input 
                                 type="number" 
                                 {...field}
-                                value={field.value || ""}
+                                value={field.value ?? ""}
                                 onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                                 data-testid="input-promotion-discount-percentage" 
                               />
@@ -5074,7 +5074,7 @@ export default function AdminPanel() {
                           <Input 
                             {...field} 
                             placeholder="0"
-                            value={field.value || ""}
+                            value={field.value ?? ""}
                             onChange={(e) => field.onChange(e.target.value ? formatPrice(e.target.value) : "")}
                             data-testid="input-edit-product-original-price"
                           />
