@@ -919,7 +919,7 @@ const ProductsByBrandManager: React.FC = () => {
                       <FormItem>
                         <FormLabel>Referencia</FormLabel>
                         <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="REF-001" />
+                          <Input {...field} value={field.value ?? ""} placeholder="REF-001" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -2596,7 +2596,7 @@ export default function AdminPanel() {
                         <FormItem>
                           <FormLabel>URL del Catálogo (opcional)</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="https://ejemplo.com/catalog" data-testid="input-brand-catalog" />
+                            <Input {...field} value={field.value ?? ""} placeholder="https://ejemplo.com/catalog" data-testid="input-brand-catalog" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
