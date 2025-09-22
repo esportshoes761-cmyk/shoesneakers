@@ -71,6 +71,26 @@ const mergeProductsSchema = z.object({
 
 const editProductSchema = insertProductSchema.partial();
 
+// 🔒 SECURE: Brand bulk editing schemas
+const bulkUpdateSchema = z.object({
+  productIds: z.array(z.string()).min(1, "Selecciona al menos un producto"),
+  updates: z.object({
+    price: z.string().optional(),
+    salePrice: z.string().optional(),
+    stock: z.number().optional(),
+    imageUrl: z.string().optional(),
+  }).refine(data => Object.values(data).some(value => value !== undefined && value !== ""), {
+    message: "Debe especificar al menos un campo para actualizar"
+  })
+});
+
+const priceAdjustmentSchema = z.object({
+  productIds: z.array(z.string()).min(1, "Selecciona al menos un producto"),
+  adjustmentType: z.enum(["percentage", "fixed"]),
+  adjustmentValue: z.number().min(0.01, "El valor debe ser mayor a 0"),
+  applyTo: z.enum(["price", "salePrice", "both"])
+});
+
 type ProductFormData = z.infer<typeof productFormSchema>;
 type PromotionFormData = z.infer<typeof promotionFormSchema>;
 type EventFormData = z.infer<typeof eventFormSchema>;
@@ -78,6 +98,8 @@ type BrandFormData = z.infer<typeof brandFormSchema>;
 type DuplicateFiltersData = z.infer<typeof duplicateFiltersSchema>;
 type MergeProductsData = z.infer<typeof mergeProductsSchema>;
 type EditProductData = z.infer<typeof editProductSchema>;
+type BulkUpdateData = z.infer<typeof bulkUpdateSchema>;
+type PriceAdjustmentData = z.infer<typeof priceAdjustmentSchema>;
 
 // Duplicate group type
 type DuplicateGroup = {
@@ -448,6 +470,563 @@ const DuplicateGroupsList: React.FC<DuplicateGroupsListProps> = ({
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+};
+
+// 🚀 COMPONENT: Products by Brand Manager
+const ProductsByBrandManager: React.FC = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // State management
+  const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [bulkEditMode, setBulkEditMode] = useState<"update" | "adjust" | null>(null);
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
+
+  // Form management
+  const bulkUpdateForm = useForm<BulkUpdateData>({
+    resolver: zodResolver(bulkUpdateSchema),
+    defaultValues: {
+      productIds: [],
+      updates: {}
+    }
+  });
+
+  const priceAdjustmentForm = useForm<PriceAdjustmentData>({
+    resolver: zodResolver(priceAdjustmentSchema),
+    defaultValues: {
+      productIds: [],
+      adjustmentType: "percentage",
+      adjustmentValue: 0,
+      applyTo: "price"
+    }
+  });
+
+  // Queries
+  const brandsQuery = useQuery({
+    queryKey: ["/api/brands/admin/with-products"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/brands/admin/with-products");
+      return response.json();
+    },
+  });
+
+  const productsQuery = useQuery({
+    queryKey: ["/api/admin/brands", selectedBrandId, "products", currentPage],
+    queryFn: async () => {
+      if (!selectedBrandId) return null;
+      const response = await apiRequest("GET", `/api/admin/brands/${selectedBrandId}/products?page=${currentPage}&limit=20`);
+      return response.json();
+    },
+    enabled: !!selectedBrandId,
+  });
+
+  // Mutations
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: BulkUpdateData) => {
+      const response = await apiRequest("PATCH", "/api/admin/products/bulk", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return response.json();
+    },
+    onSuccess: (response) => {
+      toast({
+        title: "✅ Actualización Masiva Exitosa",
+        description: `${response.data.updated} productos actualizados correctamente`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/brands", selectedBrandId, "products"] });
+      setSelectedProducts(new Set());
+      setShowBulkDialog(false);
+      setBulkEditMode(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "❌ Error en Actualización Masiva",
+        description: error.message || "No se pudieron actualizar los productos",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Helper functions
+  const handleSelectAll = () => {
+    if (!productsQuery.data?.data.products) return;
+    
+    const allProductIds = new Set<string>(productsQuery.data.data.products.map((p: any) => String(p.id)));
+    if (selectedProducts.size === allProductIds.size) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(allProductIds);
+    }
+  };
+
+  const handleProductSelect = (productId: string) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const handleBulkUpdate = (data: BulkUpdateData) => {
+    // Remove empty fields
+    const updates = Object.fromEntries(
+      Object.entries(data.updates).filter(([_, value]) => value !== undefined && value !== "")
+    );
+    
+    bulkUpdateMutation.mutate({
+      productIds: Array.from(selectedProducts),
+      updates
+    });
+  };
+
+  const handlePriceAdjustment = (data: PriceAdjustmentData) => {
+    if (!productsQuery.data?.data.products) return;
+
+    const selectedProductsData = productsQuery.data.data.products.filter((p: any) => 
+      selectedProducts.has(p.id)
+    );
+
+    const updates: any = {};
+    
+    selectedProductsData.forEach((product: any) => {
+      const { adjustmentType, adjustmentValue, applyTo } = data;
+      
+      if (applyTo === "price" || applyTo === "both") {
+        const currentPrice = parseFloat(parsePrice(product.price || "0"));
+        let newPrice = currentPrice;
+        
+        if (adjustmentType === "percentage") {
+          newPrice = currentPrice * (1 + adjustmentValue / 100);
+        } else {
+          newPrice = currentPrice + adjustmentValue;
+        }
+        
+        updates.price = formatPrice(Math.round(newPrice).toString());
+      }
+      
+      if (applyTo === "salePrice" || applyTo === "both") {
+        const currentSalePrice = parseFloat(parsePrice(product.salePrice || "0"));
+        let newSalePrice = currentSalePrice;
+        
+        if (adjustmentType === "percentage") {
+          newSalePrice = currentSalePrice * (1 + adjustmentValue / 100);
+        } else {
+          newSalePrice = currentSalePrice + adjustmentValue;
+        }
+        
+        updates.salePrice = formatPrice(Math.round(newSalePrice).toString());
+      }
+    });
+
+    bulkUpdateMutation.mutate({
+      productIds: Array.from(selectedProducts),
+      updates
+    });
+  };
+
+  const selectedBrand = brandsQuery.data?.find((brand: any) => brand.id === selectedBrandId);
+  const products = productsQuery.data?.data.products || [];
+  const pagination = productsQuery.data?.data.pagination;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Gestión de Productos por Marca</h3>
+        <Badge variant="outline">
+          {selectedProducts.size} productos seleccionados
+        </Badge>
+      </div>
+
+      {/* Brand Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5" />
+            Seleccionar Marca
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedBrandId} onValueChange={(value) => {
+            setSelectedBrandId(value);
+            setSelectedProducts(new Set());
+            setCurrentPage(1);
+          }}>
+            <SelectTrigger className="w-full" data-testid="select-brand">
+              <SelectValue placeholder="Selecciona una marca para gestionar sus productos" />
+            </SelectTrigger>
+            <SelectContent>
+              {brandsQuery.data?.map((brand: any) => (
+                <SelectItem key={brand.id} value={brand.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{brand.name}</span>
+                    <Badge variant="secondary">{brand.productCount} productos</Badge>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Products Table */}
+      {selectedBrandId && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Productos de {selectedBrand?.name}
+                </CardTitle>
+                <CardDescription>
+                  {pagination ? `${pagination.total} productos encontrados` : "Cargando productos..."}
+                </CardDescription>
+              </div>
+              {selectedProducts.size > 0 && (
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setBulkEditMode("update");
+                      setShowBulkDialog(true);
+                    }}
+                    data-testid="button-bulk-update"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar Masivo
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setBulkEditMode("adjust");
+                      setShowBulkDialog(true);
+                    }}
+                    data-testid="button-price-adjustment"
+                  >
+                    <Hash className="h-4 w-4 mr-2" />
+                    Ajustar Precios
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {productsQuery.isLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-muted-foreground">Cargando productos...</p>
+                </div>
+              </div>
+            ) : products.length === 0 ? (
+              <div className="text-center p-8">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No se encontraron productos para esta marca</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Table Header */}
+                <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                  <input
+                    type="checkbox"
+                    checked={selectedProducts.size === products.length && products.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded"
+                    data-testid="checkbox-select-all"
+                  />
+                  <div className="flex-1 grid grid-cols-12 gap-4 text-sm font-medium">
+                    <div className="col-span-3">Producto</div>
+                    <div className="col-span-2">Precio</div>
+                    <div className="col-span-2">Precio Oferta</div>
+                    <div className="col-span-2">Stock</div>
+                    <div className="col-span-2">Referencia</div>
+                    <div className="col-span-1">Acciones</div>
+                  </div>
+                </div>
+
+                {/* Product Rows */}
+                <div className="space-y-2">
+                  {products.map((product: any) => (
+                    <div
+                      key={product.id}
+                      className={`flex items-center gap-4 p-4 border rounded-lg transition-colors ${
+                        selectedProducts.has(product.id) ? "bg-primary/5 border-primary/20" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.has(product.id)}
+                        onChange={() => handleProductSelect(product.id)}
+                        className="rounded"
+                        data-testid={`checkbox-product-${product.id}`}
+                      />
+                      <div className="flex-1 grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-3 flex items-center gap-3">
+                          {product.imageUrl && (
+                            <img
+                              src={`/api/images/${product.imageUrl}`}
+                              alt={product.name}
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                          )}
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            <p className="text-sm text-muted-foreground">{product.category?.name}</p>
+                          </div>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-mono">${formatCurrency(product.price)}</span>
+                        </div>
+                        <div className="col-span-2">
+                          {product.salePrice ? (
+                            <span className="font-mono text-green-600">${formatCurrency(product.salePrice)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </div>
+                        <div className="col-span-2">
+                          <Badge variant={product.stock > 0 ? "default" : "destructive"}>
+                            {product.stock} unidades
+                          </Badge>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-mono text-xs">{product.reference}</span>
+                        </div>
+                        <div className="col-span-1">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Página {pagination.page} de {pagination.totalPages} ({pagination.total} productos)
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={!pagination.hasMore}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bulkEditMode === "update" ? "Actualización Masiva" : "Ajuste de Precios"}
+            </DialogTitle>
+            <DialogDescription>
+              {bulkEditMode === "update" 
+                ? `Actualizar ${selectedProducts.size} productos seleccionados`
+                : `Ajustar precios de ${selectedProducts.size} productos seleccionados`
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          {bulkEditMode === "update" ? (
+            <Form {...bulkUpdateForm}>
+              <form onSubmit={bulkUpdateForm.handleSubmit(handleBulkUpdate)} className="space-y-4">
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="updates.price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nuevo Precio</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Ej: 50.000 (dejar vacío para no cambiar)"
+                          onChange={(e) => field.onChange(formatPrice(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="updates.salePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nuevo Precio de Oferta</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Ej: 45.000 (dejar vacío para no cambiar)"
+                          onChange={(e) => field.onChange(formatPrice(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkUpdateForm.control}
+                  name="updates.stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nuevo Stock</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          placeholder="Ej: 10 (dejar vacío para no cambiar)"
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBulkDialog(false)}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={bulkUpdateMutation.isPending}
+                    className="flex-1"
+                  >
+                    {bulkUpdateMutation.isPending ? "Actualizando..." : "Actualizar"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          ) : (
+            <Form {...priceAdjustmentForm}>
+              <form onSubmit={priceAdjustmentForm.handleSubmit(handlePriceAdjustment)} className="space-y-4">
+                <FormField
+                  control={priceAdjustmentForm.control}
+                  name="adjustmentType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Ajuste</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="percentage">Porcentaje</SelectItem>
+                          <SelectItem value="fixed">Valor Fijo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={priceAdjustmentForm.control}
+                  name="adjustmentValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {priceAdjustmentForm.watch("adjustmentType") === "percentage" ? "Porcentaje (%)" : "Valor ($)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          placeholder={priceAdjustmentForm.watch("adjustmentType") === "percentage" ? "Ej: 10" : "Ej: 5000"}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={priceAdjustmentForm.control}
+                  name="applyTo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Aplicar A</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="price">Solo Precio Regular</SelectItem>
+                          <SelectItem value="salePrice">Solo Precio de Oferta</SelectItem>
+                          <SelectItem value="both">Ambos Precios</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBulkDialog(false)}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={bulkUpdateMutation.isPending}
+                    className="flex-1"
+                  >
+                    {bulkUpdateMutation.isPending ? "Ajustando..." : "Ajustar"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -1602,7 +2181,7 @@ export default function AdminPanel() {
         {/* ✨ REORGANIZED: Catálogo with sub-tabs */}
         <TabsContent value="catalog" className="space-y-2 sm:space-y-4">
           <Tabs value={catalogSubTab} onValueChange={setCatalogSubTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="list" className="flex items-center gap-2" data-testid="subtab-catalog-list">
                 <Search className="h-4 w-4" />
                 Lista
@@ -1610,6 +2189,10 @@ export default function AdminPanel() {
               <TabsTrigger value="edit" className="flex items-center gap-2" data-testid="subtab-catalog-edit">
                 <Edit className="h-4 w-4" />
                 Crear/Editar
+              </TabsTrigger>
+              <TabsTrigger value="by-brand" className="flex items-center gap-2" data-testid="subtab-catalog-by-brand">
+                <Briefcase className="h-4 w-4" />
+                Por Marca
               </TabsTrigger>
               <TabsTrigger value="uploads" className="flex items-center gap-2" data-testid="subtab-catalog-uploads">
                 <Upload className="h-4 w-4" />
@@ -1870,6 +2453,11 @@ export default function AdminPanel() {
                   <p className="text-muted-foreground">El formulario de producto se implementará aquí con los nuevos estados centralizados.</p>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Sub-tab: Productos por Marca */}
+            <TabsContent value="by-brand" className="space-y-4">
+              <ProductsByBrandManager />
             </TabsContent>
 
             {/* Sub-tab: Cargas (uploads) */}
