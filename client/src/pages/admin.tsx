@@ -72,6 +72,30 @@ const mergeProductsSchema = z.object({
 
 const editProductSchema = insertProductSchema.partial();
 
+// 🤖 BULK UPLOAD: Schemas and interfaces for AI-powered bulk upload
+interface BulkUploadResult {
+  success: boolean;
+  product?: Product;
+  detectedBrand: string;
+  confidence: number;
+  detectionMethod: string;
+  imageUrl: string;
+  originalFileName: string;
+}
+
+interface BulkUploadResponse {
+  message: string;
+  totalProcessed: number;
+  successful: number;
+  failed: number;
+  results: BulkUploadResult[];
+  errors: Array<{
+    index: number;
+    error: string;
+    imageData: string;
+  }>;
+}
+
 // 🔒 SECURE: Brand bulk editing schemas
 const bulkUpdateSchema = z.object({
   productIds: z.array(z.string()).min(1, "Selecciona al menos un producto"),
@@ -1415,6 +1439,292 @@ const ProductsByBrandManager: React.FC = () => {
 
   return null;
 };
+
+// 🤖 COMPONENTE: Panel de Carga Masiva con Clasificación Automática de Marcas
+function BulkUploadPanel() {
+  const { toast } = useToast();
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [uploadResults, setUploadResults] = useState<BulkUploadResponse | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+
+  // Mutation para carga masiva
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (images: File[]) => {
+      const formattedImages = await Promise.all(
+        images.map(async (file, index) => {
+          return new Promise<{imageData: string, fileName: string}>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                imageData: reader.result as string,
+                fileName: file.name || `imagen_${index}.jpg`
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      const response = await apiRequest("POST", "/api/products/bulk-upload", {
+        images: formattedImages
+      });
+      return response.json();
+    },
+    onSuccess: (data: BulkUploadResponse) => {
+      setUploadResults(data);
+      toast({
+        title: "✅ Carga masiva completada",
+        description: `${data.successful} productos creados exitosamente, ${data.failed} errores`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "❌ Error en carga masiva",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    // Validar tipos de archivo
+    const validFiles = files.filter(file => 
+      file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024 // 10MB max
+    );
+
+    if (validFiles.length !== files.length) {
+      toast({
+        title: "⚠️ Archivos filtrados",
+        description: `${files.length - validFiles.length} archivos fueron excluidos (solo imágenes, máximo 10MB)`,
+        variant: "destructive",
+      });
+    }
+
+    setSelectedImages(validFiles);
+    setUploadResults(null); // Limpiar resultados anteriores
+  };
+
+  const handleBulkUpload = async () => {
+    if (selectedImages.length === 0) {
+      toast({
+        title: "⚠️ No hay imágenes",
+        description: "Selecciona al menos una imagen para subir",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress({ current: 0, total: selectedImages.length });
+    
+    try {
+      await bulkUploadMutation.mutateAsync(selectedImages);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedImages([]);
+    setUploadResults(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Selector de imágenes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Seleccionar Imágenes
+          </CardTitle>
+          <CardDescription>
+            Selecciona múltiples imágenes de productos. El sistema analizará cada imagen automáticamente para detectar la marca.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col space-y-4">
+            <Input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleImageSelection}
+              className="cursor-pointer"
+              data-testid="input-bulk-upload-images"
+            />
+            
+            {selectedImages.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                <span className="text-sm">
+                  📸 {selectedImages.length} imágenes seleccionadas
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={clearSelection}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Limpiar
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Vista previa de imágenes seleccionadas */}
+      {selectedImages.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Vista Previa</CardTitle>
+            <CardDescription>
+              Revisa las imágenes antes de iniciar el procesamiento automático
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {selectedImages.map((file, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt={`Preview ${index + 1}`}
+                    className="w-full h-24 object-cover rounded-lg border"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <span className="text-white text-xs text-center px-2">
+                      {file.name}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Botón de procesamiento */}
+      {selectedImages.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <Button
+              onClick={handleBulkUpload}
+              disabled={isUploading}
+              className="w-full"
+              size="lg"
+              data-testid="button-start-bulk-upload"
+            >
+              {isUploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Procesando {uploadProgress.current}/{uploadProgress.total}...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Procesar con IA ({selectedImages.length} imágenes)
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resultados de la carga */}
+      {uploadResults && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Check className="h-5 w-5 text-green-500" />
+              Resultados del Procesamiento
+            </CardTitle>
+            <CardDescription>
+              {uploadResults.message}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Resumen */}
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="p-3 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{uploadResults.successful}</div>
+                <div className="text-sm text-green-700">Exitosos</div>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg">
+                <div className="text-2xl font-bold text-red-600">{uploadResults.failed}</div>
+                <div className="text-sm text-red-700">Errores</div>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{uploadResults.totalProcessed}</div>
+                <div className="text-sm text-blue-700">Total</div>
+              </div>
+            </div>
+
+            {/* Lista de productos creados */}
+            {uploadResults.results.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="font-semibold">Productos Creados:</h4>
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {uploadResults.results.map((result, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg"
+                    >
+                      <img
+                        src={result.imageUrl}
+                        alt={result.originalFileName}
+                        className="w-12 h-12 object-cover rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">
+                          {result.product?.name || 'Producto sin nombre'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Marca: <span className="font-medium">{result.detectedBrand}</span>
+                          {' • '}
+                          Confianza: {(result.confidence * 100).toFixed(1)}%
+                          {' • '}
+                          Método: {result.detectionMethod === 'visual_ai' ? 'IA Visual' : 'Archivo'}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          Ref: {result.product?.reference}
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {result.product?.reference}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lista de errores */}
+            {uploadResults.errors.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="font-semibold text-red-600">Errores:</h4>
+                <div className="max-h-32 overflow-y-auto space-y-2">
+                  {uploadResults.errors.map((error, index) => (
+                    <div key={index} className="p-3 bg-red-50 rounded-lg">
+                      <div className="text-sm font-medium text-red-700">
+                        {error.imageData}
+                      </div>
+                      <div className="text-xs text-red-600">{error.error}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPanel() {
   const { toast } = useToast();
@@ -3268,10 +3578,14 @@ export default function AdminPanel() {
         {/* Panel de Herramientas */}
         <TabsContent value="tools" className="space-y-2 sm:space-y-4">
           <Tabs value={toolsSubTab} onValueChange={setToolsSubTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-1">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="duplicates" className="flex items-center gap-2" data-testid="subtab-tools-duplicates">
                 <Copy className="h-4 w-4" />
                 Duplicados
+              </TabsTrigger>
+              <TabsTrigger value="bulk-upload" className="flex items-center gap-2" data-testid="subtab-tools-bulk-upload">
+                <Upload className="h-4 w-4" />
+                Carga Masiva
               </TabsTrigger>
             </TabsList>
 
@@ -3451,6 +3765,18 @@ export default function AdminPanel() {
                 }}
                 onPageChange={setDuplicatePage}
               />
+            </TabsContent>
+
+            {/* Sub-tab: Carga Masiva con Clasificación Automática */}
+            <TabsContent value="bulk-upload" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-semibold">Carga Masiva con Clasificación Automática</h2>
+                  <p className="text-muted-foreground">Sube múltiples imágenes y el sistema detectará automáticamente las marcas usando IA</p>
+                </div>
+              </div>
+
+              <BulkUploadPanel />
             </TabsContent>
           </Tabs>
         </TabsContent>
