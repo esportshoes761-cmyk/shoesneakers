@@ -1,6 +1,6 @@
 import { db, sqlite } from './db';
-import { users, categories, brands, themeSettings } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { users, categories, brands, themeSettings, auditActionCodes } from '@shared/schema';
+import { eq, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 export async function initializeDatabase() {
@@ -175,6 +175,43 @@ export async function initializeDatabase() {
         "animation_config" text,
         "updated_at" integer DEFAULT (unixepoch())
       );
+
+      CREATE TABLE IF NOT EXISTS "audit_events" (
+        "id" text PRIMARY KEY NOT NULL,
+        "timestamp" integer NOT NULL DEFAULT (unixepoch()),
+        "actor_type" text NOT NULL,
+        "actor_id" text,
+        "session_id" text NOT NULL,
+        "ip_truncated" text,
+        "ua_hash" text,
+        "action_code" integer NOT NULL,
+        "resource_type" text,
+        "resource_id" text,
+        "result" text NOT NULL,
+        "latency_ms" integer,
+        "metadata" text,
+        "prev_hash" text,
+        "hash" text NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS "audit_action_codes" (
+        "code" integer PRIMARY KEY NOT NULL,
+        "name" text NOT NULL UNIQUE,
+        "description" text,
+        "level" text NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS "audit_daily_digests" (
+        "date" text PRIMARY KEY NOT NULL,
+        "first_event_id" text NOT NULL,
+        "last_event_id" text NOT NULL,
+        "start_hash" text NOT NULL,
+        "end_hash" text NOT NULL,
+        "hmac" text NOT NULL,
+        "archive_path" text,
+        "event_count" integer NOT NULL DEFAULT 0,
+        "created_at" integer DEFAULT (unixepoch())
+      );
     `;
 
     // Execute table creation SQL
@@ -340,10 +377,7 @@ export async function initializeDatabase() {
           .limit(1);
         
         if (existing.length === 0) {
-          await db.insert(themeSettings).values({
-            id: crypto.randomUUID(),
-            ...theme
-          });
+          await db.insert(themeSettings).values(theme);
           console.log(`✅ Inserted theme: ${theme.title}`);
         }
       } catch (error) {
@@ -351,7 +385,83 @@ export async function initializeDatabase() {
       }
     }
 
+    // Insert default audit action codes
+    const defaultActionCodes = [
+      // Authentication & Authorization (1xx)
+      { code: 101, name: 'USER_LOGIN', description: 'Usuario inició sesión', level: 'A' },
+      { code: 102, name: 'USER_LOGOUT', description: 'Usuario cerró sesión', level: 'A' },
+      { code: 103, name: 'AUTH_FAILURE', description: 'Fallo en autenticación', level: 'A' },
+      { code: 104, name: 'SESSION_EXPIRED', description: 'Sesión expirada', level: 'A' },
+      { code: 105, name: 'PERMISSION_DENIED', description: 'Acceso denegado', level: 'A' },
+      
+      // User Management (2xx)
+      { code: 201, name: 'USER_CREATE', description: 'Usuario creado', level: 'A' },
+      { code: 202, name: 'USER_UPDATE', description: 'Usuario actualizado', level: 'A' },
+      { code: 203, name: 'USER_DELETE', description: 'Usuario eliminado', level: 'A' },
+      { code: 204, name: 'ROLE_CHANGE', description: 'Cambio de rol de usuario', level: 'A' },
+      { code: 205, name: 'PASSWORD_CHANGE', description: 'Cambio de contraseña', level: 'A' },
+      
+      // Product Management (3xx)
+      { code: 301, name: 'PRODUCT_CREATE', description: 'Producto creado', level: 'A' },
+      { code: 302, name: 'PRODUCT_UPDATE', description: 'Producto actualizado', level: 'A' },
+      { code: 303, name: 'PRODUCT_DELETE', description: 'Producto eliminado', level: 'A' },
+      { code: 304, name: 'PRODUCT_VIEW', description: 'Producto visualizado', level: 'B' },
+      { code: 305, name: 'BULK_UPLOAD', description: 'Carga masiva de productos', level: 'A' },
+      { code: 306, name: 'PRICE_CHANGE', description: 'Cambio de precio', level: 'A' },
+      
+      // Brand Management (4xx)
+      { code: 401, name: 'BRAND_CREATE', description: 'Marca creada', level: 'A' },
+      { code: 402, name: 'BRAND_UPDATE', description: 'Marca actualizada', level: 'A' },
+      { code: 403, name: 'BRAND_DELETE', description: 'Marca eliminada', level: 'A' },
+      { code: 404, name: 'BRAND_VIEW', description: 'Marca visualizada', level: 'B' },
+      
+      // Cart & Orders (5xx)
+      { code: 501, name: 'CART_ADD', description: 'Producto agregado al carrito', level: 'B' },
+      { code: 502, name: 'CART_REMOVE', description: 'Producto removido del carrito', level: 'B' },
+      { code: 503, name: 'ORDER_CREATE', description: 'Pedido creado', level: 'A' },
+      { code: 504, name: 'ORDER_UPDATE', description: 'Pedido actualizado', level: 'A' },
+      { code: 505, name: 'ORDER_STATUS_CHANGE', description: 'Cambio de estado de pedido', level: 'A' },
+      
+      // File Operations (6xx)
+      { code: 601, name: 'FILE_UPLOAD', description: 'Archivo subido', level: 'A' },
+      { code: 602, name: 'FILE_DELETE', description: 'Archivo eliminado', level: 'A' },
+      { code: 603, name: 'BULK_OPERATION', description: 'Operación masiva', level: 'A' },
+      
+      // System Operations (7xx)
+      { code: 701, name: 'THEME_CHANGE', description: 'Cambio de tema', level: 'A' },
+      { code: 702, name: 'CONFIG_UPDATE', description: 'Configuración actualizada', level: 'A' },
+      { code: 703, name: 'API_CALL', description: 'Llamada a API externa', level: 'A' },
+      { code: 704, name: 'EXTERNAL_SERVICE', description: 'Servicio externo utilizado', level: 'A' },
+      
+      // Search & Analytics (8xx)
+      { code: 801, name: 'SEARCH_QUERY', description: 'Búsqueda realizada', level: 'B' },
+      { code: 802, name: 'DUPLICATE_DETECTION', description: 'Detección de duplicados', level: 'A' },
+      { code: 803, name: 'REPORT_GENERATE', description: 'Reporte generado', level: 'A' },
+      
+      // Data Operations (9xx)
+      { code: 901, name: 'DATA_EXPORT', description: 'Exportación de datos', level: 'A' },
+      { code: 902, name: 'DATA_IMPORT', description: 'Importación de datos', level: 'A' },
+      { code: 903, name: 'MERGE_OPERATION', description: 'Operación de fusión', level: 'A' },
+      { code: 904, name: 'ARCHIVE_OPERATION', description: 'Operación de archivado', level: 'A' },
+    ];
+
+    for (const actionCode of defaultActionCodes) {
+      try {
+        const existing = await db.select().from(auditActionCodes)
+          .where(eq(auditActionCodes.code, actionCode.code))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(auditActionCodes).values(actionCode);
+          console.log(`✅ Inserted audit action code: ${actionCode.name}`);
+        }
+      } catch (error) {
+        console.log(`Audit action code ${actionCode.name} might already exist:`, error);
+      }
+    }
+
     console.log('✅ Default data insertion complete');
+    console.log('🔒 Audit system initialized with tamper-evident logging');
     console.log('🎉 SQLite database initialization complete!');
 
   } catch (error) {

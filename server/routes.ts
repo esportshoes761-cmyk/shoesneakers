@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema } from "@shared/schema";
+import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema, auditEvents, auditActionCodes, auditDailyDigests } from "@shared/schema";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { randomBytes } from "crypto";
@@ -9,6 +9,7 @@ import fs from "fs-extra";
 import * as path from "path";
 import { detectBrandFromImage, combineDetectionResults } from "./ai-vision";
 import { detectBrandFromFilename, PENDING_REVIEW_BRAND, MIN_CONFIDENCE_THRESHOLD } from "./brand-detection";
+import { db } from "./db";
 
 // Helper functions
 function generateUniqueReference(): string {
@@ -147,6 +148,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     MAX_PRODUCTS: 1000000,
     MAX_IMAGES: 1000000
   };
+
+  // 🔍 AUDIT SYSTEM TEST ENDPOINT - REGISTERED FIRST TO AVOID VITE INTERFERENCE
+  app.get("/api/test-audit", async (req, res) => {
+    try {
+      console.log('🔍 Testing audit system...');
+      
+      // Check if audit tables exist and have data
+      const actionCodes = await db.select().from(auditActionCodes).limit(5);
+      const eventCount = await db.select().from(auditEvents);
+      
+      // Create a test audit event
+      const testEvent = {
+        actorType: 'system',
+        actorId: 'test-api',
+        sessionId: 'test-session-' + Date.now(),
+        actionCode: 703, // API_CALL
+        resourceType: 'system',
+        resourceId: 'audit-test-api',
+        result: 'success',
+        metadata: { testRun: true, endpoint: '/api/test-audit', timestamp: new Date().toISOString() },
+        hash: 'test-hash-' + Math.random().toString(36).substring(7)
+      };
+      
+      const insertResult = await db.insert(auditEvents).values(testEvent).returning();
+      
+      res.json({
+        success: true,
+        message: 'Audit system test completed successfully!',
+        data: {
+          actionCodesCount: actionCodes.length,
+          sampleActionCodes: actionCodes,
+          totalEvents: eventCount.length,
+          testEventCreated: insertResult[0]?.id,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Audit system test failed:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Audit system test failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -265,6 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error fetching categories" });
     }
   });
+
 
   // Brands routes
   app.get("/api/brands", async (req, res) => {
