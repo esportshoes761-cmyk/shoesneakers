@@ -2618,8 +2618,38 @@ export default function AdminPanel() {
 
         {/* Panel de Marcas */}
         <TabsContent value="brands" className="space-y-2 sm:space-y-4">
+          
+          {/* 🚀 ACCESO DIRECTO: Gestión de Productos por Marca */}
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Package className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-blue-900">🏷️ Gestionar Productos por Marca</h3>
+                    <p className="text-sm text-blue-700">Edita productos organizados por marca - perfecto para ajustes de precios masivos</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => {
+                    // Switch to catalog tab and by-brand subtab
+                    setActiveTab("catalog");
+                    setCatalogSubTab("by-brand");
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-manage-products-by-brand"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Gestionar Productos
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex justify-between items-center mb-2 sm:mb-4">
-            <h2 className="text-lg sm:text-2xl font-semibold">Gestión de Marcas</h2>
+            <h2 className="text-lg sm:text-2xl font-semibold">Configuración de Marcas</h2>
             <Dialog open={activeModal.type === "brand"} onOpenChange={(open) => open ? openModal("brand") : closeModal()}>
               <DialogTrigger asChild>
                 <Button size="sm" className="h-8 sm:h-10 text-xs sm:text-sm" data-testid="button-add-brand">
