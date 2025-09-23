@@ -13,7 +13,6 @@ import { useCartStore } from "@/lib/cart-store";
 import { useLocation } from "wouter";
 import { SavingsAnimation, PulsingDiscount } from "./savings-animation";
 import { formatCurrency } from "@/lib/currency";
-import { ComparisonButton } from "@/components/ComparisonButton";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -463,11 +462,6 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             <MessageCircle className="w-3 h-3 mr-1" />
             <span className="truncate">Pedir Ya</span>
           </Button>
-        </div>
-        
-        {/* Fila inferior: Comparar */}
-        <div className="flex justify-center">
-          <ComparisonButton product={product} size="sm" variant="outline" />
         </div>
       </div>
       
