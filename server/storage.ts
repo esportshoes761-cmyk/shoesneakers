@@ -261,12 +261,15 @@ export class DatabaseStorage implements IStorage {
       const brandsWithProducts: BrandWithProducts[] = [];
       
       for (const brand of locationBrands) {
-        const brandProducts = await db.select().from(products)
+        // OPTIMIZACIÓN: Solo contar productos, no cargarlos todos para mejor rendimiento
+        const productCount = await db.select({ count: sql<number>`count(*)` })
+          .from(products)
           .where(eq(products.brandId, brand.id));
         
         brandsWithProducts.push({
           ...brand,
-          products: brandProducts
+          products: [], // No cargar productos aquí para evitar lentitud
+          productCount: productCount[0]?.count || 0
         });
       }
       

@@ -485,6 +485,379 @@ const DuplicateGroupsList: React.FC<DuplicateGroupsListProps> = ({
   );
 };
 
+// 🎯 COMPONENT: Simple Brand Product Manager - SOLUCIÓN DIRECTA
+const SimpleBrandProductManager: React.FC = () => {
+  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Get brands with products
+  const brandsQuery = useQuery({
+    queryKey: ["/api/brands/admin/with-products"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/brands/admin/with-products");
+      return response.json();
+    },
+  });
+
+  // Get products for selected brand
+  const productsQuery = useQuery({
+    queryKey: ["/api/products/brand", selectedBrand?.id],
+    queryFn: async () => {
+      if (!selectedBrand?.id) return [];
+      const response = await apiRequest("GET", "/api/products");
+      const allProducts = await response.json();
+      return allProducts.filter((p: any) => p.brandId === selectedBrand.id);
+    },
+    enabled: !!selectedBrand?.id,
+  });
+
+  // Update product mutation
+  const updateProductMutation = useMutation({
+    mutationFn: async (data: { id: string; updates: any }) => {
+      const response = await apiRequest("PATCH", `/api/products/${data.id}`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.updates),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "✅ Producto Actualizado",
+        description: "Los cambios se guardaron correctamente",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/products/brand", selectedBrand?.id] });
+      setEditingProduct(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "❌ Error",
+        description: error.message || "No se pudo actualizar el producto",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit form
+  const editForm = useForm({
+    defaultValues: {}
+  });
+
+  const handleEditProduct = (product: any) => {
+    setEditingProduct(product);
+    editForm.reset({
+      name: product.name || "",
+      price: product.price || "",
+      salePrice: product.salePrice || "",
+      description: product.description || "",
+      stock: product.stock || 0,
+      sizes: product.sizes || "",
+      colors: product.colors || "",
+      reference: product.reference || "",
+    });
+  };
+
+  const handleSaveProduct = (data: any) => {
+    if (!editingProduct) return;
+    
+    const updates = {
+      ...data,
+      price: parseFloat(data.price) || 0,
+      salePrice: data.salePrice ? parseFloat(data.salePrice) : null,
+      stock: parseInt(data.stock) || 0,
+    };
+
+    updateProductMutation.mutate({ id: editingProduct.id, updates });
+  };
+
+  // Si no hay marca seleccionada, mostrar lista de marcas
+  if (!selectedBrand) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-2">🏷️ Gestión de Productos por Marca</h1>
+          <p className="text-muted-foreground">Selecciona una marca para editar sus productos</p>
+        </div>
+
+        {brandsQuery.isLoading ? (
+          <div className="flex justify-center p-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-lg">Cargando marcas...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {brandsQuery.data?.map((brand: any) => (
+              <Card key={brand.id} className="hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-blue-300">
+                <CardContent className="p-8 text-center">
+                  <div className="space-y-4">
+                    {brand.logo ? (
+                      <img src={brand.logo} alt={brand.name} className="w-20 h-20 object-contain mx-auto" />
+                    ) : (
+                      <div className="w-20 h-20 bg-gray-200 rounded-lg mx-auto flex items-center justify-center">
+                        <Briefcase className="h-10 w-10 text-gray-500" />
+                      </div>
+                    )}
+                    
+                    <div>
+                      <h2 className="text-2xl font-bold">{brand.name}</h2>
+                      <Badge variant="secondary" className="mt-2 text-lg px-4 py-1">
+                        {brand.productCount} productos
+                      </Badge>
+                    </div>
+                    
+                    <Button 
+                      onClick={() => setSelectedBrand(brand)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg"
+                      size="lg"
+                    >
+                      <Package className="h-5 w-5 mr-2" />
+                      Ver Productos
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Si hay marca seleccionada, mostrar productos
+  return (
+    <div className="space-y-6">
+      {/* Header con botón de regreso */}
+      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            onClick={() => setSelectedBrand(null)}
+            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver a Marcas
+          </Button>
+          
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-blue-900">🏷️ {selectedBrand.name}</h1>
+            <p className="text-blue-700">
+              {productsQuery.data?.length || 0} productos disponibles
+            </p>
+          </div>
+          
+          <div className="w-32"></div>
+        </div>
+      </div>
+
+      {/* Lista de productos en 2 columnas */}
+      {productsQuery.isLoading ? (
+        <div className="flex justify-center p-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-lg">Cargando productos...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2">
+          {productsQuery.data?.map((product: any) => (
+            <Card key={product.id} className="hover:shadow-lg transition-all border-2 hover:border-blue-200">
+              <CardContent className="p-6">
+                <div className="flex gap-6">
+                  {/* Imagen */}
+                  <div className="flex-shrink-0">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-32 h-32 object-cover rounded-lg border"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <Package className="h-12 w-12 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Información */}
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <h3 className="font-bold text-lg line-clamp-2">{product.name}</h3>
+                      <p className="text-sm text-muted-foreground">Ref: {product.reference || "Sin referencia"}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Precio:</span>
+                        <div className="font-bold text-lg">{formatCurrency(product.price)} COP</div>
+                        {product.salePrice && (
+                          <div className="text-green-600 font-medium">
+                            Oferta: {formatCurrency(product.salePrice)} COP
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Stock:</span>
+                        <div className="font-semibold">{product.stock || 0} unidades</div>
+                      </div>
+                    </div>
+                    
+                    {product.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                    )}
+                    
+                    <Button
+                      onClick={() => handleEditProduct(product)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar Producto
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Modal de edición */}
+      <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>✏️ Editar Producto</DialogTitle>
+            <DialogDescription>Modifica todos los datos del producto</DialogDescription>
+          </DialogHeader>
+          
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleSaveProduct)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre del Producto</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Nombre completo" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={editForm.control}
+                  name="reference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Referencia</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Código/referencia" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={editForm.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio Normal</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" placeholder="0" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={editForm.control}
+                  name="salePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Precio Oferta</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" placeholder="0 (opcional)" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={editForm.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" placeholder="0" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={editForm.control}
+                  name="sizes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tallas</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="35, 36, 37..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={editForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descripción</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Descripción del producto" rows={3} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingProduct(null)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateProductMutation.isPending}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {updateProductMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 // 🚀 COMPONENT: Products by Brand Manager
 const ProductsByBrandManager: React.FC = () => {
   const { toast } = useToast();
@@ -2619,34 +2992,8 @@ export default function AdminPanel() {
         {/* Panel de Marcas */}
         <TabsContent value="brands" className="space-y-2 sm:space-y-4">
           
-          {/* 🚀 ACCESO DIRECTO: Gestión de Productos por Marca */}
-          <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Package className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-blue-900">🏷️ Gestionar Productos por Marca</h3>
-                    <p className="text-sm text-blue-700">Edita productos organizados por marca - perfecto para ajustes de precios masivos</p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => {
-                    // Switch to catalog tab and by-brand subtab
-                    setActiveTab("catalog");
-                    setCatalogSubTab("by-brand");
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700"
-                  data-testid="button-manage-products-by-brand"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Gestionar Productos
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* 🎯 SOLUCIÓN DIRECTA: Gestión Simple de Productos por Marca */}
+          <SimpleBrandProductManager />
 
           <div className="flex justify-between items-center mb-2 sm:mb-4">
             <h2 className="text-lg sm:text-2xl font-semibold">Configuración de Marcas</h2>

@@ -307,12 +307,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin brands with products
+  // Admin brands with products - SIMPLE DIRECT VERSION
   app.get("/api/brands/admin/with-products", async (req, res) => {
     try {
-      const adminBrandsWithProducts = await storage.getBrandsWithProductsByLocation('admin');
-      res.json(adminBrandsWithProducts);
+      // ✅ DIRECT APPROACH: Get brands and calculate product count manually
+      const allBrands = await storage.getBrands();
+      const allProducts = await storage.getProducts();
+      
+      const brandsWithProducts = allBrands.map(brand => {
+        const productCount = allProducts.filter(product => product.brandId === brand.id).length;
+        return {
+          ...brand,
+          productCount,
+          products: []
+        };
+      }).filter(brand => brand.productCount > 0);
+      
+      res.json(brandsWithProducts);
     } catch (error) {
+      console.error('Error fetching admin brands:', error);
       res.status(500).json({ message: "Error fetching admin brands with products" });
     }
   });
