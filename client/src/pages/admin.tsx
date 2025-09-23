@@ -1014,7 +1014,7 @@ export default function AdminPanel() {
   
   // ✨ CENTRALIZED: Single modal state per tab
   const [activeModal, setActiveModal] = useState<{
-    type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct" | null;
+    type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct" | "bulkPriceAdjust" | null;
     data?: any;
   }>({ type: null });
   
@@ -1069,6 +1069,17 @@ export default function AdminPanel() {
   const [duplicatePage, setDuplicatePage] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  
+  // Estados para ajuste masivo de precios
+  const [bulkPriceAdjustment, setBulkPriceAdjustment] = useState<{
+    type: "percentage" | "fixed" | "set";
+    value: string;
+    operation: "increase" | "decrease";
+  }>({
+    type: "percentage",
+    value: "",
+    operation: "increase"
+  });
   const [mergeData, setMergeData] = useState<{
     groupKey: string;
     primaryId: string;
@@ -1357,7 +1368,7 @@ export default function AdminPanel() {
   };
 
   // ✨ CENTRALIZED: Modal handlers
-  const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct", data?: any) => {
+  const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct" | "bulkPriceAdjust", data?: any) => {
     console.log("🚀 OPENING MODAL:", type, data);
     console.log("🚀 CURRENT MODAL STATE:", activeModal);
     setActiveModal({ type, data });
@@ -1374,6 +1385,35 @@ export default function AdminPanel() {
     setProductImages([]);
     setProductSizes([]);
     setProductColors([]);
+  };
+
+  // 💰 BULK PRICE ADJUSTMENT: Handler
+  const handleBulkPriceAdjust = () => {
+    if (!bulkPriceAdjustment.value || !activeModal.data?.productIds?.length) {
+      toast({
+        title: "Error",
+        description: "Por favor ingresa un valor válido",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const value = parseFloat(bulkPriceAdjustment.value);
+    if (isNaN(value) || value <= 0) {
+      toast({
+        title: "Error",
+        description: "El valor debe ser un número positivo",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    bulkPriceAdjustmentMutation.mutate({
+      productIds: activeModal.data.productIds,
+      type: bulkPriceAdjustment.type,
+      value: value,
+      operation: bulkPriceAdjustment.operation
+    });
   };
 
   // ✨ UNIFIED: Edit handlers
@@ -2005,6 +2045,39 @@ export default function AdminPanel() {
         variant: "destructive",
       });
     },
+  });
+
+  // 💰 BULK PRICE ADJUSTMENT: Mutation
+  const bulkPriceAdjustmentMutation = useMutation({
+    mutationFn: async (data: {
+      productIds: string[];
+      type: "percentage" | "fixed" | "set";
+      value: number;
+      operation?: "increase" | "decrease";
+    }) => {
+      const response = await apiRequest("POST", "/api/products/bulk-adjust-prices", data);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
+      
+      toast({
+        title: "¡Precios ajustados exitosamente!",
+        description: `${data.updated || 0} productos actualizados`
+      });
+      
+      closeModal();
+      setSelectedProducts(new Set());
+    },
+    onError: async (error: any) => {
+      const { title, description } = await parseApiError(error, "Error al ajustar precios");
+      toast({
+        title,
+        description,
+        variant: "destructive"
+      });
+    }
   });
 
   // Función para sugerir categoría y marca basado en el nombre del producto
@@ -5199,6 +5272,154 @@ export default function AdminPanel() {
               </form>
             </Form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para ajuste masivo de precios */}
+      <Dialog open={activeModal.type === "bulkPriceAdjust"} onOpenChange={(open) => open ? openModal("bulkPriceAdjust") : closeModal()}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Ajuste Masivo de Precios
+            </DialogTitle>
+            <DialogDescription>
+              Ajusta los precios de los productos seleccionados de manera masiva.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Información de productos seleccionados */}
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm font-medium mb-2">
+                Productos seleccionados: {activeModal.data?.productIds?.length || 0}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Los cambios se aplicarán a todos los productos seleccionados
+              </div>
+            </div>
+
+            {/* Formulario de ajuste */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Tipo de Ajuste
+                  </label>
+                  <Select
+                    value={bulkPriceAdjustment.type}
+                    onValueChange={(value: "percentage" | "fixed" | "set") =>
+                      setBulkPriceAdjustment(prev => ({ ...prev, type: value }))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-bulk-price-type">
+                      <SelectValue placeholder="Selecciona tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Porcentaje</SelectItem>
+                      <SelectItem value="fixed">Cantidad Fija</SelectItem>
+                      <SelectItem value="set">Establecer Precio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    {bulkPriceAdjustment.type === "percentage" 
+                      ? "Porcentaje (%)" 
+                      : bulkPriceAdjustment.type === "fixed" 
+                      ? "Cantidad (COP)" 
+                      : "Nuevo Precio (COP)"
+                    }
+                  </label>
+                  <Input
+                    type="number"
+                    value={bulkPriceAdjustment.value}
+                    onChange={(e) =>
+                      setBulkPriceAdjustment(prev => ({ ...prev, value: e.target.value }))
+                    }
+                    placeholder={
+                      bulkPriceAdjustment.type === "percentage" 
+                        ? "Ej: 10" 
+                        : "Ej: 50000"
+                    }
+                    data-testid="input-bulk-price-value"
+                  />
+                </div>
+              </div>
+
+              {bulkPriceAdjustment.type === "percentage" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Operación
+                    </label>
+                    <Select
+                      value={bulkPriceAdjustment.operation}
+                      onValueChange={(value: "increase" | "decrease") =>
+                        setBulkPriceAdjustment(prev => ({ ...prev, operation: value }))
+                      }
+                    >
+                      <SelectTrigger data-testid="select-bulk-price-operation">
+                        <SelectValue placeholder="Selecciona operación" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="increase">Aumentar</SelectItem>
+                        <SelectItem value="decrease">Disminuir</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {/* Vista previa del cambio */}
+              {bulkPriceAdjustment.value && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                  <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
+                    Vista Previa
+                  </div>
+                  <div className="text-xs text-blue-600 dark:text-blue-300">
+                    {bulkPriceAdjustment.type === "percentage" 
+                      ? `${bulkPriceAdjustment.operation === "increase" ? "Aumentar" : "Disminuir"} precios en ${bulkPriceAdjustment.value}%`
+                      : bulkPriceAdjustment.type === "fixed"
+                      ? `${bulkPriceAdjustment.operation === "increase" ? "Aumentar" : "Disminuir"} precios en ${formatCurrency(bulkPriceAdjustment.value)} COP`
+                      : `Establecer todos los precios a ${formatCurrency(bulkPriceAdjustment.value)} COP`
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botones de acción */}
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={closeModal}
+                className="flex-1"
+                data-testid="button-cancel-bulk-price-adjust"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleBulkPriceAdjust}
+                disabled={!bulkPriceAdjustment.value || bulkPriceAdjustmentMutation.isPending}
+                className="flex-1"
+                data-testid="button-confirm-bulk-price-adjust"
+              >
+                {bulkPriceAdjustmentMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Aplicando...
+                  </div>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Aplicar Cambios ({activeModal.data?.productIds?.length || 0})
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
