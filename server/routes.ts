@@ -782,6 +782,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 💰 BULK PRICE ADJUSTMENT: Endpoint for bulk price adjustments
+  app.post("/api/products/bulk-adjust-prices", requireAdminAuth, async (req, res) => {
+    try {
+      const { productIds, type, value, operation } = req.body;
+
+      // Validate input
+      if (!Array.isArray(productIds) || productIds.length === 0) {
+        return res.status(400).json({ message: "Se requiere al menos un ID de producto" });
+      }
+
+      if (!type || !["percentage", "fixed", "set"].includes(type)) {
+        return res.status(400).json({ message: "Tipo de ajuste inválido" });
+      }
+
+      if (typeof value !== "number" || value <= 0) {
+        return res.status(400).json({ message: "El valor debe ser un número positivo" });
+      }
+
+      if (type !== "set" && (!operation || !["increase", "decrease"].includes(operation))) {
+        return res.status(400).json({ message: "Operación inválida para el tipo de ajuste" });
+      }
+
+      // Perform bulk price adjustment
+      const result = await storage.bulkAdjustProductPrices(productIds, type, value, operation);
+
+      res.json({
+        message: `${result.updated} productos actualizados exitosamente`,
+        updated: result.updated,
+        errors: result.errors
+      });
+    } catch (error) {
+      console.error("Error in bulk price adjustment:", error);
+      res.status(500).json({ message: "Error al ajustar precios masivamente" });
+    }
+  });
+
   // 🧹 CLEANUP: Clean malformed URLs by removing affected products
   app.post("/api/products/cleanup-malformed", requireAdminAuth, async (req, res) => {
     try {

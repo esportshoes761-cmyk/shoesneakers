@@ -40,6 +40,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   updateProductsBulk(productIds: string[], updates: Partial<InsertProduct>): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
+  bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
   deleteProduct(id: string): Promise<boolean>;
   getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
 
@@ -635,6 +636,77 @@ export class DatabaseStorage implements IStorage {
       }
       
       return { updated, errors };
+    }
+  }
+
+  async bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }> {
+    try {
+      // First get all products to calculate new prices
+      const existingProducts = await db.select()
+        .from(products)
+        .where(inArray(products.id, productIds));
+
+      const updatedProducts = existingProducts.map(product => {
+        let currentPrice = parseFloat(product.price);
+        let newPrice = currentPrice;
+
+        switch (type) {
+          case "percentage":
+            if (operation === "increase") {
+              newPrice = currentPrice * (1 + value / 100);
+            } else {
+              newPrice = currentPrice * (1 - value / 100);
+            }
+            break;
+          case "fixed":
+            if (operation === "increase") {
+              newPrice = currentPrice + value;
+            } else {
+              newPrice = currentPrice - value;
+            }
+            break;
+          case "set":
+            newPrice = value;
+            break;
+        }
+
+        // Ensure price is not negative
+        newPrice = Math.max(0, newPrice);
+        
+        return {
+          ...product,
+          price: newPrice.toFixed(2)
+        };
+      });
+
+      // Update all products
+      let updated = 0;
+      const errors: Array<{ id: string; error: string }> = [];
+
+      for (const updatedProduct of updatedProducts) {
+        try {
+          await db.update(products)
+            .set({ price: updatedProduct.price })
+            .where(eq(products.id, updatedProduct.id));
+          updated++;
+        } catch (error) {
+          errors.push({
+            id: updatedProduct.id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      return { updated, errors };
+    } catch (error) {
+      console.error('Error in bulk price adjustment:', error);
+      return {
+        updated: 0,
+        errors: [{
+          id: 'bulk_price_adjustment_error',
+          error: error instanceof Error ? error.message : 'Unknown error during bulk price adjustment'
+        }]
+      };
     }
   }
 
