@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -20,7 +21,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts, ProductDuplicateAlert } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX, ArrowLeft } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX, ArrowLeft, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -2980,10 +2981,66 @@ export default function AdminPanel() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                {brandProducts.map((product) => (
-                  <Card key={product.id} className="relative">
-                    <CardHeader className="pb-3">
+              <>
+                {/* Controles de selección múltiple */}
+                <div className="flex items-center justify-between mb-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={selectedProducts.size === brandProducts.length && brandProducts.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedProducts(new Set(brandProducts.map(p => p.id)));
+                        } else {
+                          setSelectedProducts(new Set());
+                        }
+                      }}
+                      data-testid="checkbox-select-all-brand-products"
+                    />
+                    <span className="text-sm font-medium">
+                      Seleccionar todos ({brandProducts.length} productos)
+                    </span>
+                    {selectedProducts.size > 0 && (
+                      <Badge variant="secondary">
+                        {selectedProducts.size} seleccionados
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {selectedProducts.size > 0 && (
+                    <Button
+                      onClick={() => setActiveModal({ type: "bulkPriceAdjust", data: { brandId: selectedBrandId, productIds: Array.from(selectedProducts) } })}
+                      className="bg-green-600 hover:bg-green-700"
+                      data-testid="button-bulk-adjust-prices"
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Ajustar Precios ({selectedProducts.size})
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  {brandProducts.map((product) => (
+                    <Card key={product.id} className="relative">
+                      {/* Checkbox de selección */}
+                      <div className="absolute top-2 left-2 z-10">
+                      <Checkbox
+                        checked={selectedProducts.has(product.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedProducts(prev => {
+                            const newSet = new Set(prev);
+                            if (checked) {
+                              newSet.add(product.id);
+                            } else {
+                              newSet.delete(product.id);
+                            }
+                            return newSet;
+                          });
+                        }}
+                        data-testid={`checkbox-select-product-${product.id}`}
+                        className="bg-white border-2 shadow-sm"
+                      />
+                      </div>
+                      <CardHeader className="pb-3">
                       <div className="aspect-square bg-muted rounded-lg overflow-hidden mb-3">
                         {product.imageUrl ? (
                           <img 
@@ -3091,6 +3148,7 @@ export default function AdminPanel() {
                   </Card>
                 ))}
               </div>
+              </>
             )}
             
             <div className="flex justify-end gap-2 mt-6">
