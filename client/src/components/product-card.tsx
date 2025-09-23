@@ -35,32 +35,27 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const { addItem } = useCartStore();
   const [, navigate] = useLocation();
 
-  // ✅ FUNCIONES AUXILIARES PARA MANEJO DE IMÁGENES - ARREGLADAS
-  const getMainImage = (product: ProductWithCategory): string => {
+  // 🔧 ARREGLO DEFINITIVO: URL encoding correcto y URLs relativas
+  const buildImageSrc = (product: ProductWithCategory): string => {
     // Prioridad: imageUrl primero, luego primera imagen del array
-    if (product.imageUrl && product.imageUrl.trim() !== '') {
-      const imageUrl = product.imageUrl;
-      if (imageUrl.startsWith('http')) {
-        return imageUrl;
-      }
-      // ✅ ARREGLO CRÍTICO: No duplicar /api/images/
-      if (imageUrl.startsWith('/api/images/')) {
-        return `${window.location.origin}${imageUrl}`;
-      }
-      // Si no tiene /api/images/, añadirlo
-      return `${window.location.origin}/api/images/${imageUrl}`;
+    const rawImageUrl = product.imageUrl || (product.images && product.images.length > 0 ? product.images[0] : null);
+    
+    if (!rawImageUrl || rawImageUrl.trim() === '') {
+      return '';
     }
-    if (product.images && product.images.length > 0 && product.images[0].trim() !== '') {
-      const imageUrl = product.images[0];
-      if (imageUrl.startsWith('http')) {
-        return imageUrl;
-      }
-      if (imageUrl.startsWith('/api/images/')) {
-        return `${window.location.origin}${imageUrl}`;
-      }
-      return `${window.location.origin}/api/images/${imageUrl}`;
+    
+    // Si ya es una URL completa, usarla tal como está
+    if (rawImageUrl.startsWith('http')) {
+      return rawImageUrl;
     }
-    return '';
+    
+    // Si ya tiene /api/images/, usarla tal como está (ya está codificada)
+    if (rawImageUrl.startsWith('/api/images/')) {
+      return rawImageUrl;
+    }
+    
+    // Si es solo el nombre del archivo, codificarlo y añadir el prefijo
+    return `/api/images/${encodeURIComponent(rawImageUrl)}`;
   };
 
   const getImageCount = (product: ProductWithCategory): number => {
@@ -85,20 +80,16 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     
     // Sin cálculos de precio - se cotiza por WhatsApp
     
-    // ✅ OBTENER IMAGEN PARA WHATSAPP - ARREGLADA
+    // 🔧 IMAGEN PARA WHATSAPP - usando función corregida
     const getProductImageUrl = () => {
-      let imageUrl = product.imageUrl || product.images?.[0];
-      if (!imageUrl) return '';
+      const imageSrc = buildImageSrc(product);
+      if (!imageSrc) return '';
       
-      if (imageUrl.startsWith('http')) {
-        return imageUrl;
+      // Si es relativa, convertir a absoluta para WhatsApp
+      if (imageSrc.startsWith('/')) {
+        return `${window.location.origin}${imageSrc}`;
       }
-      // ✅ ARREGLO CRÍTICO: No duplicar /api/images/
-      if (imageUrl.startsWith('/api/images/')) {
-        return `${window.location.origin}${imageUrl}`;
-      }
-      // Si no tiene /api/images/, añadirlo
-      return `${window.location.origin}/api/images/${imageUrl}`;
+      return imageSrc;
     };
 
     // Preparar información de precio para el mensaje
@@ -282,30 +273,32 @@ export default function ProductCard({ product, showManageButton = false }: Produ
         </div>
       )}
 
-      <div className="relative group">
-        <img 
-          src={getMainImage(product) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>'} 
+      {/* 🎯 IMAGEN SIEMPRE VISIBLE - ARREGLO DEFINITIVO */}
+      <div className="aspect-square w-full overflow-hidden rounded-md bg-muted mb-3 relative group">
+        <img
+          src={buildImageSrc(product) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>'}
           alt={product.name}
-          className="w-full h-24 sm:h-36 object-cover rounded-lg mb-2 sm:mb-3 cursor-pointer transition-transform hover:scale-105"
+          className="h-full w-full object-cover block cursor-pointer transition-transform hover:scale-105"
+          loading="lazy"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             console.error(`❌ Error cargando imagen: ${target.src} para producto: ${product.name}`);
-            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Sin imagen</text></svg>';
+            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="14" fill="%236b7280">Error</text></svg>';
           }}
           onLoad={() => {
-            console.log(`✅ Imagen cargada correctamente para producto: ${product.name}`);
+            console.log(`✅ Imagen cargada: ${buildImageSrc(product)} para: ${product.name}`);
           }}
           onClick={() => setIsImageZoomOpen(true)}
           data-testid={`img-product-${product.id}`}
         />
         
-        {/* Zoom icon overlay */}
+        {/* Zoom overlay - solo visible al hover */}
         <div 
-          className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+          className="absolute inset-0 bg-black transition-all duration-200 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-30 cursor-pointer pointer-events-none group-hover:pointer-events-auto"
           data-zoom-overlay="true"
           onClick={() => setIsImageZoomOpen(true)}
         >
-          <div className="w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
             <ZoomIn className="w-5 h-5 text-gray-700" />
           </div>
         </div>
@@ -401,7 +394,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
               const savings = originalPrice - currentPrice;
               const discountPercentage = Math.round((savings / originalPrice) * 100);
               
-              return discountPercentage > 0 && !isNaN(discountPercentage) ? (
+              return discountPercentage > 0 && !isNaN(discountPercentage) && typeof discountPercentage === 'number' ? (
                 <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold">
                   🎁 {discountPercentage}% OFF
                 </div>
@@ -472,9 +465,9 @@ export default function ProductCard({ product, showManageButton = false }: Produ
             {/* Imagen del producto */}
             <div className="flex justify-center">
               <div className="relative aspect-square w-32 bg-muted rounded-lg overflow-hidden">
-                {getMainImage(product) ? (
+                {buildImageSrc(product) ? (
                   <img 
-                    src={getMainImage(product)} 
+                    src={buildImageSrc(product)} 
                     alt={product.name}
                     className="w-full h-full object-cover"
                     data-testid={`img-product-${product.id}`}
@@ -688,7 +681,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
           </DialogHeader>
           <div className="relative flex justify-center">
             <img 
-              src={getMainImage(product)} 
+              src={buildImageSrc(product)} 
               alt={product.name}
               className="max-w-full max-h-[70vh] object-contain rounded-lg"
               data-testid={`img-zoom-${product.id}`}
