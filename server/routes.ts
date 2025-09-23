@@ -323,7 +323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ✅ CRITICAL FIX: Clients should see ALL brands that have products, not just displayLocation='client'
       const allBrandsWithProducts = await storage.getBrandsWithProducts();
       // Filter to only include brands that have products (productCount > 0)
-      const brandsWithProductsFiltered = allBrandsWithProducts.filter(brand => brand.products.length > 0);
+      const brandsWithProductsFiltered = allBrandsWithProducts.filter(brand => brand.productCount > 0);
       res.json(brandsWithProductsFiltered);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands with products" });
