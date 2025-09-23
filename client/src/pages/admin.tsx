@@ -5336,10 +5336,6 @@ export default function AdminPanel() {
             <div className="relative flex justify-center">
               <img 
                 src={buildImageSrc(imageZoomDrawer?.product.imageUrl || imageZoomDrawer?.product.images?.[0])} 
-                onLoad={() => {
-                  if (!imageUrl) return;
-                  return imageUrl;
-                })()} 
                 alt={imageZoomDrawer?.product.name || "Product image"}
                 className="max-w-full max-h-[70vh] object-contain rounded-lg"
                 data-testid={`img-admin-zoom-${imageZoomDrawer?.product.id}`}
