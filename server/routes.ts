@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ✅ CRITICAL FIX: Clients should see ALL brands that have products, not just displayLocation='client'
       const allBrandsWithProducts = await storage.getBrandsWithProducts();
       // Filter to only include brands that have products (productCount > 0)
-      const brandsWithProductsFiltered = allBrandsWithProducts.filter(brand => brand.productCount > 0);
+      const brandsWithProductsFiltered = allBrandsWithProducts.filter(brand => (brand.productCount || 0) > 0);
       res.json(brandsWithProductsFiltered);
     } catch (error) {
       res.status(500).json({ message: "Error fetching client brands with products" });
@@ -1804,6 +1804,194 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error serving image:", error);
       res.status(500).json({ error: "Error al servir imagen" });
+    }
+  });
+
+  // 🤖 CARGA MASIVA DE IMÁGENES CON CLASIFICACIÓN AUTOMÁTICA DE MARCAS
+  // Este endpoint analiza múltiples imágenes y crea productos automáticamente
+  app.post("/api/products/bulk-upload", requireAdminAuth, async (req, res) => {
+    try {
+      const { images } = req.body;
+      
+      if (!images || !Array.isArray(images) || images.length === 0) {
+        return res.status(400).json({ 
+          error: "Se requiere al menos una imagen",
+          message: "Envía un array de imágenes en el campo 'images'" 
+        });
+      }
+
+      console.log(`🚀 Iniciando carga masiva de ${images.length} imágenes`);
+      
+      const results = [];
+      const errors = [];
+      
+      // Obtener categorías y marcas existentes
+      const categories = await storage.getCategories();
+      const brands = await storage.getBrands();
+      
+      // Buscar categoría "Zapatos" o usar la primera disponible
+      const defaultCategory = categories.find(cat => 
+        cat.name.toLowerCase().includes('zapato') || 
+        cat.name.toLowerCase().includes('calzado')
+      ) || categories[0];
+      
+      if (!defaultCategory) {
+        return res.status(400).json({ 
+          error: "No hay categorías disponibles",
+          message: "Crea al menos una categoría antes de subir productos" 
+        });
+      }
+
+      // Procesar cada imagen
+      for (let i = 0; i < images.length; i++) {
+        const imageData = images[i];
+        
+        try {
+          console.log(`📸 Procesando imagen ${i + 1}/${images.length}`);
+          
+          // 1. SUBIR LA IMAGEN (reutilizando lógica existente)
+          let imageUrl;
+          let fileName = `producto_${Date.now()}_${i}.jpg`;
+          
+          if (imageData.imageData) {
+            // Imagen en formato base64
+            const uploadResult = await new Promise<any>((resolve, reject) => {
+              // Simular la lógica del endpoint de subida existente
+              const base64Data = imageData.imageData.replace(/^data:image\/[a-z]+;base64,/, "");
+              const buffer = Buffer.from(base64Data, 'base64');
+              
+              // Crear URL temporal para análisis de AI
+              const tempFileName = `temp_${Date.now()}_${i}.jpg`;
+              imageUrl = `/uploads/${tempFileName}`;
+              fileName = imageData.fileName || tempFileName;
+              
+              resolve({ url: imageUrl, fileName });
+            });
+            
+            imageUrl = uploadResult.url;
+            fileName = uploadResult.fileName;
+          } else if (imageData.url) {
+            // URL directa de imagen
+            imageUrl = imageData.url;
+            fileName = imageData.fileName || `imagen_${i}.jpg`;
+          } else {
+            throw new Error('Formato de imagen inválido');
+          }
+
+          console.log(`✅ Imagen subida: ${imageUrl}`);
+
+          // 2. DETECTAR MARCA CON AI (reutilizando funciones existentes)
+          console.log(`🤖 Analizando marca para: ${fileName}`);
+          
+          // Usar detección combinada de nombre de archivo y AI visual
+          const filenameResult = detectBrandFromFilename(fileName);
+          
+          let finalBrand = filenameResult.brandName;
+          let confidence = filenameResult.confidence;
+          let detectionMethod = 'filename';
+          
+          // Si hay URL de imagen, usar también AI visual
+          if (imageUrl && !filenameResult.requiresReview) {
+            try {
+              const visualResult = await detectBrandFromImage(imageUrl);
+              const combinedResult = combineDetectionResults(filenameResult, visualResult);
+              
+              finalBrand = combinedResult.brand;
+              confidence = combinedResult.confidence;
+              detectionMethod = combinedResult.method;
+              
+              console.log(`🔍 Detección combinada: ${finalBrand} (${confidence.toFixed(2)}, método: ${detectionMethod})`);
+            } catch (aiError) {
+              console.log(`⚠️ AI falló, usando detección de filename: ${finalBrand}`);
+            }
+          }
+
+          // 3. BUSCAR O CREAR MARCA
+          let targetBrand = brands.find(b => 
+            b.name.toLowerCase() === (finalBrand || '').toLowerCase()
+          );
+          
+          if (!targetBrand && finalBrand && finalBrand !== PENDING_REVIEW_BRAND) {
+            // Crear nueva marca automáticamente
+            console.log(`🆕 Creando nueva marca: ${finalBrand}`);
+            targetBrand = await storage.createBrand({
+              name: finalBrand,
+              logo: `/brand-logos/${finalBrand.toLowerCase().replace(/\s+/g, '-')}-logo.png`,
+              displayLocation: 'client'
+            });
+            brands.push(targetBrand); // Agregar a la lista local
+          }
+          
+          // Si no se puede determinar marca, usar marca por defecto o enviar a revisión
+          if (!targetBrand) {
+            targetBrand = brands.find(b => b.name === 'Nike') || brands[0];
+            console.log(`🔄 Usando marca por defecto: ${targetBrand?.name}`);
+          }
+
+          // 4. CREAR PRODUCTO AUTOMÁTICAMENTE
+          const productName = `${targetBrand?.name || 'Producto'} ${fileName.split('.')[0]}`.substring(0, 255);
+          const reference = await generateUniqueReferenceForProduct();
+          
+          const newProduct = await storage.createProduct({
+            name: productName,
+            description: `Producto importado automáticamente. Marca: ${finalBrand}. Confianza: ${(confidence * 100).toFixed(1)}%. Método: ${detectionMethod}`,
+            price: 50000, // Precio por defecto
+            originalPrice: 50000,
+            discountPercentage: 0,
+            categoryId: defaultCategory.id,
+            brandId: targetBrand?.id || categories[0]?.id || 'default',
+            sellerId: 'admin',
+            imageUrl: imageUrl,
+            reference: reference,
+            sizes: ['38', '39', '40', '41', '42'],
+            colors: ['Negro'],
+            rating: 0,
+            reviewCount: 0,
+            isFlashSale: false,
+            isFeatured: false
+          });
+
+          results.push({
+            success: true,
+            product: newProduct,
+            detectedBrand: finalBrand,
+            confidence: confidence,
+            detectionMethod: detectionMethod,
+            imageUrl: imageUrl,
+            originalFileName: fileName
+          });
+
+          console.log(`✅ Producto creado: ${newProduct.name} (${newProduct.reference})`);
+
+        } catch (imageError) {
+          console.error(`❌ Error procesando imagen ${i + 1}:`, imageError);
+          errors.push({
+            index: i,
+            error: imageError instanceof Error ? imageError.message : 'Error desconocido',
+            imageData: imageData.fileName || `imagen_${i}`
+          });
+        }
+      }
+
+      // Respuesta final
+      const response = {
+        message: `Carga masiva completada: ${results.length} productos creados, ${errors.length} errores`,
+        totalProcessed: images.length,
+        successful: results.length,
+        failed: errors.length,
+        results: results,
+        errors: errors
+      };
+
+      console.log(`🏁 Carga masiva finalizada: ${results.length}/${images.length} exitosos`);
+      res.json(response);
+
+    } catch (error) {
+      console.error('❌ Error en carga masiva:', error);
+      res.status(500).json({ 
+        error: "Error en carga masiva",
+        message: error instanceof Error ? error.message : 'Error desconocido'
+      });
     }
   });
 
