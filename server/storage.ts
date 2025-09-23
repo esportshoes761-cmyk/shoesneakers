@@ -40,7 +40,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   updateProductsBulk(productIds: string[], updates: Partial<InsertProduct>): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
-  bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
+  bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease", applyTo?: "price" | "originalPrice" | "both"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }>;
   deleteProduct(id: string): Promise<boolean>;
   getProductWithReviews(id: string): Promise<ProductWithReviews | undefined>;
 
@@ -639,7 +639,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }> {
+  async bulkAdjustProductPrices(productIds: string[], type: "percentage" | "fixed" | "set", value: number, operation?: "increase" | "decrease", applyTo: "price" | "originalPrice" | "both" = "price"): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }> {
     try {
       // First get all products to calculate new prices
       const existingProducts = await db.select()
@@ -647,35 +647,66 @@ export class DatabaseStorage implements IStorage {
         .where(inArray(products.id, productIds));
 
       const updatedProducts = existingProducts.map(product => {
-        let currentPrice = parseFloat(product.price);
+        const currentPrice = parseFloat(product.price);
+        const currentOriginalPrice = product.originalPrice ? parseFloat(product.originalPrice) : null;
+        
         let newPrice = currentPrice;
+        let newOriginalPrice = currentOriginalPrice;
 
-        switch (type) {
-          case "percentage":
-            if (operation === "increase") {
-              newPrice = currentPrice * (1 + value / 100);
-            } else {
-              newPrice = currentPrice * (1 - value / 100);
-            }
-            break;
-          case "fixed":
-            if (operation === "increase") {
-              newPrice = currentPrice + value;
-            } else {
-              newPrice = currentPrice - value;
-            }
-            break;
-          case "set":
-            newPrice = value;
-            break;
+        const calculateNewValue = (currentValue: number) => {
+          let result = currentValue;
+          switch (type) {
+            case "percentage":
+              if (operation === "increase") {
+                result = currentValue * (1 + value / 100);
+              } else {
+                result = currentValue * (1 - value / 100);
+              }
+              break;
+            case "fixed":
+              if (operation === "increase") {
+                result = currentValue + value;
+              } else {
+                result = currentValue - value;
+              }
+              break;
+            case "set":
+              result = value;
+              break;
+          }
+          return Math.max(0, result);
+        };
+
+        // Apply the adjustment based on applyTo field
+        if (applyTo === "price" || applyTo === "both") {
+          newPrice = calculateNewValue(currentPrice);
+        }
+        if (applyTo === "originalPrice" || applyTo === "both") {
+          if (currentOriginalPrice !== null) {
+            newOriginalPrice = calculateNewValue(currentOriginalPrice);
+          } else if (applyTo === "originalPrice") {
+            // If only originalPrice is being set but product doesn't have one, use current price as base
+            newOriginalPrice = calculateNewValue(currentPrice);
+          }
         }
 
-        // Ensure price is not negative
-        newPrice = Math.max(0, newPrice);
+        // Calculate discount percentage if both prices exist
+        let discountPercentage = product.discountPercentage || 0;
+        if (newOriginalPrice !== null && newOriginalPrice > 0) {
+          if (newPrice < newOriginalPrice) {
+            discountPercentage = Math.round(((newOriginalPrice - newPrice) / newOriginalPrice) * 100);
+          } else {
+            // If current price is higher than or equal to original price, clear discount
+            newOriginalPrice = null;
+            discountPercentage = 0;
+          }
+        }
         
         return {
           ...product,
-          price: newPrice.toFixed(2)
+          price: newPrice.toFixed(2),
+          originalPrice: newOriginalPrice ? newOriginalPrice.toFixed(2) : null,
+          discountPercentage
         };
       });
 
@@ -686,7 +717,11 @@ export class DatabaseStorage implements IStorage {
       for (const updatedProduct of updatedProducts) {
         try {
           await db.update(products)
-            .set({ price: updatedProduct.price })
+            .set({ 
+              price: updatedProduct.price,
+              originalPrice: updatedProduct.originalPrice,
+              discountPercentage: updatedProduct.discountPercentage
+            })
             .where(eq(products.id, updatedProduct.id));
           updated++;
         } catch (error) {

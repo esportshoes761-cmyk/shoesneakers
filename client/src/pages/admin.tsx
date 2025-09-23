@@ -87,9 +87,19 @@ const bulkUpdateSchema = z.object({
 
 const priceAdjustmentSchema = z.object({
   productIds: z.array(z.string()).min(1, "Selecciona al menos un producto"),
-  adjustmentType: z.enum(["percentage", "fixed"]),
+  adjustmentType: z.enum(["percentage", "fixed", "set"]),
   adjustmentValue: z.number().min(0.01, "El valor debe ser mayor a 0"),
-  applyTo: z.enum(["price", "salePrice", "both"])
+  operation: z.enum(["increase", "decrease"]).optional(),
+  applyTo: z.enum(["price", "originalPrice", "both"])
+}).refine((data) => {
+  // Operation is required for percentage and fixed, but not for set
+  if (data.adjustmentType === "set") {
+    return true;
+  }
+  return data.operation !== undefined;
+}, {
+  message: "La operación es requerida para ajustes de porcentaje y fijo",
+  path: ["operation"]
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -1074,11 +1084,13 @@ export default function AdminPanel() {
   const [bulkPriceAdjustment, setBulkPriceAdjustment] = useState<{
     type: "percentage" | "fixed" | "set";
     value: string;
-    operation: "increase" | "decrease";
+    operation?: "increase" | "decrease";
+    applyTo: "price" | "originalPrice" | "both";
   }>({
     type: "percentage",
     value: "",
-    operation: "increase"
+    operation: "increase",
+    applyTo: "price"
   });
   const [mergeData, setMergeData] = useState<{
     groupKey: string;
@@ -1408,11 +1420,22 @@ export default function AdminPanel() {
       return;
     }
 
+    // Validate operation for percentage and fixed types
+    if (bulkPriceAdjustment.type !== "set" && !bulkPriceAdjustment.operation) {
+      toast({
+        title: "Error",
+        description: "Selecciona una operación",
+        variant: "destructive"
+      });
+      return;
+    }
+
     bulkPriceAdjustmentMutation.mutate({
       productIds: activeModal.data.productIds,
       type: bulkPriceAdjustment.type,
       value: value,
-      operation: bulkPriceAdjustment.operation
+      operation: bulkPriceAdjustment.operation,
+      applyTo: bulkPriceAdjustment.applyTo
     });
   };
 
@@ -2054,6 +2077,7 @@ export default function AdminPanel() {
       type: "percentage" | "fixed" | "set";
       value: number;
       operation?: "increase" | "decrease";
+      applyTo: "price" | "originalPrice" | "both";
     }) => {
       const response = await apiRequest("POST", "/api/products/bulk-adjust-prices", data);
       return response.json();
