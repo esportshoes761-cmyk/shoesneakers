@@ -35,15 +35,30 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const { addItem } = useCartStore();
   const [, navigate] = useLocation();
 
-  // Funciones auxiliares para manejo de imágenes
+  // ✅ FUNCIONES AUXILIARES PARA MANEJO DE IMÁGENES - ARREGLADAS
   const getMainImage = (product: ProductWithCategory): string => {
     // Prioridad: imageUrl primero, luego primera imagen del array
     if (product.imageUrl && product.imageUrl.trim() !== '') {
-      // Si la URL no es absoluta, añadir el dominio base
-      return product.imageUrl.startsWith('http') ? product.imageUrl : `${window.location.origin}${product.imageUrl}`;
+      const imageUrl = product.imageUrl;
+      if (imageUrl.startsWith('http')) {
+        return imageUrl;
+      }
+      // ✅ ARREGLO CRÍTICO: No duplicar /api/images/
+      if (imageUrl.startsWith('/api/images/')) {
+        return `${window.location.origin}${imageUrl}`;
+      }
+      // Si no tiene /api/images/, añadirlo
+      return `${window.location.origin}/api/images/${imageUrl}`;
     }
     if (product.images && product.images.length > 0 && product.images[0].trim() !== '') {
-      return product.images[0].startsWith('http') ? product.images[0] : `${window.location.origin}${product.images[0]}`;
+      const imageUrl = product.images[0];
+      if (imageUrl.startsWith('http')) {
+        return imageUrl;
+      }
+      if (imageUrl.startsWith('/api/images/')) {
+        return `${window.location.origin}${imageUrl}`;
+      }
+      return `${window.location.origin}/api/images/${imageUrl}`;
     }
     return '';
   };
@@ -70,13 +85,20 @@ export default function ProductCard({ product, showManageButton = false }: Produ
     
     // Sin cálculos de precio - se cotiza por WhatsApp
     
-    // Obtener la imagen principal del producto
+    // ✅ OBTENER IMAGEN PARA WHATSAPP - ARREGLADA
     const getProductImageUrl = () => {
       let imageUrl = product.imageUrl || product.images?.[0];
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = `${window.location.origin}${imageUrl}`;
+      if (!imageUrl) return '';
+      
+      if (imageUrl.startsWith('http')) {
+        return imageUrl;
       }
-      return imageUrl;
+      // ✅ ARREGLO CRÍTICO: No duplicar /api/images/
+      if (imageUrl.startsWith('/api/images/')) {
+        return `${window.location.origin}${imageUrl}`;
+      }
+      // Si no tiene /api/images/, añadirlo
+      return `${window.location.origin}/api/images/${imageUrl}`;
     };
 
     // Preparar información de precio para el mensaje
@@ -379,7 +401,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
               const savings = originalPrice - currentPrice;
               const discountPercentage = Math.round((savings / originalPrice) * 100);
               
-              return discountPercentage > 0 ? (
+              return discountPercentage > 0 && !isNaN(discountPercentage) ? (
                 <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold">
                   🎁 {discountPercentage}% OFF
                 </div>

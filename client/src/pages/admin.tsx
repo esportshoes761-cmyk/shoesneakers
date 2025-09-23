@@ -937,11 +937,12 @@ const ProductsByBrandManager: React.FC = () => {
     },
   });
 
-  // Navigation handlers
+  // ✅ ARREGLO NAVEGACIÓN: Asegurar que siempre vaya a productos
   const handleViewProducts = (brand: any) => {
+    console.log('🎯 Navegando a productos de marca:', brand.name, 'ID:', brand.id);
     setSelectedBrandId(brand.id);
     setSelectedBrand(brand);
-    setCurrentView("products");
+    setCurrentView("products"); // ✅ CORRECTO: ir a vista de productos
     setCurrentPage(1);
   };
 
