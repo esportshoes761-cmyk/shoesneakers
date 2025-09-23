@@ -35,7 +35,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const { addItem } = useCartStore();
   const [, navigate] = useLocation();
 
-  // 🎯 ARREGLO FINAL DEFINITIVO: Manejo correcto de URLs sin duplicaciones
+  // 🔥 SOLUCIÓN DEFINITIVA: Eliminar CUALQUIER duplicación de /api/images/
   const buildImageSrc = (product: ProductWithCategory): string => {
     // Prioridad: imageUrl primero, luego primera imagen del array
     const rawImageUrl = product.imageUrl || (product.images && product.images.length > 0 ? product.images[0] : null);
@@ -44,24 +44,26 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       return '';
     }
     
-    const imageUrl = rawImageUrl.trim();
+    let imageUrl = rawImageUrl.trim();
     
     // Si ya es una URL completa (http/https), usarla tal como está
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       return imageUrl;
     }
     
-    // 🔧 CRÍTICO: Si ya tiene /api/images/, NO duplicar - usar directamente
-    if (imageUrl.startsWith('/api/images/')) {
-      return imageUrl;
+    // 🔥 CRÍTICO: LIMPIAR cualquier duplicación existente de api/images
+    // Remover TODAS las instancias de "api/images/" para empezar limpio
+    imageUrl = imageUrl.replace(/\/?api\/images\/*/g, '');
+    
+    // 🔥 CRÍTICO: Limpiar barras múltiples y espacios
+    imageUrl = imageUrl.replace(/\/+/g, '').trim();
+    
+    // Si quedó vacío después de limpiar, retornar vacío
+    if (!imageUrl) {
+      return '';
     }
     
-    // 🔧 CRÍTICO: Si ya tiene api/images/ (sin barra inicial), agregar solo la barra
-    if (imageUrl.startsWith('api/images/')) {
-      return `/${imageUrl}`;
-    }
-    
-    // Si es solo nombre de archivo, codificar y agregar prefijo completo
+    // ✅ CONSTRUIR URL LIMPIA: Siempre empezar desde cero con una sola instancia
     return `/api/images/${encodeURIComponent(imageUrl)}`;
   };
 
