@@ -35,7 +35,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
   const { addItem } = useCartStore();
   const [, navigate] = useLocation();
 
-  // 🔧 ARREGLO DEFINITIVO: URL encoding correcto y URLs relativas
+  // 🎯 ARREGLO FINAL DEFINITIVO: Manejo correcto de URLs sin duplicaciones
   const buildImageSrc = (product: ProductWithCategory): string => {
     // Prioridad: imageUrl primero, luego primera imagen del array
     const rawImageUrl = product.imageUrl || (product.images && product.images.length > 0 ? product.images[0] : null);
@@ -44,18 +44,25 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       return '';
     }
     
-    // Si ya es una URL completa, usarla tal como está
-    if (rawImageUrl.startsWith('http')) {
-      return rawImageUrl;
+    const imageUrl = rawImageUrl.trim();
+    
+    // Si ya es una URL completa (http/https), usarla tal como está
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
     }
     
-    // Si ya tiene /api/images/, usarla tal como está (ya está codificada)
-    if (rawImageUrl.startsWith('/api/images/')) {
-      return rawImageUrl;
+    // 🔧 CRÍTICO: Si ya tiene /api/images/, NO duplicar - usar directamente
+    if (imageUrl.startsWith('/api/images/')) {
+      return imageUrl;
     }
     
-    // Si es solo el nombre del archivo, codificarlo y añadir el prefijo
-    return `/api/images/${encodeURIComponent(rawImageUrl)}`;
+    // 🔧 CRÍTICO: Si ya tiene api/images/ (sin barra inicial), agregar solo la barra
+    if (imageUrl.startsWith('api/images/')) {
+      return `/${imageUrl}`;
+    }
+    
+    // Si es solo nombre de archivo, codificar y agregar prefijo completo
+    return `/api/images/${encodeURIComponent(imageUrl)}`;
   };
 
   const getImageCount = (product: ProductWithCategory): number => {
@@ -394,7 +401,7 @@ export default function ProductCard({ product, showManageButton = false }: Produ
               const savings = originalPrice - currentPrice;
               const discountPercentage = Math.round((savings / originalPrice) * 100);
               
-              return discountPercentage > 0 && !isNaN(discountPercentage) && typeof discountPercentage === 'number' ? (
+              return discountPercentage > 0 && !isNaN(discountPercentage) ? (
                 <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold">
                   🎁 {discountPercentage}% OFF
                 </div>
