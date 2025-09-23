@@ -670,13 +670,19 @@ const SimpleBrandProductManager: React.FC = () => {
                   <div className="flex-shrink-0">
                     {product.imageUrl ? (
                       <img
-                        src={product.imageUrl}
+                        src={product.imageUrl.startsWith('/api/images/') ? product.imageUrl : `/api/images/${product.imageUrl}`}
                         alt={product.name}
                         className="w-32 h-32 object-cover rounded-lg border"
+                        onError={(e) => {
+                          console.error(`❌ Error cargando imagen: ${product.imageUrl}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                        onLoad={() => console.log(`✅ Imagen cargada: ${product.name}`)}
                       />
                     ) : (
                       <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
                         <Package className="h-12 w-12 text-gray-400" />
+                        <span className="text-xs text-gray-500 mt-1">Sin imagen</span>
                       </div>
                     )}
                   </div>
