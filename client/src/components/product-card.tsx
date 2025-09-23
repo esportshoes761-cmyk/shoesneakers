@@ -13,6 +13,7 @@ import { useCartStore } from "@/lib/cart-store";
 import { useLocation } from "wouter";
 import { SavingsAnimation, PulsingDiscount } from "./savings-animation";
 import { formatCurrency } from "@/lib/currency";
+import { ComparisonButton } from "@/components/ComparisonButton";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -418,48 +419,56 @@ export default function ProductCard({ product, showManageButton = false }: Produ
       </div>
       
       {/* Botones de acción */}
-      <div className="flex gap-2 mb-2 w-full">
-        <Button 
-          size="sm"
-          variant="outline"
-          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0 max-w-[48%]"
+      <div className="space-y-2 mb-2 w-full">
+        {/* Fila superior: Al Carrito y Pedir Ya */}
+        <div className="flex gap-2">
+          <Button 
+            size="sm"
+            variant="outline"
+            className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0"
 
-          onClick={() => {
-            addItem(product);
-            
-            // Calcular ahorro si hay descuento
-            let savingsMessage = "";
-            if (product.originalPrice && product.price) {
-              const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
-              const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
-              const savings = originalPrice - currentPrice;
-              if (savings > 0) {
-                savingsMessage = ` ¡Ahorras $${Math.round(savings).toLocaleString('es-CO')} COP!`;
+            onClick={() => {
+              addItem(product);
+              
+              // Calcular ahorro si hay descuento
+              let savingsMessage = "";
+              if (product.originalPrice && product.price) {
+                const originalPrice = parseFloat(String(product.originalPrice).replace(/\./g, ''));
+                const currentPrice = parseFloat(String(product.price).replace(/\./g, ''));
+                const savings = originalPrice - currentPrice;
+                if (savings > 0) {
+                  savingsMessage = ` ¡Ahorras $${Math.round(savings).toLocaleString('es-CO')} COP!`;
+                }
               }
-            }
-            
-            toast({
-              title: "¡Producto agregado! 🎉",
-              description: `${product.name} se agregó al carrito.${savingsMessage}`,
-              duration: 3000,
-            });
-          }}
-          data-testid={`button-add-to-cart-${product.id}`}
-        >
-          <ShoppingCart className="w-3 h-3 mr-1" />
-          <span className="truncate">Al Carrito</span>
-        </Button>
-        
-        <Button 
-          size="sm"
-          className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0 max-w-[48%]"
+              
+              toast({
+                title: "¡Producto agregado! 🎉",
+                description: `${product.name} se agregó al carrito.${savingsMessage}`,
+                duration: 3000,
+              });
+            }}
+            data-testid={`button-add-to-cart-${product.id}`}
+          >
+            <ShoppingCart className="w-3 h-3 mr-1" />
+            <span className="truncate">Al Carrito</span>
+          </Button>
+          
+          <Button 
+            size="sm"
+            className="flex-1 py-1 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg h-7 sm:h-auto min-w-0"
 
-          onClick={() => setIsOrderFormOpen(true)}
-          data-testid={`button-order-product-${product.id}`}
-        >
-          <MessageCircle className="w-3 h-3 mr-1" />
-          <span className="truncate">Pedir Ya</span>
-        </Button>
+            onClick={() => setIsOrderFormOpen(true)}
+            data-testid={`button-order-product-${product.id}`}
+          >
+            <MessageCircle className="w-3 h-3 mr-1" />
+            <span className="truncate">Pedir Ya</span>
+          </Button>
+        </div>
+        
+        {/* Fila inferior: Comparar */}
+        <div className="flex justify-center">
+          <ComparisonButton product={product} size="sm" variant="outline" />
+        </div>
       </div>
       
       <Dialog open={isOrderFormOpen} onOpenChange={setIsOrderFormOpen}>
