@@ -364,7 +364,7 @@ const DuplicateGroupsList: React.FC<DuplicateGroupsListProps> = ({
                               
                               {product.imageUrl && (
                                 <img
-                                  src={product.imageUrl}
+                                  src={buildImageSrc(product.imageUrl)}
                                   alt={product.name}
                                   className="w-16 h-16 object-cover rounded border"
                                 />
@@ -670,7 +670,7 @@ const SimpleBrandProductManager: React.FC = () => {
                   <div className="flex-shrink-0">
                     {product.imageUrl ? (
                       <img
-                        src={product.imageUrl.startsWith('/api/images/') ? product.imageUrl : `/api/images/${product.imageUrl}`}
+                        src={buildImageSrc(product.imageUrl)}
                         alt={product.name}
                         className="w-32 h-32 object-cover rounded-lg border"
                         onError={(e) => {
@@ -862,6 +862,31 @@ const SimpleBrandProductManager: React.FC = () => {
       </Dialog>
     </div>
   );
+};
+
+// 🔥 FUNCIÓN GLOBAL: Construir URLs de imagen sin duplicación  
+const buildImageSrc = (imageUrl: string | null | undefined): string => {
+  if (!imageUrl || imageUrl.trim() === '') {
+    return '';
+  }
+  
+  let cleanUrl = imageUrl.trim();
+  
+  // Si ya es una URL completa (http/https), usarla tal como está
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    return cleanUrl;
+  }
+  
+  // 🔥 CRÍTICO: LIMPIAR cualquier duplicación existente de api/images
+  cleanUrl = cleanUrl.replace(/\/?api\/images\/*/g, '');
+  cleanUrl = cleanUrl.replace(/\/+/g, '').trim();
+  
+  if (!cleanUrl) {
+    return '';
+  }
+  
+  // ✅ CONSTRUIR URL LIMPIA: Siempre empezar desde cero con una sola instancia
+  return `/api/images/${encodeURIComponent(cleanUrl)}`;
 };
 
 // 🚀 COMPONENT: Products by Brand Manager
@@ -1102,7 +1127,7 @@ const ProductsByBrandManager: React.FC = () => {
                         <div className="aspect-square relative">
                           {product.imageUrl ? (
                             <img
-                              src={`/api/images/${product.imageUrl}`}
+                              src={buildImageSrc(product.imageUrl)}
                               alt={product.name}
                               className="w-full h-full object-cover rounded-t-lg"
                             />
@@ -1217,7 +1242,7 @@ const ProductsByBrandManager: React.FC = () => {
                 <div className="aspect-square relative">
                   {editingProduct.imageUrl ? (
                     <img
-                      src={`/api/images/${editingProduct.imageUrl}`}
+                      src={buildImageSrc(editingProduct.imageUrl)}
                       alt={editingProduct.name}
                       className="w-full h-full object-cover rounded-lg"
                     />
@@ -2731,13 +2756,7 @@ export default function AdminPanel() {
                     {(product.imageUrl || (product.images && product.images.length > 0)) && (
                       <div className="aspect-square bg-muted rounded-lg overflow-hidden relative group cursor-pointer">
                         <img 
-                          src={(() => {
-                            let imageUrl = product.imageUrl || product.images?.[0];
-                            if (imageUrl && !imageUrl.startsWith('http')) {
-                              imageUrl = `${window.location.origin}${imageUrl}`;
-                            }
-                            return imageUrl;
-                          })()} 
+                          src={buildImageSrc(product.imageUrl || product.images?.[0])} 
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform hover:scale-105"
                           onClick={() => setImageZoomDrawer({product, isOpen: true})}
@@ -3525,7 +3544,7 @@ export default function AdminPanel() {
                       <div className="aspect-square bg-muted rounded-lg overflow-hidden mb-3">
                         {product.imageUrl ? (
                           <img 
-                            src={product.imageUrl} 
+                            src={buildImageSrc(product.imageUrl)} 
                             alt={product.name}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -5316,11 +5335,9 @@ export default function AdminPanel() {
             </DialogHeader>
             <div className="relative flex justify-center">
               <img 
-                src={(() => {
-                  let imageUrl = imageZoomDrawer?.product.imageUrl || imageZoomDrawer?.product.images?.[0];
-                  if (imageUrl && !imageUrl.startsWith('http')) {
-                    imageUrl = `${window.location.origin}${imageUrl}`;
-                  }
+                src={buildImageSrc(imageZoomDrawer?.product.imageUrl || imageZoomDrawer?.product.images?.[0])} 
+                onLoad={() => {
+                  if (!imageUrl) return;
                   return imageUrl;
                 })()} 
                 alt={imageZoomDrawer?.product.name || "Product image"}
@@ -5629,7 +5646,7 @@ export default function AdminPanel() {
                   <div className="flex items-start gap-3">
                     {editingProduct.imageUrl && (
                       <img
-                        src={editingProduct.imageUrl}
+                        src={buildImageSrc(editingProduct.imageUrl)}
                         alt={editingProduct.name}
                         className="w-16 h-16 object-cover rounded border"
                       />
@@ -5907,7 +5924,7 @@ export default function AdminPanel() {
                       <div className="flex items-start gap-3 p-3 border rounded-lg bg-green-50">
                         {primary.imageUrl && (
                           <img
-                            src={primary.imageUrl}
+                            src={buildImageSrc(primary.imageUrl)}
                             alt={primary.name}
                             className="w-16 h-16 object-cover rounded border"
                           />
@@ -5948,7 +5965,7 @@ export default function AdminPanel() {
                         <div key={id} className="flex items-start gap-3 p-3 border rounded-lg bg-red-50">
                           {product.imageUrl && (
                             <img
-                              src={product.imageUrl}
+                              src={buildImageSrc(product.imageUrl)}
                               alt={product.name}
                               className="w-12 h-12 object-cover rounded border"
                             />
