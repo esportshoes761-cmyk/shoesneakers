@@ -279,13 +279,16 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* Botones para reseñas y seguimiento - Reemplaza Tabs para evitar problemas touch */}
+      {/* Botones para reseñas y seguimiento - COMPLETAMENTE FIJOS */}
       <div className="w-full">
         <div className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground grid grid-cols-2 w-full">
-          <Button
-            variant={activeTab === 'reviews' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => handleTabChange('reviews')}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleTabChange('reviews');
+            }}
             className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-all ${
               activeTab === 'reviews' 
                 ? 'bg-background text-foreground shadow-sm' 
@@ -294,11 +297,14 @@ export default function ProductDetails() {
             data-testid="tab-reviews"
           >
             Reseñas
-          </Button>
-          <Button
-            variant={activeTab === 'tracking' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => handleTabChange('tracking')}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleTabChange('tracking');
+            }}
             className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-all ${
               activeTab === 'tracking' 
                 ? 'bg-background text-foreground shadow-sm' 
@@ -307,7 +313,7 @@ export default function ProductDetails() {
             data-testid="tab-tracking"
           >
             Seguimiento
-          </Button>
+          </button>
         </div>
 
         {/* Contenido condicional basado en activeTab */}
@@ -323,7 +329,11 @@ export default function ProductDetails() {
             </CardHeader>
             <CardContent>
               <Form {...reviewForm}>
-                <form onSubmit={reviewForm.handleSubmit(handleReviewSubmit)} className="space-y-4">
+                <form 
+                  onSubmit={reviewForm.handleSubmit(handleReviewSubmit)} 
+                  className="space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <FormField
                     control={reviewForm.control}
                     name="customerName"
@@ -331,7 +341,13 @@ export default function ProductDetails() {
                       <FormItem>
                         <FormLabel>Tu nombre</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Ingresa tu nombre" data-testid="input-reviewer-name" />
+                          <Input 
+                            {...field} 
+                            placeholder="Ingresa tu nombre" 
+                            data-testid="input-reviewer-name"
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => e.stopPropagation()}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
