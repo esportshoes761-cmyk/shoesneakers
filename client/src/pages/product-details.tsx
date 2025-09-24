@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,20 +71,28 @@ export default function ProductDetails() {
 
   // Estado controlado para los tabs - evita redirección automática al tab de reseñas
   const [activeTab, setActiveTab] = useState<'reviews' | 'tracking'>('reviews');
+  const initializedRef = useRef(false);
 
-  // Actualizar tab automáticamente si hay pedidos del cliente
+  // Inicialización única del tab basada en si hay pedidos - evita resets constantes
   useEffect(() => {
-    if (customerOrders.length > 0 && activeTab === 'reviews') {
-      setActiveTab('tracking');
+    if (!initializedRef.current && customerOrders !== undefined) {
+      setActiveTab(customerOrders.length > 0 ? 'tracking' : 'reviews');
+      initializedRef.current = true;
     }
-  }, [customerOrders.length, activeTab]);
+  }, [customerOrders]);
 
   // Función wrapper para manejar el cambio de tab con tipos correctos
   const handleTabChange = (value: string) => {
+    console.log(`🔄 Tab cambiando de "${activeTab}" a "${value}"`);
     if (value === 'reviews' || value === 'tracking') {
       setActiveTab(value);
     }
   };
+
+  // Log para detectar cambios inesperados en activeTab
+  useEffect(() => {
+    console.log(`📱 ActiveTab cambió a: "${activeTab}"`);
+  }, [activeTab]);
 
   // Form para reseñas
   const reviewForm = useForm<ReviewFormData>({
@@ -286,19 +294,40 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* Tabs para reseñas y seguimiento */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} activationMode="manual" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="reviews" data-testid="tab-reviews">
+      {/* Botones para reseñas y seguimiento - Reemplaza Tabs para evitar problemas touch */}
+      <div className="w-full">
+        <div className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground grid grid-cols-2 w-full">
+          <Button
+            variant={activeTab === 'reviews' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => handleTabChange('reviews')}
+            className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-all ${
+              activeTab === 'reviews' 
+                ? 'bg-background text-foreground shadow-sm' 
+                : 'hover:bg-background/50'
+            }`}
+            data-testid="tab-reviews"
+          >
             Reseñas
-          </TabsTrigger>
-          <TabsTrigger value="tracking" data-testid="tab-tracking">
+          </Button>
+          <Button
+            variant={activeTab === 'tracking' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => handleTabChange('tracking')}
+            className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-all ${
+              activeTab === 'tracking' 
+                ? 'bg-background text-foreground shadow-sm' 
+                : 'hover:bg-background/50'
+            }`}
+            data-testid="tab-tracking"
+          >
             Seguimiento
-          </TabsTrigger>
-        </TabsList>
+          </Button>
+        </div>
 
-        {/* Tab de Reseñas */}
-        <TabsContent value="reviews" className="space-y-6">
+        {/* Contenido condicional basado en activeTab */}
+        {activeTab === 'reviews' && (
+        <div className="space-y-6 mt-6">
           {/* Formulario para nueva reseña */}
           <Card>
             <CardHeader>
@@ -416,10 +445,12 @@ export default function ProductDetails() {
               </Card>
             )}
           </div>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* Tab de Seguimiento */}
-        <TabsContent value="tracking" className="space-y-6">
+        {/* Contenido de Seguimiento */}
+        {activeTab === 'tracking' && (
+        <div className="space-y-6 mt-6">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Seguimiento de tus pedidos</h3>
             
@@ -541,8 +572,9 @@ export default function ProductDetails() {
               </Card>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+        )}
+      </div>
     </div>
   );
 }
