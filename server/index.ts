@@ -2,11 +2,15 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./init-db";
+import { auditLogger } from "./audit-middleware";
 
 const app = express();
 // Aumentar límite para subida de imágenes (50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// 🔒 Apply audit logging middleware for all API requests
+app.use(auditLogger);
 
 app.use((req, res, next) => {
   const start = Date.now();

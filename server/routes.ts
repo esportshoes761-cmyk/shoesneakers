@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema, auditEvents, auditActionCodes, auditDailyDigests } from "@shared/schema";
+import { insertProductSchema, insertCartItemSchema, insertPromotionSchema, insertEventSchema, insertUserSchema, insertBrandSchema, insertCustomerSavingsSchema, auditEvents, auditActionCodes, auditDailyDigests, AuditActionCodes, type InsertAuditEvent } from "@shared/schema";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { randomBytes } from "crypto";
@@ -124,6 +124,149 @@ const mergeProductsSchema = z.object({
 
 const updateProductSchema = insertProductSchema.partial();
 
+// 🔒 AUDIT MIDDLEWARE - Asynchronous logging system 
+function truncateIp(ip: string): string {
+  if (!ip) return '';
+  // IPv4 truncation to /24 subnet for privacy
+  if (ip.includes('.')) {
+    const parts = ip.split('.');
+    return `${parts[0]}.${parts[1]}.${parts[2]}.0`;
+  }
+  // IPv6 truncation to /48 subnet for privacy  
+  if (ip.includes(':')) {
+    const parts = ip.split(':');
+    return `${parts[0]}:${parts[1]}:${parts[2]}::`;
+  }
+  return ip;
+}
+
+function hashUserAgent(userAgent: string): string {
+  if (!userAgent) return '';
+  // Simple hash for user agent (could use crypto.createHash for better security)
+  return Buffer.from(userAgent).toString('base64').slice(0, 16);
+}
+
+function getActionCodeForRoute(method: string, path: string): number {
+  // Map HTTP method + path to audit action codes
+  const route = `${method} ${path}`;
+  
+  // Authentication routes (1xx)
+  if (route.includes('/auth/login')) return AuditActionCodes.USER_LOGIN;
+  if (route.includes('/auth/register')) return AuditActionCodes.USER_CREATE;
+  if (route.includes('/auth/')) return AuditActionCodes.AUTH_FAILURE;
+  
+  // Product management (3xx)
+  if (method === 'POST' && path.includes('/products')) return AuditActionCodes.PRODUCT_CREATE;
+  if (method === 'PUT' && path.includes('/products')) return AuditActionCodes.PRODUCT_UPDATE;
+  if (method === 'DELETE' && path.includes('/products')) return AuditActionCodes.PRODUCT_DELETE;
+  if (method === 'GET' && path.includes('/products')) return AuditActionCodes.PRODUCT_VIEW;
+  
+  // Brand management (4xx)
+  if (method === 'POST' && path.includes('/brands')) return AuditActionCodes.BRAND_CREATE;
+  if (method === 'PUT' && path.includes('/brands')) return AuditActionCodes.BRAND_UPDATE;
+  if (method === 'DELETE' && path.includes('/brands')) return AuditActionCodes.BRAND_DELETE;
+  if (method === 'GET' && path.includes('/brands')) return AuditActionCodes.BRAND_VIEW;
+  
+  // Cart & Orders (5xx)
+  if (method === 'POST' && path.includes('/cart')) return AuditActionCodes.CART_ADD;
+  if (method === 'DELETE' && path.includes('/cart')) return AuditActionCodes.CART_REMOVE;
+  if (method === 'POST' && path.includes('/orders')) return AuditActionCodes.ORDER_CREATE;
+  if (method === 'PUT' && path.includes('/orders')) return AuditActionCodes.ORDER_UPDATE;
+  
+  // File operations (6xx)
+  if (method === 'POST' && (path.includes('/upload') || path.includes('/images'))) {
+    return 601; // FILE_UPLOAD
+  }
+  
+  // Default to API_CALL for other API routes
+  return 703; // API_CALL
+}
+
+async function auditLogger(req: Request, res: Response, next: NextFunction) {
+  // Skip non-API routes and static files
+  if (!req.path.startsWith('/api') || req.path.includes('/images/')) {
+    return next();
+  }
+  
+  const startTime = Date.now();
+  
+  // Capture original res.json to get response data
+  const originalJson = res.json;
+  let responseData: any = null;
+  
+  res.json = function(body: any) {
+    responseData = body;
+    return originalJson.call(this, body);
+  };
+  
+  res.on('finish', () => {
+    // Async logging - don't block the response
+    setImmediate(async () => {
+      try {
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        
+        // Extract session info if available
+        let actorType = 'anonymous';
+        let actorId: string | null = null;
+        let sessionId = 'no-session';
+        
+        const userSession = req.headers['x-user-session'] as string;
+        if (userSession) {
+          try {
+            const userData = JSON.parse(userSession);
+            actorId = userData.id;
+            actorType = userData.isAdmin ? 'admin' : 'client';
+            sessionId = `user-${actorId}`;
+          } catch {
+            actorType = 'anonymous';
+          }
+        }
+        
+        // Determine result based on status code
+        let result = 'success';
+        if (res.statusCode >= 400 && res.statusCode < 500) {
+          result = 'denied';
+        } else if (res.statusCode >= 500) {
+          result = 'error';
+        }
+        
+        // Get action code for this route
+        const actionCode = getActionCodeForRoute(req.method, req.path);
+        
+        // Create audit event
+        const auditEvent: InsertAuditEvent = {
+          actorType,
+          actorId,
+          sessionId,
+          ipTruncated: truncateIp(req.ip || req.connection.remoteAddress || ''),
+          userAgentHash: hashUserAgent(req.get('User-Agent') || ''),
+          actionCode,
+          resourceType: 'api',
+          resourceId: req.path,
+          result,
+          latencyMs: latency,
+          metadata: JSON.stringify({
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            hasResponse: !!responseData,
+            timestamp: endTime
+          })
+        };
+        
+        // Log asynchronously without blocking
+        await storage.createAuditEvent(auditEvent);
+      } catch (error) {
+        // Silent fail for audit logging - don't affect the application
+        console.error('Audit logging error:', error);
+      }
+    });
+  });
+  
+  next();
+}
+
 // 🔒 SECURE: Bulk product update schema
 const bulkUpdateProductsSchema = z.object({
   productIds: z.array(z.string()).min(1, "At least one product ID is required"),
@@ -149,7 +292,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     MAX_IMAGES: 1000000
   };
 
-  // 🔍 AUDIT SYSTEM TEST ENDPOINT - REGISTERED FIRST TO AVOID VITE INTERFERENCE
+  // 🔍 AUDIT SYSTEM ENDPOINTS - REGISTERED FIRST TO AVOID VITE INTERFERENCE
+  
+  // Query recent audit events
+  app.get("/api/audit/events", requireAdminAuth, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const events = await db.select().from(auditEvents)
+        .orderBy(sql`timestamp DESC`)
+        .limit(limit)
+        .offset(offset);
+        
+      const total = await db.select({ count: sql`count(*)` }).from(auditEvents);
+      
+      res.json({
+        success: true,
+        data: events,
+        pagination: {
+          total: total[0].count,
+          limit,
+          offset,
+          hasMore: (offset + limit) < total[0].count
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error fetching audit events:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Error fetching audit events',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+  
   app.get("/api/test-audit", async (req, res) => {
     try {
       console.log('🔍 Testing audit system...');
@@ -1982,9 +2159,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const newProduct = await storage.createProduct({
             name: productName,
+            nameNormalized: productName.toLowerCase().trim(),
             description: `Producto importado automáticamente. Marca: ${finalBrand}. Confianza: ${(confidence * 100).toFixed(1)}%. Método: ${detectionMethod}`,
-            price: 50000, // Precio por defecto
-            originalPrice: 50000,
+            price: "50000", // Precio por defecto
+            originalPrice: "50000",
             discountPercentage: 0,
             categoryId: defaultCategory.id,
             brandId: targetBrand?.id || categories[0]?.id || 'default',
@@ -1993,7 +2171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             reference: reference,
             sizes: ['38', '39', '40', '41', '42'],
             colors: ['Negro'],
-            rating: 0,
+            rating: "0",
             reviewCount: 0,
             isFlashSale: false,
             isFeatured: false
