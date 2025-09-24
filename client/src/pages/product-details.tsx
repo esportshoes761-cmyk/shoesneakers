@@ -69,30 +69,15 @@ export default function ProductDetails() {
     enabled: !!productId && !!customerId,
   });
 
-  // Estado controlado para los tabs - evita redirección automática al tab de reseñas
+  // Estado controlado para los tabs - FIJO: Evita cambios automáticos
   const [activeTab, setActiveTab] = useState<'reviews' | 'tracking'>('reviews');
-  const initializedRef = useRef(false);
 
-  // Inicialización única del tab basada en si hay pedidos - evita resets constantes
-  useEffect(() => {
-    if (!initializedRef.current && customerOrders !== undefined) {
-      setActiveTab(customerOrders.length > 0 ? 'tracking' : 'reviews');
-      initializedRef.current = true;
-    }
-  }, [customerOrders]);
-
-  // Función wrapper para manejar el cambio de tab con tipos correctos
+  // Función simple para manejar el cambio de tab - SIN automatizaciones
   const handleTabChange = (value: string) => {
-    console.log(`🔄 Tab cambiando de "${activeTab}" a "${value}"`);
     if (value === 'reviews' || value === 'tracking') {
       setActiveTab(value);
     }
   };
-
-  // Log para detectar cambios inesperados en activeTab
-  useEffect(() => {
-    console.log(`📱 ActiveTab cambió a: "${activeTab}"`);
-  }, [activeTab]);
 
   // Form para reseñas
   const reviewForm = useForm<ReviewFormData>({
