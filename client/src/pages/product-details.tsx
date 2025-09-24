@@ -69,6 +69,23 @@ export default function ProductDetails() {
     enabled: !!productId && !!customerId,
   });
 
+  // Estado controlado para los tabs - evita redirección automática al tab de reseñas
+  const [activeTab, setActiveTab] = useState<'reviews' | 'tracking'>('reviews');
+
+  // Actualizar tab automáticamente si hay pedidos del cliente
+  useEffect(() => {
+    if (customerOrders.length > 0 && activeTab === 'reviews') {
+      setActiveTab('tracking');
+    }
+  }, [customerOrders.length, activeTab]);
+
+  // Función wrapper para manejar el cambio de tab con tipos correctos
+  const handleTabChange = (value: string) => {
+    if (value === 'reviews' || value === 'tracking') {
+      setActiveTab(value);
+    }
+  };
+
   // Form para reseñas
   const reviewForm = useForm<ReviewFormData>({
     resolver: zodResolver(reviewFormSchema),
@@ -270,7 +287,7 @@ export default function ProductDetails() {
       </div>
 
       {/* Tabs para reseñas y seguimiento */}
-      <Tabs defaultValue="reviews" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} activationMode="manual" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="reviews" data-testid="tab-reviews">
             Reseñas
