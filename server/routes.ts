@@ -1426,8 +1426,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Product not found" });
       }
       
-      // Just use the data directly and let the storage layer handle it
-      const productData = req.body;
+      // Fix the data structure - extract from nested body if needed
+      let productData = req.body;
+      
+      // If data is nested in body.body (JSON string), parse it
+      if (productData.body && typeof productData.body === 'string') {
+        try {
+          productData = JSON.parse(productData.body);
+        } catch (e) {
+          console.log("Failed to parse nested body, using original");
+        }
+      }
+      
       console.log("🔧 PRODUCT UPDATE REQUEST:", JSON.stringify(productData, null, 2));
       
       // Update the product with the data
