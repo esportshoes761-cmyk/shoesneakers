@@ -584,18 +584,19 @@ const SimpleBrandProductManager: React.FC = () => {
   const handleSaveProduct = (data: any) => {
     if (!editingProduct) return;
     
-    // Only send fields that have values
-    const updates: any = {};
+    const payload: any = {};
     
-    if (data.name && data.name.trim()) updates.name = data.name.trim();
-    if (data.price) updates.price = data.price.toString();
-    if (data.originalPrice && data.originalPrice.trim()) updates.originalPrice = data.originalPrice.toString();
-    if (data.description !== undefined) updates.description = data.description || null;
-    if (data.reference !== undefined) updates.reference = data.reference || null;
-    if (data.sizes) updates.sizes = data.sizes.split(",").map((s: string) => s.trim()).filter(Boolean);
-    if (data.colors) updates.colors = data.colors.split(",").map((c: string) => c.trim()).filter(Boolean);
+    if (data.name && data.name.trim()) payload.name = data.name.trim();
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.price) payload.price = data.price;
+    if (data.originalPrice) payload.originalPrice = data.originalPrice;
+    if (data.reference !== undefined) payload.reference = data.reference;
+    if (data.categoryId) payload.categoryId = data.categoryId;
+    if (data.brandId) payload.brandId = data.brandId;
+    if (data.sizes) payload.sizes = data.sizes.split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (data.colors) payload.colors = data.colors.split(",").map((c: string) => c.trim()).filter(Boolean);
 
-    updateProductMutation.mutate({ id: editingProduct.id, updates });
+    updateProductMutation.mutate({ id: editingProduct.id, updates: payload });
   };
 
   // Si no hay marca seleccionada, mostrar lista de marcas

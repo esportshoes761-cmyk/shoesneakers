@@ -1420,17 +1420,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
     try {
-      // Skip schema validation for now and use the data directly
-      const productData = req.body;
-      
       // Validate that product exists
       const existingProduct = await storage.getProduct(req.params.id);
       if (!existingProduct) {
         return res.status(404).json({ message: "Product not found" });
       }
       
-      // Update the product with validated data
-      const updatedProduct = await storage.updateProduct(req.params.id, productData);
+      // Sanitize and prepare updates
+      const sanitizedUpdates: any = {};
+      
+      if (req.body.name && req.body.name.trim()) {
+        sanitizedUpdates.name = req.body.name.trim();
+        sanitizedUpdates.nameNormalized = req.body.name.trim().toLowerCase();
+      }
+      
+      if (req.body.price) {
+        const cleanPrice = req.body.price.toString().replace(/[^\d]/g, '');
+        if (cleanPrice) sanitizedUpdates.price = cleanPrice;
+      }
+      
+      if (req.body.originalPrice) {
+        const cleanOriginalPrice = req.body.originalPrice.toString().replace(/[^\d]/g, '');
+        if (cleanOriginalPrice) sanitizedUpdates.originalPrice = cleanOriginalPrice;
+      }
+      
+      if (req.body.description !== undefined) {
+        sanitizedUpdates.description = req.body.description || null;
+      }
+      
+      if (req.body.reference !== undefined) {
+        sanitizedUpdates.reference = req.body.reference || null;
+      }
+      
+      if (req.body.categoryId) {
+        sanitizedUpdates.categoryId = req.body.categoryId;
+      }
+      
+      if (req.body.brandId) {
+        sanitizedUpdates.brandId = req.body.brandId;
+      }
+      
+      if (req.body.sizes && Array.isArray(req.body.sizes)) {
+        sanitizedUpdates.sizes = req.body.sizes;
+      }
+      
+      if (req.body.colors && Array.isArray(req.body.colors)) {
+        sanitizedUpdates.colors = req.body.colors;
+      }
+      
+      // Check if we have any valid updates
+      if (Object.keys(sanitizedUpdates).length === 0) {
+        return res.status(400).json({ message: "No hay cambios válidos para actualizar" });
+      }
+      
+      // Update the product with sanitized data
+      const updatedProduct = await storage.updateProduct(req.params.id, sanitizedUpdates);
       
       if (!updatedProduct) {
         return res.status(500).json({ message: "Failed to update product" });
