@@ -540,7 +540,7 @@ const SimpleBrandProductManager: React.FC = () => {
   // Update product mutation
   const updateProductMutation = useMutation({
     mutationFn: async (data: { id: string; updates: any }) => {
-      const response = await apiRequest("PATCH", `/api/products/${data.id}`, {
+      const response = await apiRequest("PATCH", `/api/admin/products/${data.id}`, {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.updates),
       });
@@ -962,7 +962,7 @@ const ProductsByBrandManager: React.FC = () => {
   // Mutations
   const updateProductMutation = useMutation({
     mutationFn: async (data: { id: string; updates: EditProductData }) => {
-      const response = await apiRequest("PATCH", `/api/products/${data.id}`, {
+      const response = await apiRequest("PATCH", `/api/admin/products/${data.id}`, {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.updates),
       });
