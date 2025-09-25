@@ -584,15 +584,16 @@ const SimpleBrandProductManager: React.FC = () => {
   const handleSaveProduct = (data: any) => {
     if (!editingProduct) return;
     
-    const updates = {
-      name: data.name,
-      price: data.price.toString(),
-      originalPrice: data.originalPrice ? data.originalPrice.toString() : null,
-      description: data.description,
-      reference: data.reference,
-      sizes: data.sizes ? data.sizes.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-      colors: data.colors ? data.colors.split(",").map((c: string) => c.trim()).filter(Boolean) : [],
-    };
+    // Only send fields that have values
+    const updates: any = {};
+    
+    if (data.name && data.name.trim()) updates.name = data.name.trim();
+    if (data.price) updates.price = data.price.toString();
+    if (data.originalPrice && data.originalPrice.trim()) updates.originalPrice = data.originalPrice.toString();
+    if (data.description !== undefined) updates.description = data.description || null;
+    if (data.reference !== undefined) updates.reference = data.reference || null;
+    if (data.sizes) updates.sizes = data.sizes.split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (data.colors) updates.colors = data.colors.split(",").map((c: string) => c.trim()).filter(Boolean);
 
     updateProductMutation.mutate({ id: editingProduct.id, updates });
   };

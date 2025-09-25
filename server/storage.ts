@@ -600,8 +600,21 @@ export class DatabaseStorage implements IStorage {
 
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
     try {
+      // Filter out undefined, null, and empty string values
+      const cleanedProduct: any = {};
+      for (const [key, value] of Object.entries(product)) {
+        if (value !== undefined && value !== null && value !== '') {
+          cleanedProduct[key] = value;
+        }
+      }
+      
+      // If no valid fields to update, return the existing product
+      if (Object.keys(cleanedProduct).length === 0) {
+        return await this.getProduct(id);
+      }
+      
       const updatedProduct = await db.update(products)
-        .set(product)
+        .set(cleanedProduct)
         .where(eq(products.id, id))
         .returning();
       return updatedProduct[0];
