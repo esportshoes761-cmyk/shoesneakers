@@ -573,11 +573,10 @@ const SimpleBrandProductManager: React.FC = () => {
     editForm.reset({
       name: product.name || "",
       price: product.price || "",
-      salePrice: product.salePrice || "",
+      originalPrice: product.originalPrice || "",
       description: product.description || "",
-      stock: product.stock || 0,
-      sizes: product.sizes || "",
-      colors: product.colors || "",
+      sizes: Array.isArray(product.sizes) ? product.sizes.join(", ") : (product.sizes || ""),
+      colors: Array.isArray(product.colors) ? product.colors.join(", ") : (product.colors || ""),
       reference: product.reference || "",
     });
   };
@@ -586,10 +585,13 @@ const SimpleBrandProductManager: React.FC = () => {
     if (!editingProduct) return;
     
     const updates = {
-      ...data,
-      price: parseFloat(data.price) || 0,
-      salePrice: data.salePrice ? parseFloat(data.salePrice) : null,
-      stock: parseInt(data.stock) || 0,
+      name: data.name,
+      price: data.price.toString(),
+      originalPrice: data.originalPrice ? data.originalPrice.toString() : null,
+      description: data.description,
+      reference: data.reference,
+      sizes: data.sizes ? data.sizes.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      colors: data.colors ? data.colors.split(",").map((c: string) => c.trim()).filter(Boolean) : [],
     };
 
     updateProductMutation.mutate({ id: editingProduct.id, updates });
@@ -808,26 +810,12 @@ const SimpleBrandProductManager: React.FC = () => {
                 
                 <FormField
                   control={editForm.control}
-                  name="salePrice"
+                  name="originalPrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Precio Oferta</FormLabel>
+                      <FormLabel>Precio Original</FormLabel>
                       <FormControl>
                         <Input {...field} type="number" placeholder="0 (opcional)" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={editForm.control}
-                  name="stock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stock</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" placeholder="0" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
