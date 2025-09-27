@@ -21,7 +21,7 @@ import { insertProductSchema, insertPromotionSchema, insertEventSchema, insertBr
 import type { Product, Promotion, Event, Category, Brand, BrandWithProducts, ProductDuplicateAlert } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX, ArrowLeft, DollarSign } from "lucide-react";
+import { Plus, Package, Gift, Calendar as CalendarIcon, Trash2, Edit, X, ImagePlus, LogOut, Users, Briefcase, Lightbulb, ZoomIn, Star, Truck, Eye, Layers, Sparkles, Check, Settings, Search, Upload, Copy, Merge, Filter, ChevronDown, ChevronRight, AlertTriangle, Hash, UserX, ArrowLeft, DollarSign, FileText, BarChart3, Clock, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -2961,7 +2961,7 @@ export default function AdminPanel() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-2 sm:space-y-4">
         {/* ✨ REORGANIZED: Clean main tab structure */}
-        <TabsList className="grid w-full grid-cols-6 h-auto">
+        <TabsList className="grid w-full grid-cols-7 h-auto">
           <TabsTrigger value="catalog" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-catalog">
             <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Catálogo</span>
@@ -2985,6 +2985,10 @@ export default function AdminPanel() {
           <TabsTrigger value="tools" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-tools">
             <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="mt-1 sm:mt-0">Herramientas</span>
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="flex-col sm:flex-row py-2 sm:py-3 text-xs sm:text-sm" data-testid="tab-reports">
+            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="mt-1 sm:mt-0">Reportes</span>
           </TabsTrigger>
         </TabsList>
 
@@ -4781,6 +4785,175 @@ export default function AdminPanel() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Panel de Reportes */}
+      <TabsContent value="reports" className="space-y-2 sm:space-y-4">
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-semibold flex items-center gap-2">
+                <BarChart3 className="h-6 w-6 text-blue-600" />
+                Sistema de Reportes Automáticos
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Generación automática de reportes diarios con estadísticas completas del sistema
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Panel de control manual */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-green-600" />
+                  Generar Reporte Manual
+                </CardTitle>
+                <CardDescription>
+                  Crear y enviar un reporte inmediato con todas las estadísticas del sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-800 mb-2">
+                    <Clock className="h-4 w-4" />
+                    <span className="font-semibold">Estado del Sistema</span>
+                  </div>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>✅ Reportes automáticos habilitados</li>
+                    <li>⏰ Programados diariamente a las 12:00 AM</li>
+                    <li>📊 Incluye estadísticas completas</li>
+                    <li>🔍 Detección automática de duplicados</li>
+                  </ul>
+                </div>
+                
+                <Button 
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      toast({ title: "⏳ Generando reporte...", description: "Por favor espera mientras se genera el reporte completo" });
+                      
+                      const response = await apiRequest("/api/admin/generate-report", { method: "GET" });
+                      
+                      if (response.success) {
+                        toast({ 
+                          title: "✅ Reporte generado exitosamente", 
+                          description: `${response.message || 'Reporte completo generado y enviado via múltiples canales'}`,
+                          duration: 5000
+                        });
+                      } else {
+                        throw new Error(response.message || 'Error desconocido');
+                      }
+                    } catch (error: any) {
+                      console.error('Error generating report:', error);
+                      toast({ 
+                        title: "❌ Error al generar reporte", 
+                        description: error.message || 'No se pudo generar el reporte',
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                  data-testid="button-generate-manual-report"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Generar Reporte Ahora
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Configuración de reportes */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-gray-600" />
+                  Configuración de Reportes
+                </CardTitle>
+                <CardDescription>
+                  Información sobre el sistema de reportes automáticos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Reportes Automáticos</span>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">Activo</Badge>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Horario</span>
+                    <Badge variant="outline">12:00 AM (Bogotá)</Badge>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Frecuencia</span>
+                    <Badge variant="outline">Diario</Badge>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Incluye</span>
+                    <Badge variant="outline">Estadísticas completas</Badge>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Métodos de notificación activos:</strong><br />
+                    • Archivo local de logs<br />
+                    • Reporte en consola<br />
+                    • Webhook genérico (configurable)
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Información adicional */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-purple-600" />
+                Contenido de los Reportes
+              </CardTitle>
+              <CardDescription>
+                Estadísticas y métricas incluidas en cada reporte automático
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-800 mb-2">📦 Inventario</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Total de productos</li>
+                    <li>• Productos por marca</li>
+                    <li>• Categorías activas</li>
+                    <li>• Stock y disponibilidad</li>
+                  </ul>
+                </div>
+                
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <h4 className="font-semibold text-green-800 mb-2">🖼️ Imágenes</h4>
+                  <ul className="text-sm text-green-700 space-y-1">
+                    <li>• Total de imágenes</li>
+                    <li>• Duplicados detectados</li>
+                    <li>• Referencias afectadas</li>
+                    <li>• Optimizaciones sugeridas</li>
+                  </ul>
+                </div>
+                
+                <div className="p-3 bg-purple-50 rounded-lg">
+                  <h4 className="font-semibold text-purple-800 mb-2">📊 Actividad</h4>
+                  <ul className="text-sm text-purple-700 space-y-1">
+                    <li>• Eventos del sistema</li>
+                    <li>• Usuarios activos</li>
+                    <li>• Acciones realizadas</li>
+                    <li>• Auditoría completa</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
 
       {/* Dialog para mostrar URLs malformadas */}
       <Dialog open={activeModal.type === "malformedUrls"} onOpenChange={(open) => open ? openModal("malformedUrls") : closeModal()}>
