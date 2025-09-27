@@ -19,6 +19,14 @@ interface UploadedImage {
     type: 'hash' | 'name_and_size' | 'name_only';
     reason: string;
     message: string;
+    productsUsingImage?: Array<{
+      productId: string;
+      productName: string;
+      productReference: string;
+      brandId: string;
+      brandName: string;
+      brandLogo: string;
+    }>;
   };
 }
 
@@ -31,6 +39,14 @@ interface DuplicateCheckResult {
     type: 'hash' | 'name_and_size' | 'name_only';
     match: any;
     reason: string;
+    productsUsingImage?: Array<{
+      productId: string;
+      productName: string;
+      productReference: string;
+      brandId: string;
+      brandName: string;
+      brandLogo: string;
+    }>;
   }>;
   recommendation: string;
   message: string;
@@ -327,7 +343,8 @@ export function MultiImageUploader({
         type: dr.result.isExactDuplicate ? 'hash' as const : 
               dr.result.isLikelyDuplicate ? 'name_and_size' as const : 'name_only' as const,
         reason: dr.result.recommendation,
-        message: dr.result.message
+        message: dr.result.message,
+        productsUsingImage: dr.result.duplicates?.[0]?.productsUsingImage || []
       } : undefined,
       error: dr.result.isExactDuplicate ? 'Duplicado exacto - saltado' : undefined
     }));
@@ -865,10 +882,26 @@ export function MultiImageUploader({
                       image.duplicateInfo.type === 'hash' ? 'bg-red-500/80' :
                       image.duplicateInfo.type === 'name_and_size' ? 'bg-orange-500/70' :
                       'bg-yellow-500/60'
-                    } text-white text-xs p-2 opacity-0 hover:opacity-100 transition-opacity`}>
-                      <div className="text-center">
+                    } text-white text-xs p-2 opacity-0 hover:opacity-100 transition-opacity overflow-y-auto`}>
+                      <div className="text-center max-w-full">
                         <p className="font-semibold mb-1">{image.duplicateInfo.message}</p>
-                        <p className="text-xs">{image.duplicateInfo.reason}</p>
+                        <p className="text-xs mb-2">{image.duplicateInfo.reason}</p>
+                        
+                        {/* Información de marca */}
+                        {image.duplicateInfo.productsUsingImage && image.duplicateInfo.productsUsingImage.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="font-semibold text-xs">🏷️ Se repite en:</p>
+                            {image.duplicateInfo.productsUsingImage.map((product, index) => (
+                              <div key={product.productId} className="bg-black/30 rounded px-2 py-1 text-xs">
+                                <p className="font-medium">Marca: {product.brandName}</p>
+                                <p className="truncate">Producto: {product.productName}</p>
+                                {product.productReference && (
+                                  <p className="text-xs opacity-90">REF: {product.productReference}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

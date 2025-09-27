@@ -1800,14 +1800,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for duplicates by different criteria
       let duplicates = [];
       
+      // Helper function to find products using an image and get brand info
+      const findProductsUsingImage = async (imagePath: string) => {
+        const allProducts = await storage.getProducts();
+        const productsUsingImage = allProducts.filter((product: any) => {
+          // Check if image is used as main image or in additional images array
+          return product.imageUrl === imagePath || 
+                 (product.images && product.images.includes(imagePath));
+        });
+        
+        // Get brand info for products using this image
+        const brandsInfo = [];
+        for (const product of productsUsingImage) {
+          if (product.brandId) {
+            const brand = await storage.getBrand(product.brandId);
+            if (brand) {
+              brandsInfo.push({
+                productId: product.id,
+                productName: product.name,
+                productReference: product.reference,
+                brandId: brand.id,
+                brandName: brand.name,
+                brandLogo: brand.logo
+              });
+            }
+          }
+        }
+        return brandsInfo;
+      };
+      
       // 1. Check by hash if provided (most accurate)
       if (hash) {
         const hashDuplicate = await storage.getImageByHash(hash as string);
         if (hashDuplicate) {
+          const productsInfo = await findProductsUsingImage(hashDuplicate.path);
           duplicates.push({
             type: 'hash',
             match: hashDuplicate,
-            reason: 'Imagen idéntica (mismo contenido)'
+            reason: 'Imagen idéntica (mismo contenido)',
+            productsUsingImage: productsInfo
           });
         }
       }
@@ -1818,17 +1849,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         img.originalName === fileName && img.size === fileSizeNumber
       );
       
-      nameAndSizeMatches.forEach(match => {
+      for (const match of nameAndSizeMatches) {
         // Avoid duplicate entries if already found by hash
         const alreadyFoundByHash = duplicates.some(dup => dup.match.id === match.id);
         if (!alreadyFoundByHash) {
+          const productsInfo = await findProductsUsingImage(match.path);
           duplicates.push({
             type: 'name_and_size',
             match: match,
-            reason: 'Mismo nombre y tamaño de archivo'
+            reason: 'Mismo nombre y tamaño de archivo',
+            productsUsingImage: productsInfo
           });
         }
-      });
+      }
 
       // 3. Check by filename only (potential duplicate)
       const nameMatches = allImages.filter(img => 
@@ -1836,13 +1869,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         !duplicates.some(dup => dup.match.id === img.id)
       );
       
-      nameMatches.forEach(match => {
+      for (const match of nameMatches) {
+        const productsInfo = await findProductsUsingImage(match.path);
         duplicates.push({
           type: 'name_only',
           match: match,
-          reason: 'Mismo nombre de archivo'
+          reason: 'Mismo nombre de archivo',
+          productsUsingImage: productsInfo
         });
-      });
+      }
 
       // Return response
       const hasDuplicates = duplicates.length > 0;
