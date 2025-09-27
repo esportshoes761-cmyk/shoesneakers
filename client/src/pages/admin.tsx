@@ -4784,10 +4784,9 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
 
-      {/* Panel de Reportes */}
-      <TabsContent value="reports" className="space-y-2 sm:space-y-4">
+        {/* Panel de Reportes */}
+        <TabsContent value="reports" className="space-y-2 sm:space-y-4">
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
@@ -4953,7 +4952,8 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         </div>
-      </TabsContent>
+        </TabsContent>
+      </Tabs>
 
       {/* Dialog para mostrar URLs malformadas */}
       <Dialog open={activeModal.type === "malformedUrls"} onOpenChange={(open) => open ? openModal("malformedUrls") : closeModal()}>
