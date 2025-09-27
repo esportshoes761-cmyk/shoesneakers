@@ -1879,10 +1879,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Return response
+      // Generate detailed duplicate report
+      const generateDuplicateReport = (duplicates: any[]) => {
+        if (duplicates.length === 0) return null;
+        
+        const report = {
+          totalDuplicates: duplicates.length,
+          totalProductsAffected: 0,
+          brandsSummary: {} as Record<string, { count: number; products: string[] }>,
+          detailedReport: '',
+          urgencyLevel: 'low' as 'low' | 'medium' | 'high'
+        };
+        
+        let allProducts: any[] = [];
+        
+        duplicates.forEach(dup => {
+          if (dup.productsUsingImage) {
+            allProducts.push(...dup.productsUsingImage);
+          }
+        });
+        
+        report.totalProductsAffected = allProducts.length;
+        
+        // Group by brands
+        allProducts.forEach(product => {
+          if (!report.brandsSummary[product.brandName]) {
+            report.brandsSummary[product.brandName] = { count: 0, products: [] };
+          }
+          report.brandsSummary[product.brandName].count++;
+          report.brandsSummary[product.brandName].products.push(
+            `${product.productName} (REF: ${product.productReference || 'N/A'})`
+          );
+        });
+        
+        // Determine urgency
+        const exactDuplicates = duplicates.filter(d => d.type === 'hash').length;
+        const totalBrands = Object.keys(report.brandsSummary).length;
+        
+        if (exactDuplicates > 0 && totalBrands > 2) report.urgencyLevel = 'high';
+        else if (exactDuplicates > 0 || totalBrands > 1) report.urgencyLevel = 'medium';
+        
+        // Generate detailed report text
+        const brandDetails = Object.entries(report.brandsSummary)
+          .map(([brand, data]) => `🏷️ ${brand}: ${data.count} producto(s) - ${data.products.join(', ')}`)
+          .join('\n');
+        
+        report.detailedReport = `
+📊 REPORTE DE DUPLICADOS DETECTADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Total de duplicados: ${report.totalDuplicates}
+👥 Productos afectados: ${report.totalProductsAffected}
+🏢 Marcas involucradas: ${Object.keys(report.brandsSummary).length}
+🚨 Nivel de urgencia: ${report.urgencyLevel.toUpperCase()}
+
+📋 DETALLES POR MARCA:
+${brandDetails}
+
+⏰ Detectado: ${new Date().toLocaleString('es-CO')}
+`.trim();
+        
+        return report;
+      };
+
+      // Return response with detailed information
       const hasDuplicates = duplicates.length > 0;
       const exactDuplicate = duplicates.find(dup => dup.type === 'hash');
       const likelyDuplicate = duplicates.find(dup => dup.type === 'name_and_size');
+      const duplicateReport = generateDuplicateReport(duplicates);
 
       res.json({
         isDuplicate: hasDuplicates,
@@ -1890,6 +1953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isLikelyDuplicate: !!likelyDuplicate,
         duplicateCount: duplicates.length,
         duplicates: duplicates,
+        duplicateReport: duplicateReport,
         recommendation: exactDuplicate 
           ? 'Esta imagen ya existe exactamente igual en el sistema'
           : likelyDuplicate 
