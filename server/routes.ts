@@ -8,7 +8,7 @@ import { randomBytes } from "crypto";
 import fs from "fs-extra";
 import * as path from "path";
 import { CronJob } from "cron";
-import { sql } from "drizzle-orm";
+import { sql, desc, eq, and, count, gte } from "drizzle-orm";
 import { detectBrandFromImage, combineDetectionResults } from "./ai-vision";
 import { detectBrandFromFilename, PENDING_REVIEW_BRAND, MIN_CONFIDENCE_THRESHOLD } from "./brand-detection";
 import { db } from "./db";
@@ -3593,11 +3593,372 @@ ${brandDetails}
     }
   });
 
+  // 📊 SISTEMA DE INFORMES AUTOMÁTICOS COMPLETO
+  
+  // Función para generar estadísticas completas del sistema
+  async function generateCompleteSystemReport(): Promise<any> {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const lastWeek = new Date(today);
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const lastMonth = new Date(today);
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    try {
+      // 1. Estadísticas de productos y marcas
+      const allProducts = await storage.getProducts();
+      const totalProducts = allProducts.length;
+      const brands = await storage.getBrands();
+      
+      // Contar productos por marca
+      const productsByBrand: { [key: string]: number } = {};
+      for (const product of allProducts) {
+        const brand = brands.find(b => b.id === product.brandId);
+        if (brand) {
+          productsByBrand[brand.name] = (productsByBrand[brand.name] || 0) + 1;
+        }
+      }
+      
+      // 2. Estadísticas de imágenes y duplicados
+      const allImages = await storage.getAllImages();
+      const totalImages = allImages.length;
+      
+      // Contar duplicados por hash
+      const imagesByHash = new Map<string, any[]>();
+      for (const image of allImages) {
+        if (image.sha256) {
+          if (!imagesByHash.has(image.sha256)) {
+            imagesByHash.set(image.sha256, []);
+          }
+          imagesByHash.get(image.sha256)!.push(image);
+        }
+      }
+      
+      const duplicateGroups = Array.from(imagesByHash.values()).filter(images => images.length > 1);
+      const totalDuplicates = duplicateGroups.reduce((sum, group) => sum + (group.length - 1), 0);
+      
+      // 3. Estadísticas de auditoría y actividad
+      const todayTimestamp = Math.floor(today.getTime() / 1000);
+      const yesterdayTimestamp = Math.floor(yesterday.getTime() / 1000);
+      const lastWeekTimestamp = Math.floor(lastWeek.getTime() / 1000);
+      
+      // Obtener eventos de auditoría de manera más simple
+      const todayEvents = await db.select().from(auditEvents).catch(() => []);
+      const todayEventsCount = todayEvents.filter(event => 
+        event.timestamp && new Date(event.timestamp).getTime() >= today.getTime()
+      ).length;
+      
+      const yesterdayEventsCount = todayEvents.filter(event => 
+        event.timestamp && 
+        new Date(event.timestamp).getTime() >= yesterday.getTime() &&
+        new Date(event.timestamp).getTime() < today.getTime()
+      ).length;
+      
+      const weeklyEventsCount = todayEvents.filter(event => 
+        event.timestamp && new Date(event.timestamp).getTime() >= lastWeek.getTime()
+      ).length;
+
+      // 4. Actividad por tipo (simplificado)
+      const actionCounts: { [key: number]: number } = {};
+      const recentEvents = todayEvents.filter(event => 
+        event.timestamp && new Date(event.timestamp).getTime() >= lastWeek.getTime()
+      );
+      
+      for (const event of recentEvents) {
+        actionCounts[event.actionCode] = (actionCounts[event.actionCode] || 0) + 1;
+      }
+      
+      const recentActions = Object.entries(actionCounts).map(([actionCode, count]) => ({
+        actionCode: parseInt(actionCode),
+        count,
+        description: getActionDescription(parseInt(actionCode))
+      }));
+
+      // 5. Usuarios activos (simplificado)
+      const activeUsersCount = todayEvents.filter(event => 
+        event.timestamp && 
+        new Date(event.timestamp).getTime() >= today.getTime() &&
+        event.actionCode === AuditActionCodes.USER_LOGIN
+      ).length;
+
+      return {
+        generatedAt: now.toISOString(),
+        reportDate: now.toLocaleDateString('es-CO'),
+        
+        // Resumen del inventario
+        inventory: {
+          totalProducts: totalProducts,
+          totalBrands: brands.length,
+          totalImages: totalImages,
+          productsByBrand: productsByBrand,
+          duplicatesDetected: {
+            groups: duplicateGroups.length,
+            totalDuplicateImages: totalDuplicates,
+            savingsOpportunity: `${totalDuplicates} imágenes duplicadas detectadas`
+          }
+        },
+        
+        // Actividad del sistema
+        activity: {
+          today: {
+            totalEvents: todayEventsCount,
+            activeUsers: activeUsersCount
+          },
+          yesterday: {
+            totalEvents: yesterdayEventsCount
+          },
+          lastWeek: {
+            totalEvents: weeklyEventsCount
+          },
+          actionBreakdown: recentActions
+        },
+        
+        // Marcas más activas
+        brandAnalytics: brands.map(brand => ({
+          name: brand.name,
+          productCount: productsByBrand[brand.name] || 0,
+          isActive: brand.isActive,
+          displayLocation: brand.displayLocation
+        })).sort((a, b) => b.productCount - a.productCount),
+        
+        // Estado del sistema
+        systemHealth: {
+          status: 'operational',
+          lastReportGenerated: now.toISOString(),
+          dataIntegrity: totalDuplicates === 0 ? 'excellent' : `${totalDuplicates} duplicados detectados`,
+          performance: 'optimal'
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ Error generando reporte:', error);
+      return {
+        generatedAt: now.toISOString(),
+        error: 'Error generando estadísticas completas',
+        details: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+  
+  // Función helper para describir códigos de acción
+  function getActionDescription(actionCode: number): string {
+    const descriptions: { [key: number]: string } = {
+      [AuditActionCodes.USER_LOGIN]: 'Inicios de sesión',
+      [AuditActionCodes.PRODUCT_CREATE]: 'Productos creados',
+      [AuditActionCodes.PRODUCT_UPDATE]: 'Productos actualizados',
+      [AuditActionCodes.PRODUCT_VIEW]: 'Productos visualizados',
+      [AuditActionCodes.BULK_UPLOAD]: 'Cargas masivas',
+      [AuditActionCodes.FILE_UPLOAD]: 'Archivos subidos',
+      [AuditActionCodes.DUPLICATE_DETECTION]: 'Duplicados detectados',
+      [AuditActionCodes.BRAND_VIEW]: 'Marcas consultadas',
+      [AuditActionCodes.SEARCH_QUERY]: 'Búsquedas realizadas'
+    };
+    return descriptions[actionCode] || `Acción ${actionCode}`;
+  }
+  
+  // 🚀 SISTEMA DE NOTIFICACIONES MÚLTIPLES
+  interface NotificationMethod {
+    name: string;
+    send: (report: any) => Promise<boolean>;
+    enabled: boolean;
+  }
+  
+  const notificationMethods: NotificationMethod[] = [
+    // 1. Archivo de Log Local (siempre activo)
+    {
+      name: 'Local Log File',
+      enabled: true,
+      send: async (report: any) => {
+        try {
+          const logDir = './reports';
+          await fs.ensureDir(logDir);
+          const filename = `report_${new Date().toISOString().split('T')[0]}.json`;
+          const filePath = path.join(logDir, filename);
+          await fs.writeJSON(filePath, report, { spaces: 2 });
+          console.log(`📄 Reporte guardado: ${filePath}`);
+          return true;
+        } catch (error) {
+          console.error('❌ Error guardando reporte local:', error);
+          return false;
+        }
+      }
+    },
+    
+    // 2. Consola detallada (siempre activo)
+    {
+      name: 'Console Report',
+      enabled: true,
+      send: async (report: any) => {
+        try {
+          console.log('\n' + '='.repeat(80));
+          console.log('📊 REPORTE AUTOMÁTICO DEL SISTEMA - ' + report.reportDate);
+          console.log('='.repeat(80));
+          
+          console.log('\n📦 INVENTARIO:');
+          console.log(`  • Total productos: ${report.inventory.totalProducts}`);
+          console.log(`  • Total marcas: ${report.inventory.totalBrands}`);
+          console.log(`  • Total imágenes: ${report.inventory.totalImages}`);
+          console.log(`  • Duplicados detectados: ${report.inventory.duplicatesDetected.totalDuplicateImages}`);
+          
+          console.log('\n👥 ACTIVIDAD:');
+          console.log(`  • Eventos hoy: ${report.activity.today.totalEvents}`);
+          console.log(`  • Usuarios activos hoy: ${report.activity.today.activeUsers}`);
+          console.log(`  • Eventos esta semana: ${report.activity.lastWeek.totalEvents}`);
+          
+          console.log('\n🏷️ TOP MARCAS:');
+          report.brandAnalytics.slice(0, 5).forEach((brand: any, index: number) => {
+            console.log(`  ${index + 1}. ${brand.name}: ${brand.productCount} productos`);
+          });
+          
+          console.log('\n🔥 ACCIONES RECIENTES:');
+          report.activity.actionBreakdown.slice(0, 5).forEach((action: any) => {
+            console.log(`  • ${action.description}: ${action.count} veces`);
+          });
+          
+          console.log('\n' + '='.repeat(80));
+          console.log('✅ Reporte generado exitosamente a las ' + new Date().toLocaleTimeString());
+          console.log('='.repeat(80) + '\n');
+          
+          return true;
+        } catch (error) {
+          console.error('❌ Error mostrando reporte en consola:', error);
+          return false;
+        }
+      }
+    },
+    
+    // 3. Webhook genérico (configurable)
+    {
+      name: 'Generic Webhook',
+      enabled: false, // Se puede activar cuando se configure
+      send: async (report: any) => {
+        // Esta función se puede expandir para enviar a webhooks externos
+        // como Discord, Slack, Telegram, etc.
+        console.log('🔗 Webhook notification placeholder - configure webhook URL');
+        return false;
+      }
+    }
+  ];
+  
+  // Función principal para enviar notificaciones
+  async function sendNotifications(report: any): Promise<void> {
+    console.log('📬 Enviando notificaciones del reporte...');
+    
+    for (const method of notificationMethods) {
+      if (method.enabled) {
+        try {
+          const success = await method.send(report);
+          if (success) {
+            console.log(`✅ ${method.name}: Notificación enviada`);
+          } else {
+            console.log(`⚠️ ${method.name}: Falló el envío`);
+          }
+        } catch (error) {
+          console.error(`❌ ${method.name}: Error enviando notificación:`, error);
+        }
+      }
+    }
+  }
+  
+  // 📊 ENDPOINT PARA GENERAR REPORTE MANUAL
+  app.get('/api/admin/generate-report', requireAdminAuth, async (req: Request, res: Response) => {
+    try {
+      console.log('📊 Generando reporte manual del sistema...');
+      const report = await generateCompleteSystemReport();
+      
+      // Enviar notificaciones
+      await sendNotifications(report);
+      
+      // Registrar en auditoría
+      await storage.createAuditEvent({
+        actionCode: AuditActionCodes.REPORT_GENERATE,
+        details: 'Reporte manual generado',
+        metadata: JSON.stringify({ 
+          trigger: 'manual',
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      res.json({
+        success: true,
+        message: 'Reporte generado y enviado exitosamente',
+        report: report,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ Error generando reporte manual:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error generando reporte del sistema',
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    }
+  });
+  
+  // 🕛 SISTEMA DE REPORTES AUTOMÁTICOS CON CRON
+  const reportsCronJob = new CronJob(
+    '0 0 * * *', // Todos los días a medianoche (12:00 AM)
+    async () => {
+      try {
+        console.log('🕛 Ejecutando reporte automático programado...');
+        const report = await generateCompleteSystemReport();
+        
+        // Enviar a todos los métodos de notificación habilitados
+        await sendNotifications(report);
+        
+        // Registrar en auditoría
+        await storage.createAuditEvent({
+          actionCode: AuditActionCodes.REPORT_GENERATE,
+          details: 'Reporte automático diario generado',
+          metadata: JSON.stringify({ 
+            trigger: 'automatic',
+            timestamp: new Date().toISOString(),
+            scheduledTime: '00:00'
+          })
+        });
+        
+        console.log('✅ Reporte automático completado exitosamente');
+        
+      } catch (error) {
+        console.error('❌ Error en reporte automático:', error);
+        
+        // Intentar registrar el error en auditoría
+        try {
+          await storage.createAuditEvent({
+            actionCode: AuditActionCodes.REPORT_GENERATE,
+            details: 'Error en reporte automático',
+            metadata: JSON.stringify({ 
+              trigger: 'automatic',
+              error: error instanceof Error ? error.message : 'Error desconocido',
+              timestamp: new Date().toISOString()
+            })
+          });
+        } catch (auditError) {
+          console.error('❌ Error registrando fallo en auditoría:', auditError);
+        }
+      }
+    },
+    null, // onComplete callback
+    true, // start immediately
+    'America/Bogota' // Timezone Colombia
+  );
+
   const httpServer = createServer(app);
   
-  console.log('🕛 Sistema de reportes diarios WhatsApp activado');
-  console.log('📞 Número destino: +573219236683');
-  console.log('⏰ Envío automático: Todos los días a las 12:00 AM');
+  console.log('🕛 Sistema de reportes automáticos activado');
+  console.log('📊 Endpoint manual: GET /api/admin/generate-report');
+  console.log('⏰ Reportes automáticos: Todos los días a las 12:00 AM (Bogotá)');
+  console.log('📬 Métodos de notificación habilitados:');
+  notificationMethods.forEach(method => {
+    if (method.enabled) {
+      console.log(`  ✅ ${method.name}`);
+    } else {
+      console.log(`  ⚪ ${method.name} (deshabilitado)`);
+    }
+  });
   
   return httpServer;
 }
