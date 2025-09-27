@@ -3162,6 +3162,125 @@ ${brandDetails}
   // 📊 Initialize Daily Reports System
   setupDailyReportCron();
   
+  // 📊 PANEL DE DUPLICADOS DETALLADO - Para mostrar en admin
+  app.get("/api/admin/duplicates-report", requireAdminAuth, async (req, res) => {
+    try {
+      console.log('📊 Generando reporte detallado de duplicados...');
+      
+      // 1. Obtener todas las imágenes con hash
+      const allImages = await storage.getAllImages();
+      const allProducts = await storage.getProducts();
+      const allBrands = await storage.getBrands();
+      
+      // 2. Agrupar por hash
+      const imagesByHash: Record<string, any[]> = {};
+      const duplicateGroups = [];
+      
+      for (const image of allImages) {
+        if (image.sha256) {
+          if (!imagesByHash[image.sha256]) {
+            imagesByHash[image.sha256] = [];
+          }
+          imagesByHash[image.sha256].push(image);
+        }
+      }
+      
+      // 3. Encontrar grupos de duplicados con productos afectados
+      for (const [hash, images] of Object.entries(imagesByHash)) {
+        if (images.length > 1) {
+          const affectedProducts = [];
+          
+          for (const image of images) {
+            const productsUsingImage = allProducts.filter((product: any) => {
+              return product.imageUrl === image.path || 
+                     (product.images && product.images.includes(image.path));
+            });
+            
+            for (const product of productsUsingImage) {
+              const brand = allBrands.find(b => b.id === product.brandId);
+              affectedProducts.push({
+                productId: product.id,
+                productName: product.name,
+                productReference: product.reference,
+                brandId: product.brandId,
+                brandName: brand?.name || 'Sin marca',
+                brandLogo: brand?.logo || '',
+                imageUsed: image.path,
+                imageOriginalName: image.originalName
+              });
+            }
+          }
+          
+          duplicateGroups.push({
+            duplicateHash: hash,
+            duplicateCount: images.length,
+            affectedProducts: affectedProducts,
+            images: images.map(img => ({
+              path: img.path,
+              originalName: img.originalName,
+              uploadDate: img.createdAt || 'Desconocida'
+            })),
+            severity: affectedProducts.length > 5 ? 'high' : affectedProducts.length > 2 ? 'medium' : 'low'
+          });
+        }
+      }
+      
+      // 4. Organizar por marca para análisis
+      const duplicatesByBrand: Record<string, any> = {};
+      duplicateGroups.forEach(group => {
+        group.affectedProducts.forEach((product: any) => {
+          if (!duplicatesByBrand[product.brandName]) {
+            duplicatesByBrand[product.brandName] = {
+              brandName: product.brandName,
+              brandLogo: product.brandLogo,
+              totalDuplicateGroups: 0,
+              totalProductsAffected: 0,
+              duplicateGroups: []
+            };
+          }
+          
+          if (!duplicatesByBrand[product.brandName].duplicateGroups.find((g: any) => g.duplicateHash === group.duplicateHash)) {
+            duplicatesByBrand[product.brandName].duplicateGroups.push(group);
+            duplicatesByBrand[product.brandName].totalDuplicateGroups++;
+          }
+          
+          duplicatesByBrand[product.brandName].totalProductsAffected++;
+        });
+      });
+      
+      // 5. Estadísticas generales
+      const totalDuplicateGroups = duplicateGroups.length;
+      const totalImagesInvolved = duplicateGroups.reduce((sum, group) => sum + group.duplicateCount, 0);
+      const totalProductsAffected = duplicateGroups.reduce((sum, group) => sum + group.affectedProducts.length, 0);
+      
+      res.json({
+        success: true,
+        summary: {
+          totalDuplicateGroups,
+          totalImagesInvolved,
+          totalProductsAffected,
+          brandsAffected: Object.keys(duplicatesByBrand).length,
+          severityDistribution: {
+            high: duplicateGroups.filter(g => g.severity === 'high').length,
+            medium: duplicateGroups.filter(g => g.severity === 'medium').length,
+            low: duplicateGroups.filter(g => g.severity === 'low').length
+          }
+        },
+        duplicateGroups,
+        duplicatesByBrand,
+        generatedAt: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ Error generating duplicates report:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error generando reporte de duplicados',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // 🚨 REPORTE COMPLETO INMEDIATO - SIN MIDDLEWARE
   app.get("/api/emergency-report", async (req, res) => {
     try {

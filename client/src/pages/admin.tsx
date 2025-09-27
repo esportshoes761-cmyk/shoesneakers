@@ -33,6 +33,7 @@ import { formatCurrency } from "@/lib/currency";
 import { getBrandLogoType } from "@/lib/brand-utils";
 import AdminOrders from "@/components/admin-orders";
 import { parseApiError } from "@/lib/parse-api-error";
+import { DuplicatesDetailedReport } from "@/components/DuplicatesDetailedReport";
 
 const productFormSchema = insertProductSchema.extend({
   categoryId: z.string().min(1, "Selecciona una categoría"),
@@ -3605,10 +3606,14 @@ export default function AdminPanel() {
         {/* Panel de Herramientas */}
         <TabsContent value="tools" className="space-y-2 sm:space-y-4">
           <Tabs value={toolsSubTab} onValueChange={setToolsSubTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="duplicates" className="flex items-center gap-2" data-testid="subtab-tools-duplicates">
                 <Copy className="h-4 w-4" />
                 Duplicados
+              </TabsTrigger>
+              <TabsTrigger value="duplicates-report" className="flex items-center gap-2" data-testid="subtab-tools-duplicates-report">
+                <AlertTriangle className="h-4 w-4" />
+                Reporte Detallado
               </TabsTrigger>
               <TabsTrigger value="bulk-upload" className="flex items-center gap-2" data-testid="subtab-tools-bulk-upload">
                 <Upload className="h-4 w-4" />
@@ -3792,6 +3797,28 @@ export default function AdminPanel() {
                 }}
                 onPageChange={setDuplicatePage}
               />
+            </TabsContent>
+
+            {/* Sub-tab: Reporte Detallado de Duplicados */}
+            <TabsContent value="duplicates-report" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-semibold">Reporte Detallado de Duplicados</h2>
+                  <p className="text-muted-foreground">Análisis completo de imágenes duplicadas con productos y referencias específicas</p>
+                </div>
+                <Button
+                  onClick={() => {
+                    // Refrescar datos del reporte
+                    queryClient.invalidateQueries({ queryKey: ['/api/admin/duplicates-report'] });
+                  }}
+                  data-testid="button-refresh-duplicates-report"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Actualizar Reporte
+                </Button>
+              </div>
+
+              <DuplicatesDetailedReport />
             </TabsContent>
 
             {/* Sub-tab: Carga Masiva con Clasificación Automática */}

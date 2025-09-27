@@ -149,15 +149,30 @@ export function MultiImageUploader({
       if (result.isDuplicate && result.duplicateReport) {
         const report = result.duplicateReport;
         toast({
-          title: `⚠️ ${result.isExactDuplicate ? 'Duplicado Exacto' : 'Posible Duplicado'} Detectado`,
-          description: `${report.totalProductsAffected} producto(s) afectado(s) en ${Object.keys(report.brandsSummary).length} marca(s). Urgencia: ${report.urgencyLevel.toUpperCase()}`,
+          title: `🚨 ${result.isExactDuplicate ? 'DUPLICADO EXACTO' : 'POSIBLE DUPLICADO'} DETECTADO`,
+          description: `📊 ${report.totalProductsAffected} producto(s) afectado(s) en ${Object.keys(report.brandsSummary).length} marca(s) | ⚠️ URGENCIA: ${report.urgencyLevel.toUpperCase()} | 🔗 Ver detalles en consola`,
           variant: result.isExactDuplicate ? "destructive" : "default",
-          duration: 8000
+          duration: 15000
         });
         
-        // Log informe detallado para revisión inmediata
-        console.log('🚨 REPORTE DETALLADO DE DUPLICADOS:');
+        // MOSTRAR REPORTE DETALLADO COMPLETO EN CONSOLA
+        console.group('🚨 REPORTE DETALLADO DE DUPLICADOS');
+        console.log('📊 RESUMEN:', {
+          archivo: file.name,
+          totalProductosAfectados: report.totalProductsAffected,
+          marcasAfectadas: Object.keys(report.brandsSummary).length,
+          urgencia: report.urgencyLevel
+        });
+        
+        // Mostrar productos específicos afectados
+        console.log('📋 PRODUCTOS AFECTADOS:');
+        Object.entries(report.brandsSummary).forEach(([marca, info]: [string, any]) => {
+          console.log(`🏷️ ${marca}: ${info.count} productos`, info.products);
+        });
+        
+        console.log('📄 REPORTE COMPLETO:');
         console.log(report.detailedReport);
+        console.groupEnd();
       }
       
       return result;
