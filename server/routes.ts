@@ -347,10 +347,11 @@ const collectDailyStats = async (): Promise<DailyStats> => {
       }
     });
     
-    // Estadísticas por marca
+    // 🔧 ARREGLADO: Estadísticas por marca usando brandId correcto
     const brandStats: DailyStats['brandStats'] = {};
     allBrands.forEach((brand: any) => {
-      const brandProducts = allProducts.filter((p: any) => p.brandName === brand.name);
+      // ✅ CORRECTO: Filtrar por brandId en lugar de brandName
+      const brandProducts = allProducts.filter((p: any) => p.brandId === brand.id);
       brandStats[brand.name] = {
         totalProducts: brandProducts.length,
         duplicates: duplicatesByBrand[brand.name]?.length || 0,
@@ -2477,26 +2478,48 @@ ${brandDetails}
         return brandsInfo;
       };
 
-      // Check for duplicates by filename and size
+      // 🔍 CRITICAL FIX: Calculate SHA-256 hash of uploaded image for REAL duplicate detection
+      const crypto = require('crypto');
+      const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64');
+      const uploadedImageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+      
+      console.log(`🔍 Checking duplicates for image: ${originalName} (${size} bytes, hash: ${uploadedImageHash.substring(0, 16)}...)`);
+      
+      // Get all existing images for comparison
       const allImages = await storage.getAllImages();
       let duplicates = [];
       
-      // Check by filename and size combination
-      const nameAndSizeMatches = allImages.filter(img => 
-        img.originalName === originalName && img.size === size
-      );
-      
-      for (const match of nameAndSizeMatches) {
+      // 1. PRIORITY: Check by SHA-256 hash (exact duplicate detection)
+      const hashMatches = allImages.filter(img => img.sha256 === uploadedImageHash);
+      for (const match of hashMatches) {
         const productsInfo = await findProductsUsingImage(match.path);
         duplicates.push({
-          type: 'name_and_size',
+          type: 'exact_hash',
           match: match,
-          reason: 'Mismo nombre y tamaño de archivo',
+          reason: 'Imagen idéntica (mismo contenido exacto)',
           productsUsingImage: productsInfo
         });
+        console.log(`🚨 EXACT DUPLICATE FOUND: ${match.originalName} (hash match)`);
+      }
+      
+      // 2. Check by filename and size (likely duplicate)
+      if (duplicates.length === 0) {
+        const nameAndSizeMatches = allImages.filter(img => 
+          img.originalName === originalName && img.size === size
+        );
+        for (const match of nameAndSizeMatches) {
+          const productsInfo = await findProductsUsingImage(match.path);
+          duplicates.push({
+            type: 'name_and_size',
+            match: match,
+            reason: 'Mismo nombre y tamaño de archivo',
+            productsUsingImage: productsInfo
+          });
+          console.log(`⚠️ LIKELY DUPLICATE: ${match.originalName} (name + size match)`);
+        }
       }
 
-      // Check by filename only if no exact matches found
+      // 3. Check by filename only (potential duplicate)
       if (duplicates.length === 0) {
         const nameMatches = allImages.filter(img => img.originalName === originalName);
         for (const match of nameMatches) {
@@ -2507,8 +2530,11 @@ ${brandDetails}
             reason: 'Mismo nombre de archivo',
             productsUsingImage: productsInfo
           });
+          console.log(`⚠️ POSSIBLE DUPLICATE: ${match.originalName} (name match)`);
         }
       }
+      
+      console.log(`📊 Duplicate check result: ${duplicates.length} duplicates found`);
 
       // Generate detailed duplicate report with brand-specific messaging
       const generateDuplicateReport = (duplicates: any[]) => {
@@ -2545,11 +2571,12 @@ ${brandDetails}
         });
         
         // Determine urgency level
-        const exactDuplicates = duplicates.filter(d => d.type === 'name_and_size').length;
+        const exactDuplicates = duplicates.filter(d => d.type === 'exact_hash').length;
+        const likelyDuplicates = duplicates.filter(d => d.type === 'name_and_size').length;
         const totalBrands = Object.keys(report.brandsSummary).length;
         
-        if (exactDuplicates > 0 && totalBrands > 2) report.urgencyLevel = 'high';
-        else if (exactDuplicates > 0 || totalBrands > 1) report.urgencyLevel = 'medium';
+        if (exactDuplicates > 0) report.urgencyLevel = 'high';
+        else if (likelyDuplicates > 0 || totalBrands > 1) report.urgencyLevel = 'medium';
         
         // Generate brand details with clear brand identification
         const brandDetails = Object.entries(report.brandsSummary)
@@ -2588,16 +2615,20 @@ ${brandDetails}
 
       res.json({
         isDuplicate: hasDuplicates,
-        isExactDuplicate: hasDuplicates && duplicates.some(d => d.type === 'name_and_size'),
-        isLikelyDuplicate: hasDuplicates,
+        isExactDuplicate: hasDuplicates && duplicates.some(d => d.type === 'exact_hash'),
+        isLikelyDuplicate: hasDuplicates && duplicates.some(d => d.type === 'name_and_size'),
         duplicateCount: duplicates.length,
         duplicates: duplicates,
         duplicateReport: duplicateReport,
         recommendation: hasDuplicates 
-          ? `Esta imagen ya existe${brandMessage}`
+          ? duplicates.some(d => d.type === 'exact_hash')
+            ? `🚨 IMAGEN IDÉNTICA encontrada${brandMessage} - NO SUBIR`
+            : `⚠️ Posible duplicado encontrado${brandMessage}`
           : 'Imagen nueva, lista para subir',
         message: hasDuplicates
-          ? `⚠️ Imagen duplicada encontrada${brandMessage}`
+          ? duplicates.some(d => d.type === 'exact_hash')
+            ? `🚨 DUPLICADO EXACTO en${brandMessage}`
+            : `⚠️ Posible duplicado en${brandMessage}`
           : '✅ Imagen nueva, lista para subir'
       });
 
@@ -3158,6 +3189,157 @@ ${brandDetails}
       res.status(500).json({
         success: false,
         message: 'Error generando reporte diario',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // 🔍 DEBUG: Verificar estado de productos y marcas
+  app.get("/api/admin/debug-products", requireAdminAuth, async (req, res) => {
+    try {
+      const allProducts = await storage.getProducts();
+      const allBrands = await storage.getBrands();
+      
+      const sample = allProducts.slice(0, 5).map(p => ({
+        id: p.id,
+        name: p.name,
+        brandId: p.brandId,
+        categoryId: p.categoryId,
+        reference: p.reference
+      }));
+      
+      const productsWithBrands = allProducts.filter(p => p.brandId).length;
+      const productsWithoutBrands = allProducts.filter(p => !p.brandId).length;
+      
+      res.json({
+        totalProducts: allProducts.length,
+        totalBrands: allBrands.length,
+        productsWithBrands,
+        productsWithoutBrands,
+        sampleProducts: sample,
+        brands: allBrands.map(b => ({ id: b.id, name: b.name }))
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // 🔍 NUEVO: Endpoint para detectar duplicados existentes en la base de datos
+  app.get("/api/admin/find-duplicates", requireAdminAuth, async (req, res) => {
+    try {
+      console.log('🔍 Iniciando búsqueda de duplicados existentes...');
+      
+      // Obtener todas las imágenes de la base de datos
+      const allImages = await storage.getAllImages();
+      console.log(`📊 Total de imágenes en BD: ${allImages.length}`);
+      
+      // Agrupar por hash SHA-256 para encontrar duplicados reales
+      const imagesByHash = new Map<string, any[]>();
+      const imagesByName = new Map<string, any[]>();
+      
+      for (const image of allImages) {
+        // Agrupar por hash (duplicados exactos)
+        if (image.sha256) {
+          if (!imagesByHash.has(image.sha256)) {
+            imagesByHash.set(image.sha256, []);
+          }
+          imagesByHash.get(image.sha256)!.push(image);
+        }
+        
+        // Agrupar por nombre (posibles duplicados)
+        if (!imagesByName.has(image.originalName)) {
+          imagesByName.set(image.originalName, []);
+        }
+        imagesByName.get(image.originalName)!.push(image);
+      }
+      
+      // Encontrar duplicados exactos (mismo hash)
+      const exactDuplicates = [];
+      for (const [hash, images] of imagesByHash) {
+        if (images.length > 1) {
+          // Encontrar productos que usan estas imágenes
+          const allProducts = await storage.getProducts();
+          const affectedProducts = [];
+          
+          for (const image of images) {
+            const productsUsingImage = allProducts.filter((product: any) => {
+              return product.imageUrl === image.path || 
+                     (product.images && product.images.includes(image.path));
+            });
+            
+            for (const product of productsUsingImage) {
+              if (product.brandId) {
+                const brand = await storage.getBrand(product.brandId);
+                affectedProducts.push({
+                  productId: product.id,
+                  productName: product.name,
+                  productReference: product.reference,
+                  brandName: brand?.name || 'Sin marca',
+                  imagePath: image.path
+                });
+              }
+            }
+          }
+          
+          exactDuplicates.push({
+            hash: hash.substring(0, 16) + '...',
+            totalImages: images.length,
+            imageDetails: images.map(img => ({
+              path: img.path,
+              originalName: img.originalName,
+              size: img.size,
+              uploadedAt: img.uploadedAt
+            })),
+            affectedProducts: affectedProducts
+          });
+        }
+      }
+      
+      // Encontrar duplicados por nombre
+      const nameDuplicates = [];
+      for (const [name, images] of imagesByName) {
+        if (images.length > 1) {
+          // Solo incluir si no son duplicados exactos (ya detectados arriba)
+          const uniqueHashes = new Set(images.map(img => img.sha256).filter(Boolean));
+          if (uniqueHashes.size > 1) {
+            nameDuplicates.push({
+              originalName: name,
+              totalImages: images.length,
+              differentHashes: uniqueHashes.size,
+              imageDetails: images.map(img => ({
+                path: img.path,
+                size: img.size,
+                hash: img.sha256?.substring(0, 16) + '...' || 'sin hash'
+              }))
+            });
+          }
+        }
+      }
+      
+      const summary = {
+        totalImages: allImages.length,
+        exactDuplicates: exactDuplicates.length,
+        nameDuplicates: nameDuplicates.length,
+        imagesWithoutHash: allImages.filter(img => !img.sha256).length
+      };
+      
+      console.log('📊 Resumen de duplicados:', summary);
+      
+      res.json({
+        success: true,
+        summary,
+        exactDuplicates,
+        nameDuplicates,
+        message: exactDuplicates.length > 0 
+          ? `🚨 Se encontraron ${exactDuplicates.length} grupos de imágenes duplicadas exactas`
+          : '✅ No se encontraron duplicados exactos en la base de datos'
+      });
+      
+    } catch (error) {
+      console.error('❌ Error buscando duplicados:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error buscando duplicados en la base de datos',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
