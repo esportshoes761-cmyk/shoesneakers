@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, X, FileImage, AlertTriangle, Check, Loader2, Plus, Clock, AlertCircle } from "lucide-react";
+import { Upload, X, FileImage, AlertTriangle, Check, Loader2, Plus, Clock, AlertCircle, Hash, Package, Briefcase } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import CryptoJS from 'crypto-js';
 
 interface UploadedImage {
@@ -59,6 +61,23 @@ interface DuplicateCheckResult {
   };
 }
 
+interface DuplicateAlert {
+  id: string;
+  fileName: string;
+  severity: 'high' | 'medium' | 'low';
+  duplicateCount: number;
+  message: string;
+  affectedProducts: Array<{
+    productId: string;
+    productName: string;
+    productReference: string;
+    brandId: string;
+    brandName: string;
+    brandLogo: string;
+  }>;
+  timestamp: number;
+}
+
 interface MultiImageUploaderProps {
   onImagesChange: (imageUrls: string[]) => void;
   minImages?: number;
@@ -81,6 +100,7 @@ export function MultiImageUploader({
   );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [duplicateAlerts, setDuplicateAlerts] = useState<DuplicateAlert[]>([]);
   const { toast } = useToast();
 
   // Función para convertir HEIC a JPEG
@@ -145,34 +165,50 @@ export function MultiImageUploader({
       
       const result: DuplicateCheckResult = await response.json();
       
-      // Mostrar notificación detallada si se detectan duplicados
+      // 🚨 CREAR ALERTA PROMINENTE si se detectan duplicados
       if (result.isDuplicate && result.duplicateReport) {
         const report = result.duplicateReport;
+        
+        // Obtener productos afectados con referencias
+        const affectedProducts: DuplicateAlert['affectedProducts'] = [];
+        if (result.duplicates.length > 0 && result.duplicates[0].productsUsingImage) {
+          affectedProducts.push(...result.duplicates[0].productsUsingImage);
+        }
+        
+        // Determinar severidad basada en el número de productos afectados
+        let severity: 'high' | 'medium' | 'low' = 'low';
+        if (report.totalProductsAffected >= 5) severity = 'high';
+        else if (report.totalProductsAffected >= 2) severity = 'medium';
+        
+        // Crear alerta prominente
+        const duplicateAlert: DuplicateAlert = {
+          id: `alert-${Date.now()}-${Math.random()}`,
+          fileName: file.name,
+          severity,
+          duplicateCount: report.totalProductsAffected,
+          message: `📸 Esta imagen ya existe en ${report.totalProductsAffected} productos de ${Object.keys(report.brandsSummary).length} marca(s)`,
+          affectedProducts,
+          timestamp: Date.now()
+        };
+        
+        // Añadir alerta al estado (será muy visible en la UI)
+        setDuplicateAlerts(prev => [duplicateAlert, ...prev.slice(0, 9)]); // Máximo 10 alertas
+        
+        // Toast breve para notificación inmediata
         toast({
-          title: `🚨 ${result.isExactDuplicate ? 'DUPLICADO EXACTO' : 'POSIBLE DUPLICADO'} DETECTADO`,
-          description: `📊 ${report.totalProductsAffected} producto(s) afectado(s) en ${Object.keys(report.brandsSummary).length} marca(s) | ⚠️ URGENCIA: ${report.urgencyLevel.toUpperCase()} | 🔗 Ver detalles en consola`,
+          title: `🚨 ${result.isExactDuplicate ? 'DUPLICADO EXACTO' : 'POSIBLE DUPLICADO'}`,
+          description: `${file.name} - Ver alerta detallada arriba ↑`,
           variant: result.isExactDuplicate ? "destructive" : "default",
-          duration: 15000
+          duration: 5000
         });
         
-        // MOSTRAR REPORTE DETALLADO COMPLETO EN CONSOLA
-        console.group('🚨 REPORTE DETALLADO DE DUPLICADOS');
-        console.log('📊 RESUMEN:', {
+        // Log en consola para debugging
+        console.log('🚨 DUPLICADO DETECTADO:', {
           archivo: file.name,
-          totalProductosAfectados: report.totalProductsAffected,
-          marcasAfectadas: Object.keys(report.brandsSummary).length,
-          urgencia: report.urgencyLevel
+          productosAfectados: report.totalProductsAffected,
+          marcas: Object.keys(report.brandsSummary),
+          severidad: severity
         });
-        
-        // Mostrar productos específicos afectados
-        console.log('📋 PRODUCTOS AFECTADOS:');
-        Object.entries(report.brandsSummary).forEach(([marca, info]: [string, any]) => {
-          console.log(`🏷️ ${marca}: ${info.count} productos`, info.products);
-        });
-        
-        console.log('📄 REPORTE COMPLETO:');
-        console.log(report.detailedReport);
-        console.groupEnd();
       }
       
       return result;
@@ -670,6 +706,122 @@ export function MultiImageUploader({
           </Button>
         )}
       </div>
+
+      {/* 🚨 SECCIÓN PROMINENTE DE ALERTAS DE DUPLICADOS */}
+      {duplicateAlerts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <h3 className="font-semibold text-red-700">
+              🚨 DUPLICADOS DETECTADOS ({duplicateAlerts.length})
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDuplicateAlerts([])}
+              className="ml-auto text-xs"
+            >
+              Limpiar Alertas
+            </Button>
+          </div>
+          
+          {duplicateAlerts.map((alert) => (
+            <Card key={alert.id} className={`border-2 ${
+              alert.severity === 'high' ? 'border-red-500 bg-red-50' :
+              alert.severity === 'medium' ? 'border-orange-500 bg-orange-50' :
+              'border-yellow-500 bg-yellow-50'
+            }`}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Hash className={`h-4 w-4 ${
+                      alert.severity === 'high' ? 'text-red-600' :
+                      alert.severity === 'medium' ? 'text-orange-600' :
+                      'text-yellow-600'
+                    }`} />
+                    <CardTitle className="text-sm font-semibold">
+                      📁 {alert.fileName}
+                    </CardTitle>
+                    <Badge variant={
+                      alert.severity === 'high' ? "destructive" :
+                      alert.severity === 'medium' ? "default" : "secondary"
+                    }>
+                      {alert.severity.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDuplicateAlerts(prev => prev.filter(a => a.id !== alert.id))}
+                    className="h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  {/* Mensaje principal */}
+                  <p className={`text-sm font-medium ${
+                    alert.severity === 'high' ? 'text-red-700' :
+                    alert.severity === 'medium' ? 'text-orange-700' :
+                    'text-yellow-700'
+                  }`}>
+                    {alert.message}
+                  </p>
+                  
+                  {/* Productos afectados con información específica */}
+                  {alert.affectedProducts.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        📋 PRODUCTOS CON ESTA IMAGEN:
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {alert.affectedProducts.map((product, index) => (
+                          <div key={product.productId} className="flex items-center gap-2 p-2 bg-white border rounded-lg">
+                            {product.brandLogo && (
+                              <img 
+                                src={product.brandLogo} 
+                                alt={product.brandName}
+                                className="w-6 h-6 object-contain rounded"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <Briefcase className="h-3 w-3 text-blue-500" />
+                                <span className="text-xs font-semibold text-blue-700">
+                                  {product.brandName}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 truncate">
+                                {product.productName}
+                              </p>
+                              {product.productReference && (
+                                <p className="text-xs font-mono bg-yellow-100 px-1 rounded">
+                                  🔖 REF: {product.productReference}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Información adicional */}
+                  <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t">
+                    <span>🕒 {new Date(alert.timestamp).toLocaleTimeString()}</span>
+                    <span className="font-semibold">
+                      ❗ NO BLOQUEA LA CARGA - Solo informativo
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Botón de subida */}
       <div className="space-y-2">
