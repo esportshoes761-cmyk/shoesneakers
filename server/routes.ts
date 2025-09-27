@@ -281,6 +281,71 @@ const productsByBrandQuerySchema = z.object({
   limit: z.string().optional().transform(val => val ? Math.min(parseInt(val, 10), 100) : 20) // Limit max to 100
 });
 
+// 📱 WhatsApp Notification Simulation System
+interface WhatsAppNotification {
+  message: string;
+  urgencyLevel: 'low' | 'medium' | 'high';
+  type: 'package_duplicates' | 'image_duplicate' | 'system_alert';
+  metadata?: Record<string, any>;
+}
+
+const simulateWhatsAppNotification = async (notification: WhatsAppNotification): Promise<void> => {
+  const timestamp = new Date().toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  const urgencyEmoji = {
+    low: '🟡',
+    medium: '🟠', 
+    high: '🔴'
+  };
+
+  const typeDescriptions = {
+    package_duplicates: 'Duplicados en Paquete',
+    image_duplicate: 'Imagen Duplicada',
+    system_alert: 'Alerta del Sistema'
+  };
+
+  // Simulate real WhatsApp message format
+  const whatsappMessage = `
+${urgencyEmoji[notification.urgencyLevel]} *FASTSNEAKERS - ${typeDescriptions[notification.type]}*
+
+${notification.message}
+
+📱 *Enviado desde FASTSNEAKERS Admin*
+⏰ ${timestamp}
+  `.trim();
+
+  // Log as if sending to WhatsApp (ready for real integration)
+  console.log('\n📱 SIMULANDO ENVÍO WHATSAPP:');
+  console.log('═'.repeat(50));
+  console.log(whatsappMessage);
+  console.log('═'.repeat(50));
+  
+  if (notification.metadata) {
+    console.log('📊 METADATA:', JSON.stringify(notification.metadata, null, 2));
+  }
+  
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  console.log('✅ NOTIFICACIÓN WHATSAPP SIMULADA ENVIADA EXITOSAMENTE');
+  console.log(`📍 Destinatario: Admin Principal | Urgencia: ${notification.urgencyLevel.toUpperCase()}`);
+  
+  // TODO: Replace with real WhatsApp API integration when available
+  // await realWhatsAppService.sendMessage({
+  //   to: process.env.ADMIN_WHATSAPP_NUMBER,
+  //   message: whatsappMessage,
+  //   urgency: notification.urgencyLevel
+  // });
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Crear directorio para las imágenes si no existe
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -801,13 +866,23 @@ ${brandDetails}
 
       const packageReport = generatePackageReport(duplicates);
       
-      // Log detailed report for immediate notification
+      // Send real-time notifications for duplicate detection
       if (packageReport) {
         console.log('🚨 DUPLICATE ALERT - DETAILED REPORT:');
         console.log(packageReport.detailedReport);
         
-        // TODO: Send WhatsApp notification here when integration is available
-        // await sendWhatsAppNotification(packageReport.detailedReport);
+        // Simulate WhatsApp notification (ready for real integration)
+        await simulateWhatsAppNotification({
+          message: packageReport.detailedReport,
+          urgencyLevel: packageReport.urgencyLevel,
+          type: 'package_duplicates',
+          metadata: {
+            totalImages: imageUrls.length,
+            duplicateImages: packageReport.duplicateImages,
+            affectedProducts: packageReport.totalProductsAffected,
+            brandsInvolved: Object.keys(packageReport.brandsSummary).length
+          }
+        });
       }
       
       res.json({
