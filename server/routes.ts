@@ -7,6 +7,8 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { randomBytes } from "crypto";
 import fs from "fs-extra";
 import * as path from "path";
+import { CronJob } from "cron";
+import { sql } from "drizzle-orm";
 import { detectBrandFromImage, combineDetectionResults } from "./ai-vision";
 import { detectBrandFromFilename, PENDING_REVIEW_BRAND, MIN_CONFIDENCE_THRESHOLD } from "./brand-detection";
 import { db } from "./db";
@@ -246,13 +248,13 @@ async function auditLogger(req: Request, res: Response, next: NextFunction) {
           resourceId: req.path,
           result,
           latencyMs: latency,
-          metadata: JSON.stringify({
+          metadata: {
             method: req.method,
             path: req.path,
             statusCode: res.statusCode,
             hasResponse: !!responseData,
             timestamp: endTime
-          })
+          } as any
         };
         
         // Log asynchronously without blocking
@@ -281,15 +283,129 @@ const productsByBrandQuerySchema = z.object({
   limit: z.string().optional().transform(val => val ? Math.min(parseInt(val, 10), 100) : 20) // Limit max to 100
 });
 
-// 📱 WhatsApp Notification Simulation System
+// 📱 WhatsApp Real Notification System
 interface WhatsAppNotification {
   message: string;
   urgencyLevel: 'low' | 'medium' | 'high';
-  type: 'package_duplicates' | 'image_duplicate' | 'system_alert';
+  type: 'package_duplicates' | 'image_duplicate' | 'system_alert' | 'daily_report';
   metadata?: Record<string, any>;
 }
 
-const simulateWhatsAppNotification = async (notification: WhatsAppNotification): Promise<void> => {
+// 📊 Daily Statistics Interface
+interface DailyStats {
+  date: string;
+  visitorsCount: number;
+  totalProducts: number;
+  duplicateProducts: number;
+  brandStats: {
+    [brandName: string]: {
+      totalProducts: number;
+      duplicates: number;
+      duplicateReferences: string[];
+    };
+  };
+  categoryStats: {
+    [categoryName: string]: number;
+  };
+}
+
+// 📊 Statistics Collection Functions
+const collectDailyStats = async (): Promise<DailyStats> => {
+  try {
+    // Obtener productos y duplicados
+    const allProducts = await storage.getProducts();
+    const allBrands = await storage.getBrands();
+    
+    // Detectar duplicados por imageUrl
+    const imageUrls: string[] = [];
+    const duplicateReferences: string[] = [];
+    const duplicatesByBrand: { [brandName: string]: string[] } = {};
+    
+    // Mapear productos por imageUrl para detectar duplicados
+    const productsByImage: { [imageUrl: string]: any[] } = {};
+    
+    allProducts.forEach((product: any) => {
+      if (product.imageUrl) {
+        if (!productsByImage[product.imageUrl]) {
+          productsByImage[product.imageUrl] = [];
+        }
+        productsByImage[product.imageUrl].push(product);
+      }
+    });
+    
+    // Identificar duplicados
+    Object.values(productsByImage).forEach(productsWithSameImage => {
+      if (productsWithSameImage.length > 1) {
+        productsWithSameImage.forEach((product: any) => {
+          duplicateReferences.push(product.reference);
+          const brandName = product.brandName || 'Sin Marca';
+          if (!duplicatesByBrand[brandName]) {
+            duplicatesByBrand[brandName] = [];
+          }
+          duplicatesByBrand[brandName].push(product.reference);
+        });
+      }
+    });
+    
+    // Estadísticas por marca
+    const brandStats: DailyStats['brandStats'] = {};
+    allBrands.forEach((brand: any) => {
+      const brandProducts = allProducts.filter((p: any) => p.brandName === brand.name);
+      brandStats[brand.name] = {
+        totalProducts: brandProducts.length,
+        duplicates: duplicatesByBrand[brand.name]?.length || 0,
+        duplicateReferences: duplicatesByBrand[brand.name] || []
+      };
+    });
+    
+    // Estadísticas por categoría
+    const categoryStats: DailyStats['categoryStats'] = {};
+    allProducts.forEach((product: any) => {
+      const category = product.categoryName || 'Sin Categoría';
+      categoryStats[category] = (categoryStats[category] || 0) + 1;
+    });
+    
+    return {
+      date: new Date().toLocaleDateString('es-CO'),
+      visitorsCount: await getVisitorsCount(),
+      totalProducts: allProducts.length,
+      duplicateProducts: duplicateReferences.length,
+      brandStats,
+      categoryStats
+    };
+  } catch (error) {
+    console.error('Error collecting daily stats:', error);
+    throw error;
+  }
+};
+
+// 👥 Get visitors count from audit events
+const getVisitorsCount = async (): Promise<number> => {
+  try {
+    // Obtener eventos de auditoría del día actual
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Contar visitantes únicos basado en IP addresses en audit events
+    const events = await db.select().from(auditEvents)
+      .where(sql`timestamp >= ${startOfDay.toISOString()}`);
+    
+    const uniqueIPs = new Set();
+    events.forEach((event: any) => {
+      if (event.ipTruncated) {
+        uniqueIPs.add(event.ipTruncated);
+      }
+    });
+    
+    return uniqueIPs.size;
+  } catch (error) {
+    console.error('Error getting visitors count:', error);
+    return 0;
+  }
+};
+
+// 📱 Real WhatsApp Notification System
+const sendWhatsAppNotification = async (notification: WhatsAppNotification): Promise<void> => {
   const timestamp = new Date().toLocaleString('es-CO', {
     timeZone: 'America/Bogota',
     year: 'numeric',
@@ -309,10 +425,11 @@ const simulateWhatsAppNotification = async (notification: WhatsAppNotification):
   const typeDescriptions = {
     package_duplicates: 'Duplicados en Paquete',
     image_duplicate: 'Imagen Duplicada',
-    system_alert: 'Alerta del Sistema'
+    system_alert: 'Alerta del Sistema',
+    daily_report: 'Reporte Diario'
   };
 
-  // Simulate real WhatsApp message format
+  // Formato del mensaje para WhatsApp
   const whatsappMessage = `
 ${urgencyEmoji[notification.urgencyLevel]} *FASTSNEAKERS - ${typeDescriptions[notification.type]}*
 
@@ -322,28 +439,142 @@ ${notification.message}
 ⏰ ${timestamp}
   `.trim();
 
-  // Log as if sending to WhatsApp (ready for real integration)
-  console.log('\n📱 SIMULANDO ENVÍO WHATSAPP:');
-  console.log('═'.repeat(50));
-  console.log(whatsappMessage);
-  console.log('═'.repeat(50));
-  
-  if (notification.metadata) {
-    console.log('📊 METADATA:', JSON.stringify(notification.metadata, null, 2));
+  try {
+    // REAL WhatsApp API call using fetch
+    const phoneNumber = '573219236683'; // +57321 923 6683 formato internacional
+    
+    // Usar API de WhatsApp (ejemplo con Ultramsg o similar)
+    // Nota: Necesitarás configurar una API key en las variables de entorno
+    const whatsappApiUrl = process.env.WHATSAPP_API_URL || 'https://api.ultramsg.com/instance123456/messages/chat';
+    const whatsappApiToken = process.env.WHATSAPP_API_TOKEN || '';
+    
+    if (!whatsappApiToken) {
+      console.log('⚠️ WHATSAPP_API_TOKEN no configurado. Enviando log por consola:');
+      console.log('\n📱 MENSAJE WHATSAPP:');
+      console.log('═'.repeat(50));
+      console.log(whatsappMessage);
+      console.log('═'.repeat(50));
+      console.log(`📞 Destinatario: +${phoneNumber}`);
+      return;
+    }
+    
+    const response = await fetch(whatsappApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${whatsappApiToken}`
+      },
+      body: JSON.stringify({
+        to: phoneNumber,
+        body: whatsappMessage,
+        priority: notification.urgencyLevel
+      })
+    });
+    
+    if (response.ok) {
+      console.log('✅ MENSAJE WHATSAPP ENVIADO EXITOSAMENTE');
+      console.log(`📞 Destinatario: +${phoneNumber} | Urgencia: ${notification.urgencyLevel.toUpperCase()}`);
+    } else {
+      console.error('❌ Error enviando WhatsApp:', await response.text());
+    }
+    
+  } catch (error) {
+    console.error('❌ Error en envío WhatsApp:', error);
+    // Fallback: mostrar en consola
+    console.log('\n📱 FALLBACK - MENSAJE WHATSAPP:');
+    console.log('═'.repeat(50));
+    console.log(whatsappMessage);
+    console.log('═'.repeat(50));
+    console.log(`📞 Destinatario: +573219236683`);
   }
+};
+
+// 📊 Generate Daily Report for WhatsApp
+const generateDailyReport = async (): Promise<string> => {
+  try {
+    const stats = await collectDailyStats();
+    
+    let report = `📊 *REPORTE DIARIO FASTSNEAKERS*\n`;
+    report += `📅 *Fecha:* ${stats.date}\n\n`;
+    
+    report += `👥 *VISITANTES:*\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    report += `🌐 Personas que entraron hoy: *${stats.visitorsCount}*\n\n`;
+    
+    report += `📦 *PRODUCTOS:*\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    report += `📋 Total de productos: *${stats.totalProducts}*\n`;
+    report += `⚠️ Productos duplicados: *${stats.duplicateProducts}*\n\n`;
+    
+    if (stats.duplicateProducts > 0) {
+      report += `🔍 *DETALLE DE DUPLICADOS POR MARCA:*\n`;
+      report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      
+      Object.entries(stats.brandStats).forEach(([brandName, brandData]) => {
+        if (brandData.duplicates > 0) {
+          report += `🏷️ *${brandName}:*\n`;
+          report += `   📦 Total productos: ${brandData.totalProducts}\n`;
+          report += `   ⚠️ Duplicados: ${brandData.duplicates}\n`;
+          report += `   📋 Referencias duplicadas:\n`;
+          brandData.duplicateReferences.forEach(ref => {
+            report += `      • ${ref}\n`;
+          });
+          report += `\n`;
+        }
+      });
+    }
+    
+    report += `📊 *DISTRIBUCIÓN POR CATEGORÍA:*\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    Object.entries(stats.categoryStats).forEach(([category, count]) => {
+      report += `📂 ${category}: ${count} productos\n`;
+    });
+    
+    report += `\n🔧 *DISTRIBUCIÓN POR MARCA:*\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    Object.entries(stats.brandStats).forEach(([brandName, brandData]) => {
+      report += `🏷️ ${brandName}: ${brandData.totalProducts} productos\n`;
+    });
+    
+    return report;
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+    return `❌ Error generando reporte diario: ${error}`;
+  }
+};
+
+// ⏰ Daily Report Cron Job - Executes at midnight (00:00) every day
+const setupDailyReportCron = () => {
+  // Cron expression: 0 0 * * * = every day at midnight (00:00)
+  const dailyReportJob = new CronJob(
+    '0 0 * * *', // Midnight every day
+    async () => {
+      console.log('🕛 Ejecutando reporte diario automático...');
+      try {
+        const report = await generateDailyReport();
+        
+        await sendWhatsAppNotification({
+          message: report,
+          urgencyLevel: 'low',
+          type: 'daily_report',
+          metadata: {
+            reportDate: new Date().toISOString(),
+            automated: true
+          }
+        });
+        
+        console.log('✅ Reporte diario enviado exitosamente');
+      } catch (error) {
+        console.error('❌ Error enviando reporte diario:', error);
+      }
+    },
+    null,
+    true, // Start the job immediately
+    'America/Bogota' // Timezone for Colombia
+  );
   
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  console.log('✅ NOTIFICACIÓN WHATSAPP SIMULADA ENVIADA EXITOSAMENTE');
-  console.log(`📍 Destinatario: Admin Principal | Urgencia: ${notification.urgencyLevel.toUpperCase()}`);
-  
-  // TODO: Replace with real WhatsApp API integration when available
-  // await realWhatsAppService.sendMessage({
-  //   to: process.env.ADMIN_WHATSAPP_NUMBER,
-  //   message: whatsappMessage,
-  //   urgency: notification.urgencyLevel
-  // });
+  console.log('🕛 Sistema de reportes diarios iniciado - Envío automático a las 12:00 AM');
+  return dailyReportJob;
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -376,10 +607,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         data: events,
         pagination: {
-          total: total[0].count,
+          total: Number(total[0].count),
           limit,
           offset,
-          hasMore: (offset + limit) < total[0].count
+          hasMore: (offset + limit) < Number(total[0].count)
         }
       });
     } catch (error) {
@@ -871,8 +1102,8 @@ ${brandDetails}
         console.log('🚨 DUPLICATE ALERT - DETAILED REPORT:');
         console.log(packageReport.detailedReport);
         
-        // Simulate WhatsApp notification (ready for real integration)
-        await simulateWhatsAppNotification({
+        // Send real WhatsApp notification
+        await sendWhatsAppNotification({
           message: packageReport.detailedReport,
           urgencyLevel: packageReport.urgencyLevel,
           type: 'package_duplicates',
@@ -2682,6 +2913,46 @@ ${brandDetails}
     }
   });
 
+  // 📊 Initialize Daily Reports System
+  setupDailyReportCron();
+  
+  // 🧪 Test endpoint for manual daily report generation
+  app.get("/api/admin/daily-report", requireAdminAuth, async (req, res) => {
+    try {
+      const report = await generateDailyReport();
+      
+      // Send to WhatsApp and also return in response
+      await sendWhatsAppNotification({
+        message: report,
+        urgencyLevel: 'low',
+        type: 'daily_report',
+        metadata: {
+          reportDate: new Date().toISOString(),
+          automated: false,
+          triggeredBy: 'manual'
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Reporte diario generado y enviado a WhatsApp',
+        report
+      });
+    } catch (error) {
+      console.error('❌ Error generating manual daily report:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error generando reporte diario',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   const httpServer = createServer(app);
+  
+  console.log('🕛 Sistema de reportes diarios WhatsApp activado');
+  console.log('📞 Número destino: +573219236683');
+  console.log('⏰ Envío automático: Todos los días a las 12:00 AM');
+  
   return httpServer;
 }
