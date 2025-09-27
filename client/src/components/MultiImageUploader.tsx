@@ -50,6 +50,13 @@ interface DuplicateCheckResult {
   }>;
   recommendation: string;
   message: string;
+  duplicateReport?: {
+    totalDuplicates: number;
+    totalProductsAffected: number;
+    brandsSummary: Record<string, { count: number; products: string[] }>;
+    detailedReport: string;
+    urgencyLevel: 'low' | 'medium' | 'high';
+  };
 }
 
 interface MultiImageUploaderProps {
@@ -115,20 +122,44 @@ export function MultiImageUploader({
     });
   };
 
-  // Función para verificar duplicados usando la API
+  // Función para verificar duplicados usando la API con informes detallados
   const checkForDuplicates = async (file: File): Promise<DuplicateCheckResult> => {
     try {
-      // Calcular hash para verificación exacta
-      const hash = await calculateImageHash(file);
+      // Convertir archivo a base64 para el análisis
+      const { base64 } = await convertFileToBase64(file);
       
-      // Hacer request a la API de verificación
-      const response = await fetch(`/api/images/check-duplicates?fileName=${encodeURIComponent(file.name)}&size=${file.size}&hash=${hash}`);
+      // Hacer request a la API de verificación con POST para informes detallados
+      const response = await fetch('/api/images/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: base64,
+          originalName: file.name,
+          size: file.size
+        })
+      });
       
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
       
       const result: DuplicateCheckResult = await response.json();
+      
+      // Mostrar notificación detallada si se detectan duplicados
+      if (result.isDuplicate && result.duplicateReport) {
+        const report = result.duplicateReport;
+        toast({
+          title: `⚠️ ${result.isExactDuplicate ? 'Duplicado Exacto' : 'Posible Duplicado'} Detectado`,
+          description: `${report.totalProductsAffected} producto(s) afectado(s) en ${Object.keys(report.brandsSummary).length} marca(s). Urgencia: ${report.urgencyLevel.toUpperCase()}`,
+          variant: result.isExactDuplicate ? "destructive" : "default",
+          duration: 8000
+        });
+        
+        // Log informe detallado para revisión inmediata
+        console.log('🚨 REPORTE DETALLADO DE DUPLICADOS:');
+        console.log(report.detailedReport);
+      }
+      
       return result;
       
     } catch (error) {

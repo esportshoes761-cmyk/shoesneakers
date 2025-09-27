@@ -1928,14 +1928,51 @@ export default function AdminPanel() {
       const response = await apiRequest('POST', '/api/products/check-package-duplicates', { imageUrls });
       return response.json();
     },
-    onSuccess: (data: { duplicates: ProductDuplicateAlert[]; hasDuplicates: boolean }) => {
+    onSuccess: (data: { duplicates: ProductDuplicateAlert[]; hasDuplicates: boolean; packageReport?: any }) => {
       console.log('✅ Duplicate check completed:', data);
       setPackageDuplicates(data.duplicates);
       
-      if (data.hasDuplicates) {
+      // Mostrar notificaciones detalladas si hay duplicados en el paquete
+      if (data.hasDuplicates && data.packageReport) {
+        const report = data.packageReport;
+        
+        // Toast principal con resumen del paquete
+        toast({
+          title: `🚨 Duplicados Detectados en Paquete`,
+          description: `${report.duplicateImages}/${report.totalImages} imágenes duplicadas. ${report.totalProductsAffected} productos afectados en ${Object.keys(report.brandsSummary).length} marca(s).`,
+          variant: report.urgencyLevel === 'high' ? "destructive" : "default",
+          duration: 12000
+        });
+        
+        // Log reporte WhatsApp-ready para revisión inmediata
+        console.log('🚨 ALERTA PAQUETE - REPORTE DETALLADO LISTO PARA WHATSAPP:');
+        console.log(report.detailedReport);
+        
+        // Toast con recomendación específica según urgencia
+        setTimeout(() => {
+          toast({
+            title: `💡 Acción Recomendada (${report.urgencyLevel.toUpperCase()})`,
+            description: report.urgencyLevel === 'high' ? 
+              'CRÍTICO: Revisar duplicados antes de proceder' : 
+              report.urgencyLevel === 'medium' ? 
+              'IMPORTANTE: Verificar productos duplicados' : 
+              'Proceder con precaución - revisar duplicados',
+            variant: report.urgencyLevel === 'high' ? "destructive" : "default",
+            duration: 10000
+          });
+        }, 2000);
+        
+        setShowDuplicateAlert(true);
+      } else if (data.hasDuplicates) {
+        // Fallback para duplicados sin reporte detallado
         setShowDuplicateAlert(true);
       } else {
         // No duplicates, proceed directly with bulk creation
+        toast({
+          title: "✅ Verificación Completada",
+          description: "No se detectaron duplicados. Procediendo con la creación del paquete.",
+          duration: 5000
+        });
         if (pendingPackageData) {
           bulkCreateProductsMutation.mutate(pendingPackageData);
         }
