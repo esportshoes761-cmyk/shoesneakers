@@ -687,7 +687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk product creation endpoint - NO AUTH REQUIRED FOR IMMEDIATE PUBLISHING
-  // 🔍 DUPLICATE DETECTION: Check for duplicates before bulk creation
+  // 🔍 DUPLICATE DETECTION: Check for duplicates before bulk creation with DETAILED REPORTING
   app.post("/api/products/check-package-duplicates", async (req, res) => {
     try {
       // Validate request body
@@ -697,14 +697,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Se requiere un array de URLs de imágenes" });
       }
 
-      // Check for duplicate products using the new storage method
+      console.log(`🔍 Checking package duplicates for ${imageUrls.length} images...`);
+
+      // Check for duplicate products using the new detailed system
       const duplicates = await storage.checkPackageDuplicates(imageUrls);
+      
+      // Generate consolidated detailed report for package upload
+      const generatePackageReport = (duplicates: any[]) => {
+        if (duplicates.length === 0) return null;
+        
+        const report = {
+          totalImages: imageUrls.length,
+          duplicateImages: duplicates.length,
+          cleanImages: imageUrls.length - duplicates.length,
+          totalProductsAffected: 0,
+          brandsSummary: {} as Record<string, { count: number; products: string[]; imageCount: number }>,
+          detailedReport: '',
+          urgencyLevel: 'low' as 'low' | 'medium' | 'high',
+          imageDetails: [] as any[]
+        };
+        
+        let allProducts: any[] = [];
+        
+        // Process each duplicate to get comprehensive data
+        duplicates.forEach((duplicate, index) => {
+          const imageDetail = {
+            imageUrl: duplicate.imageUrl,
+            existingProduct: duplicate.existingProduct,
+            duplicateCount: duplicate.duplicateCount
+          };
+          report.imageDetails.push(imageDetail);
+          
+          if (duplicate.existingProduct) {
+            allProducts.push(duplicate.existingProduct);
+          }
+        });
+        
+        report.totalProductsAffected = allProducts.length;
+        
+        // Group by brands with detailed counting
+        allProducts.forEach(product => {
+          const brandName = product.brandName || 'Sin marca';
+          if (!report.brandsSummary[brandName]) {
+            report.brandsSummary[brandName] = { count: 0, products: [], imageCount: 0 };
+          }
+          report.brandsSummary[brandName].count++;
+          report.brandsSummary[brandName].imageCount++;
+          const productInfo = `${product.name} (REF: ${product.reference || 'N/A'})`;
+          if (!report.brandsSummary[brandName].products.includes(productInfo)) {
+            report.brandsSummary[brandName].products.push(productInfo);
+          }
+        });
+        
+        // Determine urgency level
+        const duplicatePercentage = (duplicates.length / imageUrls.length) * 100;
+        const totalBrands = Object.keys(report.brandsSummary).length;
+        
+        if (duplicatePercentage > 50 && totalBrands > 2) report.urgencyLevel = 'high';
+        else if (duplicatePercentage > 20 || totalBrands > 1) report.urgencyLevel = 'medium';
+        
+        // Generate detailed WhatsApp-ready report
+        const brandDetails = Object.entries(report.brandsSummary)
+          .map(([brand, data]) => 
+            `🏷️ *${brand}*: ${data.imageCount} imagen(es) duplicada(s)\n   📦 Productos: ${data.products.join(', ')}`
+          ).join('\n\n');
+        
+        const timestamp = new Date().toLocaleString('es-CO', {
+          timeZone: 'America/Bogota',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        report.detailedReport = `
+🚨 *ALERTA DE DUPLICADOS DETECTADOS* 🚨
+
+📊 *RESUMEN DE PAQUETE:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖼️ Total de imágenes a subir: *${report.totalImages}*
+⚠️ Imágenes duplicadas: *${report.duplicateImages}* (${Math.round(duplicatePercentage)}%)
+✅ Imágenes nuevas: *${report.cleanImages}*
+👥 Productos afectados: *${report.totalProductsAffected}*
+🏢 Marcas involucradas: *${Object.keys(report.brandsSummary).length}*
+🚨 Nivel de urgencia: *${report.urgencyLevel.toUpperCase()}*
+
+📋 *DETALLE POR MARCA:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${brandDetails}
+
+⏰ *Detectado el:* ${timestamp}
+
+💡 *Recomendación:* ${report.urgencyLevel === 'high' ? 
+  'URGENTE - Revisar duplicados antes de proceder' : 
+  report.urgencyLevel === 'medium' ? 
+  'ATENCIÓN - Verificar productos duplicados' : 
+  'Proceder con precaución'}
+`.trim();
+        
+        return report;
+      };
+
+      const packageReport = generatePackageReport(duplicates);
+      
+      // Log detailed report for immediate notification
+      if (packageReport) {
+        console.log('🚨 DUPLICATE ALERT - DETAILED REPORT:');
+        console.log(packageReport.detailedReport);
+        
+        // TODO: Send WhatsApp notification here when integration is available
+        // await sendWhatsAppNotification(packageReport.detailedReport);
+      }
       
       res.json({
         duplicates,
         hasDuplicates: duplicates.length > 0,
         totalDuplicates: duplicates.length,
-        checkedImages: imageUrls.length
+        checkedImages: imageUrls.length,
+        packageReport,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
       console.error("Error checking package duplicates:", error);
