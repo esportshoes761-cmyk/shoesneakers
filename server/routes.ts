@@ -379,16 +379,43 @@ const collectDailyStats = async (): Promise<DailyStats> => {
   }
 };
 
-// 👥 Get visitors count from audit events
+// 👥 Get visitors count from audit events (1 AM to 12 AM cycle)
 const getVisitorsCount = async (): Promise<number> => {
   try {
-    // Obtener eventos de auditoría del día actual
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // REQUERIMIENTO CRÍTICO: Contar desde 1:00 AM hasta 12:00 AM (medianoche)
+    // Esto asegura datos precisos para reportes oficiales de hacienda
+    const now = new Date();
+    
+    // Determinar el rango de tiempo apropiado (1 AM a 12 AM)
+    let startTime: Date;
+    let endTime: Date;
+    
+    if (now.getHours() >= 1) {
+      // Si es después de la 1 AM, contar desde las 1 AM de hoy hasta ahora
+      startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 1, 0, 0, 0);
+      endTime = now;
+    } else {
+      // Si es antes de la 1 AM (medianoche a 1 AM), contar desde 1 AM del día anterior hasta ahora
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      startTime = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 1, 0, 0, 0);
+      endTime = now;
+    }
+    
+    // Para reportes diarios automáticos, usar el ciclo completo 1 AM a 12 AM
+    if (process.env.CRON_REPORT_MODE === 'true') {
+      // En modo reporte automático, contar el período completo del día anterior
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      startTime = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 1, 0, 0, 0);
+      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 59, 59, 999);
+    }
+    
+    console.log(`📊 Contando visitantes desde ${startTime.toLocaleString('es-CO')} hasta ${endTime.toLocaleString('es-CO')}`);
     
     // Contar visitantes únicos basado en IP addresses en audit events
     const events = await db.select().from(auditEvents)
-      .where(sql`timestamp >= ${startOfDay.toISOString()}`);
+      .where(sql`timestamp >= ${startTime.toISOString()} AND timestamp <= ${endTime.toISOString()}`);
     
     const uniqueIPs = new Set();
     events.forEach((event: any) => {
@@ -397,6 +424,7 @@ const getVisitorsCount = async (): Promise<number> => {
       }
     });
     
+    console.log(`👥 Visitantes únicos encontrados: ${uniqueIPs.size} en el período especificado`);
     return uniqueIPs.size;
   } catch (error) {
     console.error('Error getting visitors count:', error);
@@ -547,10 +575,16 @@ const generateDailyReport = async (): Promise<string> => {
 const setupDailyReportCron = () => {
   // Cron expression: 0 0 * * * = every day at midnight (00:00)
   const dailyReportJob = new CronJob(
-    '0 0 * * *', // Midnight every day
+    '0 0 * * *', // Midnight every day (12:00 AM)
     async () => {
-      console.log('🕛 Ejecutando reporte diario automático...');
+      console.log('🕛 Ejecutando reporte diario automático a las 12:00 AM...');
+      
+      // 🎯 CRÍTICO: Establecer modo reporte para contar período completo 1 AM a 12 AM
+      const originalMode = process.env.CRON_REPORT_MODE;
+      process.env.CRON_REPORT_MODE = 'true';
+      
       try {
+        console.log('📊 Generando reporte del período: 1:00 AM a 12:00 AM (datos oficiales para hacienda)');
         const report = await generateDailyReport();
         
         await sendWhatsAppNotification({
@@ -559,13 +593,22 @@ const setupDailyReportCron = () => {
           type: 'daily_report',
           metadata: {
             reportDate: new Date().toISOString(),
-            automated: true
+            automated: true,
+            reportingPeriod: '1AM_to_12AM'
           }
         });
         
-        console.log('✅ Reporte diario enviado exitosamente');
+        console.log('✅ Reporte diario enviado exitosamente a +573219236683');
+        console.log('📈 Datos del período 1:00 AM a 12:00 AM incluidos');
       } catch (error) {
         console.error('❌ Error enviando reporte diario:', error);
+      } finally {
+        // Restaurar modo original
+        if (originalMode) {
+          process.env.CRON_REPORT_MODE = originalMode;
+        } else {
+          delete process.env.CRON_REPORT_MODE;
+        }
       }
     },
     null,
