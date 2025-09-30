@@ -127,6 +127,16 @@ export function ObjectUploader({
       return;
     }
 
+    // Validar tamaño del archivo
+    if (processedFile.size === 0) {
+      toast({
+        title: "Error al seleccionar imagen",
+        description: "El archivo seleccionado está vacío o no se puede leer. Intenta con otra imagen.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validar tamaño (máximo 10MB) - usar el archivo procesado
     const maxSize = 10485760; // 10MB
     if (processedFile.size > maxSize) {
@@ -140,10 +150,19 @@ export function ObjectUploader({
 
     setSelectedFile(processedFile);
 
-    // Crear preview usando el archivo procesado
+    // Crear preview usando el archivo procesado con manejo de errores
     const reader = new FileReader();
     reader.onload = () => {
       setPreview(reader.result as string);
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Error al leer la imagen",
+        description: "No se puede acceder al archivo. Intenta seleccionar otra imagen o reinicia la aplicación.",
+        variant: "destructive",
+      });
+      setSelectedFile(null);
+      setPreview(null);
     };
     reader.readAsDataURL(processedFile);
 
@@ -164,8 +183,24 @@ export function ObjectUploader({
     try {
       console.log("🚀 Iniciando subida directa de archivo:", selectedFile.name);
 
-      // Convertir archivo a base64
-      const arrayBuffer = await selectedFile.arrayBuffer();
+      // Verificar tamaño antes de procesar
+      if (selectedFile.size === 0) {
+        throw new Error("El archivo está vacío o no se puede leer");
+      }
+
+      // Convertir archivo a base64 con manejo de errores
+      let arrayBuffer: ArrayBuffer;
+      try {
+        arrayBuffer = await selectedFile.arrayBuffer();
+      } catch (readError) {
+        console.error("❌ Error al leer el archivo:", readError);
+        throw new Error("No se puede leer el archivo. Intenta con otra imagen.");
+      }
+
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error("El archivo está vacío");
+      }
+
       const uint8Array = new Uint8Array(arrayBuffer);
       const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
       const base64 = btoa(binaryString);
