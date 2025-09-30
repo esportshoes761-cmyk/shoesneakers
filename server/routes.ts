@@ -875,7 +875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin brands with products - SIMPLE DIRECT VERSION
   app.get("/api/brands/admin/with-products", async (req, res) => {
     try {
-      // ✅ DIRECT APPROACH: Get brands and calculate product count manually
+      // ✅ ADMIN sees ALL brands (with or without products)
       const allBrands = await storage.getBrands();
       const allProducts = await storage.getProducts();
       
@@ -886,7 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCount,
           products: []
         };
-      }).filter(brand => brand.productCount > 0);
+      });
       
       res.json(brandsWithProducts);
     } catch (error) {
