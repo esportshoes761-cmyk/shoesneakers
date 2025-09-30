@@ -2126,6 +2126,19 @@ export default function AdminPanel() {
   const openModal = (type: "product" | "brand" | "promotion" | "event" | "brandProducts" | "duplicateWarning" | "deleteBrand" | "brandPackage" | "malformedUrls" | "mergeConfirm" | "editProduct" | "bulkPriceAdjust", data?: any) => {
     console.log("🚀 OPENING MODAL:", type, data);
     console.log("🚀 CURRENT MODAL STATE:", activeModal);
+    
+    // Reset forms when opening modals for new items (no data provided)
+    if (type === "brand" && !data) {
+      brandForm.reset({
+        name: "",
+        logo: "",
+        description: "",
+        catalogUrl: "",
+        isActive: true,
+      });
+      setEditingItem({ type: null, item: null });
+    }
+    
     setActiveModal({ type, data });
   };
 
