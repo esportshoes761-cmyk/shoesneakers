@@ -55,7 +55,7 @@ const eventFormSchema = insertEventSchema.extend({
 
 const brandFormSchema = insertBrandSchema.extend({
   name: z.string().min(1, "El nombre de la marca es requerido"),
-  logo: z.string().min(1, "El logo es requerido"),
+  logo: z.string().optional(),
 });
 
 // Duplicate management schemas
@@ -1861,7 +1861,7 @@ export default function AdminPanel() {
     resolver: zodResolver(brandFormSchema),
     defaultValues: {
       name: "",
-      logo: "",
+      logo: "🏷️",
       description: "",
       catalogUrl: "",
       isActive: true,
@@ -2131,7 +2131,7 @@ export default function AdminPanel() {
     if (type === "brand" && !data) {
       brandForm.reset({
         name: "",
-        logo: "",
+        logo: "🏷️",
         description: "",
         catalogUrl: "",
         isActive: true,
@@ -3427,16 +3427,24 @@ export default function AdminPanel() {
                       name="logo"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Logo de la Marca</FormLabel>
+                          <FormLabel>Logo de la Marca (opcional)</FormLabel>
                           <FormControl>
-                            <ObjectUploader
-                              onComplete={(imageUrl) => field.onChange(imageUrl)}
-                              data-testid="uploader-brand-logo"
-                            />
+                            <div className="space-y-2">
+                              <Input 
+                                {...field} 
+                                value={field.value || ""}
+                                placeholder="Emoji o URL del logo (ej: 🏷️ o https://...)" 
+                                data-testid="input-brand-logo"
+                              />
+                              <ObjectUploader
+                                onComplete={(imageUrl) => field.onChange(imageUrl)}
+                                data-testid="uploader-brand-logo"
+                              />
+                            </div>
                           </FormControl>
                           {field.value && (
                             <div className="mt-2">
-                              <p className="text-sm text-muted-foreground">Logo subido: {field.value}</p>
+                              <p className="text-sm text-muted-foreground">Logo: {field.value}</p>
                             </div>
                           )}
                           <FormMessage />
