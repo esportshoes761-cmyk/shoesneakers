@@ -1,0 +1,191 @@
+{
+  "generatedAt": "2025-09-30T05:00:00.085Z",
+  "reportDate": "30/9/2025",
+  "inventory": {
+    "totalProducts": 405,
+    "totalBrands": 18,
+    "totalImages": 552,
+    "productsByBrand": {
+      "CATÁLOGO COMPLETO": 104,
+      "NIKE": 134,
+      "ADIDAS ": 104,
+      "Asics": 24,
+      "GUALLOS": 39
+    },
+    "duplicatesDetected": {
+      "groups": 127,
+      "totalDuplicateImages": 191,
+      "savingsOpportunity": "191 imágenes duplicadas detectadas"
+    }
+  },
+  "activity": {
+    "today": {
+      "totalEvents": 408,
+      "activeUsers": 9
+    },
+    "yesterday": {
+      "totalEvents": 0
+    },
+    "lastWeek": {
+      "totalEvents": 1926
+    },
+    "actionBreakdown": [
+      {
+        "actionCode": 101,
+        "count": 27,
+        "description": "Inicios de sesión"
+      },
+      {
+        "actionCode": 301,
+        "count": 2,
+        "description": "Productos creados"
+      },
+      {
+        "actionCode": 304,
+        "count": 723,
+        "description": "Productos visualizados"
+      },
+      {
+        "actionCode": 401,
+        "count": 1,
+        "description": "Acción 401"
+      },
+      {
+        "actionCode": 402,
+        "count": 5,
+        "description": "Acción 402"
+      },
+      {
+        "actionCode": 404,
+        "count": 327,
+        "description": "Marcas consultadas"
+      },
+      {
+        "actionCode": 601,
+        "count": 15,
+        "description": "Archivos subidos"
+      },
+      {
+        "actionCode": 703,
+        "count": 826,
+        "description": "Acción 703"
+      }
+    ]
+  },
+  "brandAnalytics": [
+    {
+      "name": "NIKE",
+      "productCount": 134,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "ADIDAS ",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO COMPLETO",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO COMPLETO",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Asics",
+      "productCount": 24,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Asics",
+      "productCount": 24,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Puma",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Jordan",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "EUROPEO",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "EUROPEO",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO GENERAL",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REVISIÓN PENDIENTE",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "SKETCHER",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Nike",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Adidas",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "DC",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    }
+  ],
+  "systemHealth": {
+    "status": "operational",
+    "lastReportGenerated": "2025-09-30T05:00:00.085Z",
+    "dataIntegrity": "191 duplicados detectados",
+    "performance": "optimal"
+  }
+}

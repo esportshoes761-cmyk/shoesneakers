@@ -3394,7 +3394,20 @@ export default function AdminPanel() {
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...brandForm}>
-                  <form onSubmit={brandForm.handleSubmit((data) => createBrandMutation.mutate(data))} className="space-y-4">
+                  <form onSubmit={brandForm.handleSubmit(
+                    (data) => {
+                      console.log("✅ Formulario válido, enviando:", data);
+                      createBrandMutation.mutate(data);
+                    },
+                    (errors) => {
+                      console.error("❌ Errores de validación:", errors);
+                      toast({
+                        title: "Error en el formulario",
+                        description: "Por favor completa todos los campos requeridos",
+                        variant: "destructive"
+                      });
+                    }
+                  )} className="space-y-4">
                     <FormField
                       control={brandForm.control}
                       name="name"
