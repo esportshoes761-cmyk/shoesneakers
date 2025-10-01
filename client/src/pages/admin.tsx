@@ -3437,6 +3437,7 @@ export default function AdminPanel() {
                                 data-testid="input-brand-logo"
                               />
                               <ObjectUploader
+                                value={field.value}
                                 onComplete={(imageUrl) => field.onChange(imageUrl)}
                                 data-testid="uploader-brand-logo"
                               />

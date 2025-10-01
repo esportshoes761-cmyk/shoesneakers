@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, X, FileImage, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -6,17 +6,23 @@ import { useToast } from "@/hooks/use-toast";
 interface ObjectUploaderProps {
   onComplete?: (imageUrl: string) => void;
   buttonClassName?: string;
+  value?: string;
 }
 
 export function ObjectUploader({
   onComplete,
   buttonClassName,
+  value,
 }: ObjectUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isConvertingHeic, setIsConvertingHeic] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(value || null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setPreview(value || null);
+  }, [value]);
 
   // DUPLICATE CHECKING FUNCTIONS REMOVED - NO DUPLICATE DETECTION (user request)
 
