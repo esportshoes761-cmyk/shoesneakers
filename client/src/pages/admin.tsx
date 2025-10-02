@@ -1939,44 +1939,49 @@ export default function AdminPanel() {
         
         // Toast principal con resumen del paquete
         toast({
-          title: `🚨 Duplicados Detectados en Paquete`,
-          description: `${report.duplicateImages}/${report.totalImages} imágenes duplicadas. ${report.totalProductsAffected} productos afectados en ${Object.keys(report.brandsSummary).length} marca(s).`,
-          variant: report.urgencyLevel === 'high' ? "destructive" : "default",
-          duration: 12000
+          title: `⚠️ Duplicados Detectados en Paquete`,
+          description: `${report.duplicateImages}/${report.totalImages} imágenes duplicadas encontradas. Los productos se crearán de todos modos.`,
+          variant: "default",
+          duration: 10000
         });
         
         // Log reporte WhatsApp-ready para revisión inmediata
         console.log('🚨 ALERTA PAQUETE - REPORTE DETALLADO LISTO PARA WHATSAPP:');
         console.log(report.detailedReport);
         
-        // Toast con recomendación específica según urgencia
-        setTimeout(() => {
-          toast({
-            title: `💡 Acción Recomendada (${report.urgencyLevel.toUpperCase()})`,
-            description: report.urgencyLevel === 'high' ? 
-              'CRÍTICO: Revisar duplicados antes de proceder' : 
-              report.urgencyLevel === 'medium' ? 
-              'IMPORTANTE: Verificar productos duplicados' : 
-              'Proceder con precaución - revisar duplicados',
-            variant: report.urgencyLevel === 'high' ? "destructive" : "default",
-            duration: 10000
+        // Mostrar detalles de duplicados en consola para referencia
+        if (data.duplicates && data.duplicates.length > 0) {
+          console.log('📋 DETALLES DE DUPLICADOS:');
+          data.duplicates.forEach((dup, index) => {
+            console.log(`${index + 1}. Imagen duplicada en:`, {
+              producto: dup.existingProduct.name,
+              referencia: dup.existingProduct.reference,
+              marca: dup.existingProduct.brandName,
+              vecesUsada: dup.duplicateCount
+            });
           });
-        }, 2000);
-        
-        setShowDuplicateAlert(true);
+        }
       } else if (data.hasDuplicates) {
         // Fallback para duplicados sin reporte detallado
-        setShowDuplicateAlert(true);
+        toast({
+          title: "⚠️ Duplicados Detectados",
+          description: `Se encontraron ${data.duplicates.length} imágenes duplicadas. Los productos se crearán de todos modos.`,
+          variant: "default",
+          duration: 10000
+        });
       } else {
-        // No duplicates, proceed directly with bulk creation
+        // No duplicates detected
         toast({
           title: "✅ Verificación Completada",
           description: "No se detectaron duplicados. Procediendo con la creación del paquete.",
           duration: 5000
         });
-        if (pendingPackageData) {
-          bulkCreateProductsMutation.mutate(pendingPackageData);
-        }
+      }
+      
+      // SIEMPRE proceder con la creación del paquete (duplicados o no)
+      if (pendingPackageData) {
+        console.log('🚀 Procediendo con creación de paquete...');
+        bulkCreateProductsMutation.mutate(pendingPackageData);
       }
     },
     onError: async (error: Error) => {
