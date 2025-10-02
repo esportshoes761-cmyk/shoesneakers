@@ -3886,14 +3886,21 @@ ${brandDetails}
       await sendNotifications(report);
       
       // Registrar en auditoría
-      await storage.createAuditEvent({
-        actionCode: AuditActionCodes.REPORT_GENERATE,
-        details: 'Reporte manual generado',
-        metadata: JSON.stringify({ 
-          trigger: 'manual',
-          timestamp: new Date().toISOString()
-        })
-      });
+      try {
+        await storage.createAuditEvent({
+          actorType: 'admin',
+          actorId: (req as any).user?.id || 'admin',
+          sessionId: (req as any).sessionID || 'manual-report-session',
+          actionCode: AuditActionCodes.REPORT_GENERATE,
+          result: 'success',
+          metadata: JSON.stringify({ 
+            trigger: 'manual',
+            timestamp: new Date().toISOString()
+          })
+        });
+      } catch (auditError) {
+        console.error('Error creating audit event:', auditError);
+      }
       
       res.json({
         success: true,
@@ -3924,15 +3931,21 @@ ${brandDetails}
         await sendNotifications(report);
         
         // Registrar en auditoría
-        await storage.createAuditEvent({
-          actionCode: AuditActionCodes.REPORT_GENERATE,
-          details: 'Reporte automático diario generado',
-          metadata: JSON.stringify({ 
-            trigger: 'automatic',
-            timestamp: new Date().toISOString(),
-            scheduledTime: '00:00'
-          })
-        });
+        try {
+          await storage.createAuditEvent({
+            actorType: 'system',
+            sessionId: `cron-report-${Date.now()}`,
+            actionCode: AuditActionCodes.REPORT_GENERATE,
+            result: 'success',
+            metadata: JSON.stringify({ 
+              trigger: 'automatic',
+              timestamp: new Date().toISOString(),
+              scheduledTime: '00:00'
+            })
+          });
+        } catch (auditError) {
+          console.error('Error creating audit event:', auditError);
+        }
         
         console.log('✅ Reporte automático completado exitosamente');
         
@@ -3942,8 +3955,10 @@ ${brandDetails}
         // Intentar registrar el error en auditoría
         try {
           await storage.createAuditEvent({
+            actorType: 'system',
+            sessionId: `cron-report-error-${Date.now()}`,
             actionCode: AuditActionCodes.REPORT_GENERATE,
-            details: 'Error en reporte automático',
+            result: 'error',
             metadata: JSON.stringify({ 
               trigger: 'automatic',
               error: error instanceof Error ? error.message : 'Error desconocido',

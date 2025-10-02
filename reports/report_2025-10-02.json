@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2025-10-02T21:31:27.667Z",
+  "reportDate": "2/10/2025",
+  "inventory": {
+    "totalProducts": 511,
+    "totalBrands": 23,
+    "totalImages": 688,
+    "productsByBrand": {
+      "CATÁLOGO COMPLETO": 104,
+      "NIKE": 134,
+      "ADIDAS ": 104,
+      "Asics": 24,
+      "GUALLOS": 39,
+      "REEBOK": 6,
+      "Jordan": 10,
+      "NEW BALANCE ": 45,
+      "UNDER ARMOUR": 8,
+      "SKETCHER": 37
+    },
+    "duplicatesDetected": {
+      "groups": 145,
+      "totalDuplicateImages": 217,
+      "savingsOpportunity": "217 imágenes duplicadas detectadas"
+    }
+  },
+  "activity": {
+    "today": {
+      "totalEvents": 335,
+      "activeUsers": 5
+    },
+    "yesterday": {
+      "totalEvents": 125
+    },
+    "lastWeek": {
+      "totalEvents": 2466
+    },
+    "actionBreakdown": [
+      {
+        "actionCode": 101,
+        "count": 40,
+        "description": "Inicios de sesión"
+      },
+      {
+        "actionCode": 301,
+        "count": 12,
+        "description": "Productos creados"
+      },
+      {
+        "actionCode": 304,
+        "count": 856,
+        "description": "Productos visualizados"
+      },
+      {
+        "actionCode": 401,
+        "count": 4,
+        "description": "Acción 401"
+      },
+      {
+        "actionCode": 402,
+        "count": 13,
+        "description": "Acción 402"
+      },
+      {
+        "actionCode": 403,
+        "count": 2,
+        "description": "Acción 403"
+      },
+      {
+        "actionCode": 404,
+        "count": 402,
+        "description": "Marcas consultadas"
+      },
+      {
+        "actionCode": 601,
+        "count": 151,
+        "description": "Archivos subidos"
+      },
+      {
+        "actionCode": 703,
+        "count": 986,
+        "description": "Acción 703"
+      }
+    ]
+  },
+  "brandAnalytics": [
+    {
+      "name": "NIKE",
+      "productCount": 134,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "ADIDAS ",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO COMPLETO",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "NEW BALANCE ",
+      "productCount": 45,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "SKETCHER",
+      "productCount": 37,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Asics",
+      "productCount": 24,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Jordan",
+      "productCount": 10,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "UNDER ARMOUR",
+      "productCount": 8,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REEBOK",
+      "productCount": 6,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Puma",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "COLUMBIA ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "TIMBERLAND ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO GENERAL",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Nike",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "DC",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REEBOK ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "FILA",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "LACOSTE ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Adidas",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REVISIÓN PENDIENTE",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "EUROPEO",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    }
+  ],
+  "systemHealth": {
+    "status": "operational",
+    "lastReportGenerated": "2025-10-02T21:31:27.667Z",
+    "dataIntegrity": "217 duplicados detectados",
+    "performance": "optimal"
+  }
+}
