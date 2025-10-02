@@ -71,6 +71,20 @@ The application uses a relational database structure with the following entities
 
 ## Recent Changes
 
+### 2025-10-02
+- **DUPLICATE IMAGE DETECTION**: Implemented comprehensive duplicate detection system for bulk uploads using SHA-256 hash comparison
+- **REAL-TIME ALERTS**: System now shows detailed alerts when duplicate images are detected during package uploads, including:
+  - Total number of duplicates found
+  - Product name and reference for each duplicate
+  - Brand name where duplicate exists
+  - Number of times each image has been used
+- **BACKEND OPTIMIZATION**: Added `checkPackageDuplicates()` to intelligent upload endpoint to verify images before creation
+- **BRAND MANAGEMENT FIXES**:
+  - Fixed brand admin panel to show ALL brands (with or without products)
+  - Fixed brand photo display in edit mode - images now properly load when editing existing brands
+  - Added `value` prop to ObjectUploader component for controlled image display
+- **USER EXPERIENCE**: Toast notifications now display duplicate information for 10 seconds with clear, actionable details
+
 ### 2025-09-18
 - **CRITICAL BUGFIX**: Resolved SQL error "no such column: customer_name" that was preventing product magnification (lupa) from working
 - **Brand Filtering**: Implemented strict brand separation - clients only see brands with products (productCount > 0), admin sees all brands

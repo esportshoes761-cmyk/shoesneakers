@@ -1272,6 +1272,19 @@ ${brandDetails}
       
       console.log("🚀 [NEW] Processing intelligent upload with", imageUrls.length, "successfully uploaded images");
       
+      // 🔍 STEP 0: Check for duplicate images BEFORE creating products
+      console.log("🔍 Verificando imágenes duplicadas...");
+      const duplicateAlerts = await storage.checkPackageDuplicates(imageUrls);
+      
+      if (duplicateAlerts.length > 0) {
+        console.log(`⚠️  DUPLICADOS DETECTADOS: ${duplicateAlerts.length} imágenes ya existen en productos`);
+        duplicateAlerts.forEach(dup => {
+          console.log(`  - ${dup.imageUrl} → Ya usada en producto "${dup.existingProduct.name}" (${dup.existingProduct.reference})`);
+        });
+      } else {
+        console.log("✅ No se detectaron duplicados");
+      }
+      
       const results: { imageUrl: string; status: 'created' | 'failed'; productId?: string; reason?: string }[] = [];
       let created = 0;
       let pendingReview = 0;
@@ -1423,7 +1436,8 @@ ${brandDetails}
       const response = {
         created,
         pendingReview, 
-        results
+        results,
+        duplicateAlerts: duplicateAlerts.length > 0 ? duplicateAlerts : undefined
       };
       
       res.status(201).json(response);

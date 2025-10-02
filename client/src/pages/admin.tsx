@@ -2625,7 +2625,7 @@ export default function AdminPanel() {
 
   // 🚀 NEW Intelligent upload mutation - Simple and robust
   const intelligentUploadMutation = useMutation({
-    mutationFn: async (imageUrls: string[]): Promise<{ created: number; pendingReview: number; results: any[] }> => {
+    mutationFn: async (imageUrls: string[]): Promise<{ created: number; pendingReview: number; results: any[]; duplicateAlerts?: ProductDuplicateAlert[] }> => {
       console.log(`🚀 [NEW] Starting intelligent upload with ${imageUrls.length} successfully uploaded image URLs`);
       console.log(`🔗 Image URLs:`, imageUrls);
       
@@ -2644,7 +2644,7 @@ export default function AdminPanel() {
       const response = await apiRequest("POST", "/api/products/intelligent-upload", payload);
       return response.json();
     },
-    onSuccess: (data: { created: number; pendingReview: number; results: any[] }) => {
+    onSuccess: (data: { created: number; pendingReview: number; results: any[]; duplicateAlerts?: ProductDuplicateAlert[] }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/brands/admin/with-products"] });
       
@@ -2666,6 +2666,21 @@ export default function AdminPanel() {
           }
         }
       }));
+      
+      // 🔍 Show duplicate alerts if found
+      if (data.duplicateAlerts && data.duplicateAlerts.length > 0) {
+        const totalDuplicates = data.duplicateAlerts.length;
+        const duplicateDetails = data.duplicateAlerts.map(dup => 
+          `• ${dup.existingProduct.name} (${dup.existingProduct.reference}) - Marca: ${dup.existingProduct.brandName} [Usada ${dup.duplicateCount} veces]`
+        ).join('\n');
+        
+        toast({
+          title: `⚠️ ${totalDuplicates} imagen${totalDuplicates > 1 ? 'es' : ''} duplicada${totalDuplicates > 1 ? 's' : ''} detectada${totalDuplicates > 1 ? 's' : ''}`,
+          description: `Las siguientes imágenes ya existen en otros productos:\n${duplicateDetails}`,
+          variant: "destructive",
+          duration: 10000
+        });
+      }
       
       // Build descriptive message based on results
       let description = `${totalSuccessful} productos procesados exitosamente`;
