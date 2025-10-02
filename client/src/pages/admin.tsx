@@ -4887,16 +4887,17 @@ export default function AdminPanel() {
                     try {
                       toast({ title: "⏳ Generando reporte...", description: "Por favor espera mientras se genera el reporte completo" });
                       
-                      const response = await apiRequest("/api/admin/generate-report", { method: "GET" });
+                      const response = await apiRequest("GET", "/api/admin/generate-report");
+                      const data = await response.json();
                       
-                      if (response.success) {
+                      if (data.success) {
                         toast({ 
                           title: "✅ Reporte generado exitosamente", 
-                          description: `${response.message || 'Reporte completo generado y enviado via múltiples canales'}`,
+                          description: `${data.message || 'Reporte completo generado y enviado via múltiples canales'}`,
                           duration: 5000
                         });
                       } else {
-                        throw new Error(response.message || 'Error desconocido');
+                        throw new Error(data.message || 'Error desconocido');
                       }
                     } catch (error: any) {
                       console.error('Error generating report:', error);
