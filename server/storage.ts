@@ -49,6 +49,9 @@ export interface IStorage {
   getImageByHash(hash: string): Promise<Image | undefined>;
   createImage(image: InsertImage): Promise<Image>;
   isImageUsedByProducts(imageUrl: string): Promise<boolean>;
+  getImageUsageByHash(hash: string): Promise<Array<{ productId: string; productName: string; brandName: string; categoryName: string; reference: string; imageUrl: string }>>;
+  getAllDuplicateImages(): Promise<Array<{ hash: string; imageUrl: string; usageCount: number; products: Array<{ id: string; name: string; brandName: string; categoryName: string; reference: string }> }>>;
+  checkImageDuplicateByHash(hash: string): Promise<{ isDuplicate: boolean; usageCount: number; products: Array<{ id: string; name: string; brandName: string; categoryName: string; reference: string; imageUrl: string }> }>;
 
   // Review methods
   createReview(review: InsertReview): Promise<Review>;
@@ -842,6 +845,145 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error checking if image is used:', error);
       return false;
+    }
+  }
+
+  async getImageUsageByHash(hash: string): Promise<Array<{ productId: string; productName: string; brandName: string; categoryName: string; reference: string; imageUrl: string }>> {
+    try {
+      // Get all images with this hash
+      const imagesWithHash = await db.select().from(images).where(eq(images.sha256, hash));
+      if (imagesWithHash.length === 0) {
+        return [];
+      }
+
+      // Get image URLs for this hash
+      const imageUrls = imagesWithHash.map(img => `/api/images/${img.fileName}`);
+
+      // Find all products using any of these image URLs
+      const allProducts = await this.getProducts();
+      const usage: Array<{ productId: string; productName: string; brandName: string; categoryName: string; reference: string; imageUrl: string }> = [];
+
+      for (const product of allProducts) {
+        // Check main imageUrl
+        if (product.imageUrl && imageUrls.includes(product.imageUrl)) {
+          usage.push({
+            productId: product.id,
+            productName: product.name,
+            brandName: product.brand?.name || 'Sin marca',
+            categoryName: product.category?.name || 'Sin categoría',
+            reference: product.reference || '',
+            imageUrl: product.imageUrl
+          });
+        }
+
+        // Check in images array
+        if (product.images && Array.isArray(product.images)) {
+          for (const imgUrl of product.images) {
+            if (imageUrls.includes(imgUrl)) {
+              usage.push({
+                productId: product.id,
+                productName: product.name,
+                brandName: product.brand?.name || 'Sin marca',
+                categoryName: product.category?.name || 'Sin categoría',
+                reference: product.reference || '',
+                imageUrl: imgUrl
+              });
+            }
+          }
+        }
+      }
+
+      return usage;
+    } catch (error) {
+      console.error('Error getting image usage by hash:', error);
+      return [];
+    }
+  }
+
+  async getAllDuplicateImages(): Promise<Array<{ hash: string; imageUrl: string; usageCount: number; products: Array<{ id: string; name: string; brandName: string; categoryName: string; reference: string }> }>> {
+    try {
+      // Get all images and group by hash
+      const allImages = await db.select().from(images);
+      
+      // Group images by hash
+      const imagesByHash = allImages.reduce((acc, img) => {
+        if (!acc[img.sha256]) {
+          acc[img.sha256] = [];
+        }
+        acc[img.sha256].push(img);
+        return acc;
+      }, {} as Record<string, typeof allImages>);
+
+      // Get all products
+      const allProducts = await this.getProducts();
+
+      // Find duplicates (hashes with more than one usage)
+      const duplicates: Array<{ hash: string; imageUrl: string; usageCount: number; products: Array<{ id: string; name: string; brandName: string; categoryName: string; reference: string }> }> = [];
+
+      for (const [hash, imgs] of Object.entries(imagesByHash)) {
+        const imageUrls = imgs.map(img => `/api/images/${img.fileName}`);
+        
+        // Find products using these images
+        const productsUsingImage = allProducts.filter(product => {
+          // Check main imageUrl
+          if (product.imageUrl && imageUrls.includes(product.imageUrl)) {
+            return true;
+          }
+          // Check in images array
+          if (product.images && Array.isArray(product.images)) {
+            return product.images.some(imgUrl => imageUrls.includes(imgUrl));
+          }
+          return false;
+        });
+
+        // Only include if used by more than one product
+        if (productsUsingImage.length > 1) {
+          duplicates.push({
+            hash,
+            imageUrl: `/api/images/${imgs[0].fileName}`,
+            usageCount: productsUsingImage.length,
+            products: productsUsingImage.map(p => ({
+              id: p.id,
+              name: p.name,
+              brandName: p.brand?.name || 'Sin marca',
+              categoryName: p.category?.name || 'Sin categoría',
+              reference: p.reference || ''
+            }))
+          });
+        }
+      }
+
+      // Sort by usage count descending
+      return duplicates.sort((a, b) => b.usageCount - a.usageCount);
+    } catch (error) {
+      console.error('Error getting all duplicate images:', error);
+      return [];
+    }
+  }
+
+  async checkImageDuplicateByHash(hash: string): Promise<{ isDuplicate: boolean; usageCount: number; products: Array<{ id: string; name: string; brandName: string; categoryName: string; reference: string; imageUrl: string }> }> {
+    try {
+      const usage = await this.getImageUsageByHash(hash);
+      
+      return {
+        isDuplicate: usage.length > 0,
+        usageCount: usage.length,
+        products: usage.map(u => ({
+          id: u.productId,
+          name: u.productName,
+          brandName: u.brandName,
+          categoryName: u.categoryName,
+          reference: u.reference,
+          imageUrl: u.imageUrl
+        }))
+      };
+    } catch (error) {
+      console.error('Error checking image duplicate by hash:', error);
+      return {
+        isDuplicate: false,
+        usageCount: 0,
+        products: []
+      };
     }
   }
 
