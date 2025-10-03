@@ -2453,197 +2453,93 @@ ${brandDetails}
     }
   });
 
-  // 🔍 POST Check for duplicate images before upload (with base64 image data)
+  // 🔍 POST Check for duplicate images before upload (with base64 image data or hash)
   app.post("/api/images/check-duplicates", async (req, res) => {
     try {
-      const { imageData, originalName, size } = req.body;
+      const { imageData, originalName, size, hash } = req.body;
       
-      if (!imageData || !originalName || !size) {
+      // Calculate hash if imageData is provided, otherwise use provided hash
+      let uploadedImageHash: string;
+      
+      if (hash) {
+        uploadedImageHash = hash;
+        console.log(`🔍 Checking duplicates by provided hash: ${hash.substring(0, 16)}...`);
+      } else if (imageData) {
+        const crypto = require('crypto');
+        const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64');
+        uploadedImageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+        console.log(`🔍 Checking duplicates for image: ${originalName || 'unknown'} (${size || 0} bytes, hash: ${uploadedImageHash.substring(0, 16)}...)`);
+      } else {
         return res.status(400).json({
-          error: "imageData, originalName and size are required",
-          details: "All three parameters must be provided"
+          error: "Either imageData or hash is required",
+          details: "Provide imageData (base64) or hash (SHA-256) to check for duplicates"
         });
       }
 
-      // Helper function to find products using an image and get brand info
-      const findProductsUsingImage = async (imagePath: string) => {
-        const allProducts = await storage.getProducts();
-        const productsUsingImage = allProducts.filter((product: any) => {
-          return product.imageUrl === imagePath || 
-                 (product.images && product.images.includes(imagePath));
-        });
+      // Use new optimized storage method
+      const duplicateCheck = await storage.checkImageDuplicateByHash(uploadedImageHash);
+      
+      if (duplicateCheck.isDuplicate) {
+        console.log(`🚨 DUPLICATE FOUND: ${duplicateCheck.usageCount} product(s) using this image`);
         
-        const brandsInfo = [];
-        for (const product of productsUsingImage) {
-          if (product.brandId) {
-            const brand = await storage.getBrand(product.brandId);
-            if (brand) {
-              brandsInfo.push({
-                productId: product.id,
-                productName: product.name,
-                productReference: product.reference,
-                brandId: brand.id,
-                brandName: brand.name,
-                brandLogo: brand.logo
-              });
-            }
+        // Generate detailed report
+        const brandsSummary: Record<string, { count: number; products: string[] }> = {};
+        
+        duplicateCheck.products.forEach(product => {
+          if (!brandsSummary[product.brandName]) {
+            brandsSummary[product.brandName] = { count: 0, products: [] };
           }
-        }
-        return brandsInfo;
-      };
-
-      // 🔍 CRITICAL FIX: Calculate SHA-256 hash of uploaded image for REAL duplicate detection
-      const crypto = require('crypto');
-      const imageBuffer = Buffer.from(imageData.split(',')[1], 'base64');
-      const uploadedImageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-      
-      console.log(`🔍 Checking duplicates for image: ${originalName} (${size} bytes, hash: ${uploadedImageHash.substring(0, 16)}...)`);
-      
-      // Get all existing images for comparison
-      const allImages = await storage.getAllImages();
-      let duplicates = [];
-      
-      // 1. PRIORITY: Check by SHA-256 hash (exact duplicate detection)
-      const hashMatches = allImages.filter(img => img.sha256 === uploadedImageHash);
-      for (const match of hashMatches) {
-        const productsInfo = await findProductsUsingImage(match.path);
-        duplicates.push({
-          type: 'exact_hash',
-          match: match,
-          reason: 'Imagen idéntica (mismo contenido exacto)',
-          productsUsingImage: productsInfo
-        });
-        console.log(`🚨 EXACT DUPLICATE FOUND: ${match.originalName} (hash match)`);
-      }
-      
-      // 2. Check by filename and size (likely duplicate)
-      if (duplicates.length === 0) {
-        const nameAndSizeMatches = allImages.filter(img => 
-          img.originalName === originalName && img.size === size
-        );
-        for (const match of nameAndSizeMatches) {
-          const productsInfo = await findProductsUsingImage(match.path);
-          duplicates.push({
-            type: 'name_and_size',
-            match: match,
-            reason: 'Mismo nombre y tamaño de archivo',
-            productsUsingImage: productsInfo
-          });
-          console.log(`⚠️ LIKELY DUPLICATE: ${match.originalName} (name + size match)`);
-        }
-      }
-
-      // 3. Check by filename only (potential duplicate)
-      if (duplicates.length === 0) {
-        const nameMatches = allImages.filter(img => img.originalName === originalName);
-        for (const match of nameMatches) {
-          const productsInfo = await findProductsUsingImage(match.path);
-          duplicates.push({
-            type: 'name_only',
-            match: match,
-            reason: 'Mismo nombre de archivo',
-            productsUsingImage: productsInfo
-          });
-          console.log(`⚠️ POSSIBLE DUPLICATE: ${match.originalName} (name match)`);
-        }
-      }
-      
-      console.log(`📊 Duplicate check result: ${duplicates.length} duplicates found`);
-
-      // Generate detailed duplicate report with brand-specific messaging
-      const generateDuplicateReport = (duplicates: any[]) => {
-        if (duplicates.length === 0) return null;
-        
-        const report = {
-          totalDuplicates: duplicates.length,
-          totalProductsAffected: 0,
-          brandsSummary: {} as Record<string, { count: number; products: string[] }>,
-          detailedReport: '',
-          urgencyLevel: 'low' as 'low' | 'medium' | 'high'
-        };
-        
-        let allProducts: any[] = [];
-        
-        duplicates.forEach(dup => {
-          if (dup.productsUsingImage) {
-            allProducts.push(...dup.productsUsingImage);
-          }
-        });
-        
-        report.totalProductsAffected = allProducts.length;
-        
-        // Group by brands with proper brand names
-        allProducts.forEach(product => {
-          const brandName = product.brandName || 'Sin marca';
-          if (!report.brandsSummary[brandName]) {
-            report.brandsSummary[brandName] = { count: 0, products: [] };
-          }
-          report.brandsSummary[brandName].count++;
-          report.brandsSummary[brandName].products.push(
-            `${product.productName} (REF: ${product.productReference || 'N/A'})`
+          brandsSummary[product.brandName].count++;
+          brandsSummary[product.brandName].products.push(
+            `${product.name} (REF: ${product.reference || 'N/A'})`
           );
         });
         
-        // Determine urgency level
-        const exactDuplicates = duplicates.filter(d => d.type === 'exact_hash').length;
-        const likelyDuplicates = duplicates.filter(d => d.type === 'name_and_size').length;
-        const totalBrands = Object.keys(report.brandsSummary).length;
+        const brandDetails = Object.entries(brandsSummary)
+          .map(([brand, data]) => `🏷️ ${brand}: ${data.count} producto(s) - ${data.products.join(', ')}`)
+          .join('\n');
         
-        if (exactDuplicates > 0) report.urgencyLevel = 'high';
-        else if (likelyDuplicates > 0 || totalBrands > 1) report.urgencyLevel = 'medium';
-        
-        // Generate brand details with clear brand identification
-        const brandDetails = Object.entries(report.brandsSummary)
-          .map(([brand, data]) => `🏷️ MARCA: ${brand} - ${data.count} producto(s)\n   Productos: ${data.products.join(', ')}`)
-          .join('\n\n');
-        
-        report.detailedReport = `
-🚨 IMAGEN DUPLICADA DETECTADA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  Esta imagen ya existe en el sistema
-📁 Archivo: ${originalName}
-👥 Productos afectados: ${report.totalProductsAffected}
-🏢 Marcas donde aparece: ${Object.keys(report.brandsSummary).length}
+        const detailedReport = `
+📊 IMAGEN DUPLICADA DETECTADA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Esta imagen ya está en uso
+👥 Productos afectados: ${duplicateCheck.usageCount}
+🏢 Marcas involucradas: ${Object.keys(brandsSummary).length}
+🚨 Nivel: ${duplicateCheck.usageCount > 3 ? 'ALTO' : duplicateCheck.usageCount > 1 ? 'MEDIO' : 'BAJO'}
 
-📋 UBICACIÓN ACTUAL:
+📋 DETALLES POR MARCA:
 ${brandDetails}
 
-⚠️ RECOMENDACIÓN: Esta imagen ya está siendo usada en los productos listados arriba.
+⏰ Detectado: ${new Date().toLocaleString('es-CO')}
 `.trim();
         
-        return report;
-      };
-
-      const hasDuplicates = duplicates.length > 0;
-      const duplicateReport = generateDuplicateReport(duplicates);
-
-      // Create response with clear brand messaging
-      const brandNames = duplicates.length > 0 
-        ? duplicates.flatMap(d => d.productsUsingImage?.map(p => p.brandName) || [])
-          .filter((brand, index, arr) => arr.indexOf(brand) === index)
-        : [];
-
-      const brandMessage = brandNames.length > 0 
-        ? ` en las marcas: ${brandNames.join(', ')}`
-        : '';
-
-      res.json({
-        isDuplicate: hasDuplicates,
-        isExactDuplicate: hasDuplicates && duplicates.some(d => d.type === 'exact_hash'),
-        isLikelyDuplicate: hasDuplicates && duplicates.some(d => d.type === 'name_and_size'),
-        duplicateCount: duplicates.length,
-        duplicates: duplicates,
-        duplicateReport: duplicateReport,
-        recommendation: hasDuplicates 
-          ? duplicates.some(d => d.type === 'exact_hash')
-            ? `🚨 IMAGEN IDÉNTICA encontrada${brandMessage} - NO SUBIR`
-            : `⚠️ Posible duplicado encontrado${brandMessage}`
-          : 'Imagen nueva, lista para subir',
-        message: hasDuplicates
-          ? duplicates.some(d => d.type === 'exact_hash')
-            ? `🚨 DUPLICADO EXACTO en${brandMessage}`
-            : `⚠️ Posible duplicado en${brandMessage}`
-          : '✅ Imagen nueva, lista para subir'
+        return res.json({
+          isDuplicate: true,
+          isExactDuplicate: true,
+          duplicateCount: duplicateCheck.usageCount,
+          products: duplicateCheck.products,
+          duplicateReport: {
+            totalDuplicates: duplicateCheck.usageCount,
+            totalProductsAffected: duplicateCheck.usageCount,
+            brandsSummary,
+            detailedReport,
+            urgencyLevel: duplicateCheck.usageCount > 3 ? 'high' : duplicateCheck.usageCount > 1 ? 'medium' : 'low'
+          },
+          recommendation: 'Esta imagen ya existe exactamente igual en el sistema',
+          message: '⚠️ Esta imagen ya existe en el sistema'
+        });
+      }
+      
+      // No duplicates found
+      console.log(`✅ No duplicates found for hash: ${uploadedImageHash.substring(0, 16)}...`);
+      return res.json({
+        isDuplicate: false,
+        isExactDuplicate: false,
+        duplicateCount: 0,
+        products: [],
+        duplicateReport: null,
+        recommendation: 'Imagen nueva, lista para subir',
+        message: '✅ Imagen nueva, lista para subir'
       });
 
     } catch (error) {
