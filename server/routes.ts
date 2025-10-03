@@ -1851,6 +1851,31 @@ ${brandDetails}
     }
   });
 
+  // 📊 Duplicate Images Report Endpoint
+  app.get("/api/admin/reports/duplicate-images", requireAdminAuth, async (req, res) => {
+    try {
+      const report = await storage.getDuplicateImagesReport();
+      
+      // Log audit event for manual report generation
+      await storage.logAuditEvent({
+        entityType: 'report',
+        entityId: 'duplicate-images',
+        action: 'generate',
+        actorType: 'admin',
+        actorId: req.session?.user?.id || 'system',
+        changes: { reportType: 'duplicate-images', timestamp: new Date().toISOString() }
+      });
+      
+      res.json(report);
+    } catch (error) {
+      console.error('Error generating duplicate images report:', error);
+      res.status(500).json({ 
+        message: "Error generating duplicate images report",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   app.post("/api/admin/products/duplicates/:groupKey/merge", requireAdminAuth, async (req, res) => {
     try {
       const { groupKey } = req.params;
