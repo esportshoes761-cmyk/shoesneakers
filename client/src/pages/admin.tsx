@@ -2079,6 +2079,16 @@ export default function AdminPanel() {
     enabled: false, // Only fetch when explicitly called
   });
 
+  // 🔍 Duplicate Images Report Query
+  const { data: duplicateImagesData, isLoading: isLoadingDuplicates, refetch: refetchDuplicates } = useQuery({
+    queryKey: ["/api/admin/reports/duplicate-images"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/reports/duplicate-images");
+      return response.json();
+    },
+    enabled: false, // Only fetch when explicitly called
+  });
+
   // ✨ UNIFIED: Product form helpers
   const addProductImage = () => {
     if (productImages.length < 9) {
@@ -5005,6 +5015,160 @@ export default function AdminPanel() {
                   </ul>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* 🔍 Duplicate Images Report */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Hash className="h-5 w-5 text-orange-600" />
+                Reporte de Imágenes Duplicadas
+              </CardTitle>
+              <CardDescription>
+                Análisis completo de imágenes duplicadas en el sistema usando SHA-256
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-3">
+                <Button 
+                  onClick={async () => {
+                    try {
+                      await refetchDuplicates();
+                      toast({ 
+                        title: "✅ Reporte actualizado", 
+                        description: "Se ha generado el reporte más reciente de imágenes duplicadas" 
+                      });
+                    } catch (error: any) {
+                      toast({ 
+                        title: "❌ Error", 
+                        description: error.message || 'No se pudo generar el reporte',
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                  disabled={isLoadingDuplicates}
+                  data-testid="button-generate-duplicates-report"
+                >
+                  {isLoadingDuplicates ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <Hash className="h-4 w-4 mr-2" />
+                      Generar Reporte de Duplicados
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {duplicateImagesData && (
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="text-sm text-orange-600 font-medium">Total Duplicados</div>
+                      <div className="text-2xl font-bold text-orange-800">
+                        {duplicateImagesData.summary?.totalDuplicateImages || 0}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="text-sm text-red-600 font-medium">Productos Afectados</div>
+                      <div className="text-2xl font-bold text-red-800">
+                        {duplicateImagesData.summary?.totalProductsAffected || 0}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm text-blue-600 font-medium">Marcas Afectadas</div>
+                      <div className="text-2xl font-bold text-blue-800">
+                        {duplicateImagesData.summary?.totalBrandsAffected || 0}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="text-sm text-purple-600 font-medium">Total Imágenes</div>
+                      <div className="text-2xl font-bold text-purple-800">
+                        {duplicateImagesData.summary?.totalImagesInSystem || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Duplicate Groups */}
+                  {duplicateImagesData.duplicateGroups && duplicateImagesData.duplicateGroups.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">Grupos de Duplicados Detectados:</h3>
+                      <div className="max-h-96 overflow-y-auto space-y-3">
+                        {duplicateImagesData.duplicateGroups.map((group: any, index: number) => (
+                          <div 
+                            key={group.imageHash || index} 
+                            className="p-4 bg-gray-50 border rounded-lg"
+                            data-testid={`duplicate-group-${index}`}
+                          >
+                            <div className="flex items-start gap-4">
+                              {/* Image Preview */}
+                              <div className="flex-shrink-0">
+                                <img 
+                                  src={group.imageUrl} 
+                                  alt="Duplicate" 
+                                  className="w-24 h-24 object-cover rounded border"
+                                />
+                              </div>
+                              
+                              {/* Details */}
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="destructive">
+                                    {group.usageCount} usos
+                                  </Badge>
+                                  <span className="text-xs text-gray-500 font-mono">
+                                    Hash: {group.imageHash?.substring(0, 16)}...
+                                  </span>
+                                </div>
+                                
+                                {/* Products using this image */}
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium text-gray-700">
+                                    Productos afectados:
+                                  </div>
+                                  <div className="grid gap-1">
+                                    {group.productsUsingImage?.slice(0, 3).map((prod: any) => (
+                                      <div 
+                                        key={prod.productId} 
+                                        className="text-sm text-gray-600 flex items-center gap-2"
+                                      >
+                                        <span className="font-medium">{prod.productName}</span>
+                                        <span className="text-xs text-gray-500">
+                                          ({prod.brandName} - Ref: {prod.productReference})
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {group.productsUsingImage?.length > 3 && (
+                                      <div className="text-xs text-gray-500 italic">
+                                        +{group.productsUsingImage.length - 3} productos más...
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-green-50 border border-green-200 rounded-lg text-center">
+                      <Check className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                      <p className="text-green-800 font-medium">
+                        ✨ No se encontraron imágenes duplicadas en el sistema
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
