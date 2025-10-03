@@ -469,11 +469,12 @@ export default function IntelligentUploader({
       // Group duplicates by brand for clear reporting
       const duplicateReport = duplicates.map(dup => {
         const info = dup.duplicateInfo;
-        const brands = [...new Set(
+        const brandSet = new Set(
           info.duplicates.flatMap((d: any) => 
             d.productsUsingImage?.map((p: any) => p.brandName) || []
           )
-        )];
+        );
+        const brands = Array.from(brandSet);
         return {
           fileName: dup.img.fileName,
           brands: brands.length > 0 ? brands.join(', ') : 'Sin marca',

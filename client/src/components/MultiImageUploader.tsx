@@ -145,17 +145,17 @@ export function MultiImageUploader({
   // Función para verificar duplicados usando la API con informes detallados
   const checkForDuplicates = async (file: File): Promise<DuplicateCheckResult> => {
     try {
-      // Convertir archivo a base64 para el análisis
-      const { base64 } = await convertFileToBase64(file);
+      // 🔐 Calculate SHA-256 hash BEFORE uploading (fast & secure)
+      const hash = await calculateImageHash(file);
       
-      // Hacer request a la API de verificación con POST para informes detallados
+      // 🚀 NEW: Send only hash to check duplicates (much faster)
       const response = await fetch('/api/images/check-duplicates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageData: base64,
-          originalName: file.name,
-          size: file.size
+          hash: hash,
+          fileName: file.name,
+          fileSize: file.size
         })
       });
       
