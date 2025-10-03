@@ -53,6 +53,40 @@ export default function IntelligentUploader({
   const MAX_RETRIES = 3; // Maximum retry attempts per file
   const RETRY_DELAY = 500; // Delay between retries in ms
 
+  // 🔐 Calculate SHA-256 hash from base64 data
+  const calculateSHA256 = async (base64Data: string): Promise<string> => {
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  };
+
+  // 🔍 Check for duplicates using SHA-256 hash
+  const checkDuplicateByHash = async (hash: string, fileName: string, fileSize: number) => {
+    try {
+      const response = await fetch('/api/images/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash, fileName, fileSize })
+      });
+      
+      if (!response.ok) {
+        console.warn('Duplicate check failed, continuing with upload');
+        return null;
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.warn('Duplicate check error:', error);
+      return null;
+    }
+  }
+
   // 🛡️ HEIC/HEIF conversion function
   const convertHeicToJpeg = async (file: File): Promise<File> => {
     try {
@@ -404,13 +438,64 @@ export default function IntelligentUploader({
     } else {
       toast({
         title: "Conversión exitosa",
-        description: `Todos los ${convertedImages.length} archivos convertidos correctamente. Iniciando subida...`,
+        description: `Todos los ${convertedImages.length} archivos convertidos correctamente. Iniciando verificación...`,
         variant: "default"
       });
     }
 
     // Add converted images to state (show them in UI)
     setImages(prev => [...prev, ...convertedImages]);
+    
+    // 🔍 PHASE 1.5: Check for duplicates BEFORE uploading
+    const duplicateChecks = await Promise.all(
+      convertedImages.map(async (img) => {
+        try {
+          const hash = await calculateSHA256(img.base64Data!);
+          const duplicateInfo = await checkDuplicateByHash(hash, img.fileName, img.fileSize!);
+          return { img, hash, duplicateInfo };
+        } catch (error) {
+          console.warn(`Failed to check duplicate for ${img.fileName}:`, error);
+          return { img, hash: null, duplicateInfo: null };
+        }
+      })
+    );
+
+    // Show instant alerts for duplicates
+    const duplicates = duplicateChecks.filter(check => 
+      check.duplicateInfo?.isDuplicate && check.duplicateInfo?.duplicates?.length > 0
+    );
+
+    if (duplicates.length > 0) {
+      // Group duplicates by brand for clear reporting
+      const duplicateReport = duplicates.map(dup => {
+        const info = dup.duplicateInfo;
+        const brands = [...new Set(
+          info.duplicates.flatMap((d: any) => 
+            d.productsUsingImage?.map((p: any) => p.brandName) || []
+          )
+        )];
+        return {
+          fileName: dup.img.fileName,
+          brands: brands.length > 0 ? brands.join(', ') : 'Sin marca',
+          productCount: info.duplicates.reduce((sum: number, d: any) => 
+            sum + (d.productsUsingImage?.length || 0), 0
+          )
+        };
+      });
+
+      const duplicateMessage = duplicateReport
+        .map(d => `📷 ${d.fileName}\n   → Ya existe en ${d.productCount} producto(s) de: ${d.brands}`)
+        .join('\n\n');
+
+      toast({
+        title: `⚠️ ${duplicates.length} Imagen(es) Duplicada(s) Detectada(s)`,
+        description: duplicateMessage,
+        variant: "destructive",
+        duration: 10000
+      });
+
+      console.log('🚨 DUPLICATES DETECTED:', duplicateReport);
+    }
     
     // 🛡️ PHASE 2: Upload using base64 data (NO file references needed)
     const successfulUploads: string[] = [];
