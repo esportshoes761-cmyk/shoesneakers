@@ -3191,6 +3191,98 @@ ${brandDetails}
     }
   });
 
+  // 📊 OPTIMIZED DUPLICATE IMAGES REPORT - Uses SHA-256 hash-based detection
+  app.get("/api/admin/reports/duplicate-images", requireAdminAuth, async (req, res) => {
+    try {
+      console.log('📊 Generating optimized duplicate images report using hash-based detection...');
+      
+      // Use the optimized storage method to get all duplicates
+      const duplicates = await storage.getAllDuplicateImages();
+      
+      // Calculate summary statistics
+      const summary = {
+        totalDuplicateGroups: duplicates.length,
+        totalImagesInvolved: duplicates.reduce((sum, group) => sum + group.duplicateCount, 0),
+        totalProductsAffected: duplicates.reduce((sum, group) => sum + group.productsUsingImage.length, 0),
+        brandsAffected: [...new Set(duplicates.flatMap(d => d.productsUsingImage.map(p => p.brandName)))].length
+      };
+      
+      // Organize by brand for better reporting
+      const duplicatesByBrand: Record<string, any> = {};
+      duplicates.forEach(group => {
+        group.productsUsingImage.forEach((product: any) => {
+          const brandName = product.brandName || 'Sin marca';
+          if (!duplicatesByBrand[brandName]) {
+            duplicatesByBrand[brandName] = {
+              brandName,
+              brandLogo: product.brandLogo,
+              totalDuplicateGroups: 0,
+              totalProductsAffected: 0,
+              duplicateGroups: []
+            };
+          }
+          
+          // Add this duplicate group if not already added for this brand
+          if (!duplicatesByBrand[brandName].duplicateGroups.find((g: any) => g.hash === group.hash)) {
+            duplicatesByBrand[brandName].duplicateGroups.push(group);
+            duplicatesByBrand[brandName].totalDuplicateGroups++;
+          }
+          
+          duplicatesByBrand[brandName].totalProductsAffected++;
+        });
+      });
+      
+      // Register audit event
+      await registerAuditEvent({
+        actorType: 'admin',
+        actorId: req.user?.id || 'unknown-admin',
+        sessionId: req.sessionID || 'no-session',
+        actionCode: 703, // API_CALL
+        resourceType: 'report',
+        resourceId: 'duplicate-images',
+        result: 'success',
+        metadata: {
+          totalDuplicates: duplicates.length,
+          totalProducts: summary.totalProductsAffected,
+          reportType: 'duplicate_images',
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      res.json({
+        success: true,
+        summary,
+        duplicates,
+        duplicatesByBrand,
+        generatedAt: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ Error generating duplicate images report:', error);
+      
+      // Register failure in audit
+      await registerAuditEvent({
+        actorType: 'admin',
+        actorId: req.user?.id || 'unknown-admin',
+        sessionId: req.sessionID || 'no-session',
+        actionCode: 703, // API_CALL
+        resourceType: 'report',
+        resourceId: 'duplicate-images',
+        result: 'failure',
+        metadata: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error generando reporte de imágenes duplicadas',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // 🚨 REPORTE COMPLETO INMEDIATO - SIN MIDDLEWARE
   app.get("/api/emergency-report", async (req, res) => {
     try {
