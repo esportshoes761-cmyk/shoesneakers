@@ -629,23 +629,23 @@ export class DatabaseStorage implements IStorage {
 
   async toggleAllProductPrices(): Promise<{ updated: number; newState: boolean }> {
     try {
+      // Get all products to determine current state
       const allProducts = await db.select().from(products);
       if (allProducts.length === 0) {
         return { updated: 0, newState: true };
       }
       
-      // Count how many products have showPrice = true
+      // If any product has showPrice=true, hide all. Otherwise show all.
       const visibleCount = allProducts.filter(p => p.showPrice).length;
-      const shouldShow = visibleCount <= allProducts.length / 2; // If less than 50% visible, show all
+      const newShowPrice = visibleCount === 0; // Show all if none are visible
       
-      const result = await db.update(products)
-        .set({ showPrice: shouldShow })
-        .returning();
+      // Update all products with the new state
+      await db.update(products).set({ showPrice: newShowPrice });
       
-      return { updated: result.length, newState: shouldShow };
+      return { updated: allProducts.length, newState: newShowPrice };
     } catch (error) {
       console.error('Error toggling all product prices:', error);
-      return { updated: 0, newState: true };
+      throw error;
     }
   }
 
