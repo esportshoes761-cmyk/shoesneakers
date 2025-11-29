@@ -1965,22 +1965,22 @@ ${brandDetails}
     }
   });
 
-  // 💰 Toggle product price visibility
-  app.patch("/api/products/:id/toggle-price", requireAdminAuth, async (req, res) => {
+  // 💰 Toggle ALL product prices visibility globally
+  app.patch("/api/admin/products/toggle-prices-global", requireAdminAuth, async (req, res) => {
     try {
-      const product = await storage.toggleProductPrice(req.params.id);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+      const result = await storage.toggleAllProductPrices();
       
       res.json({
         success: true,
-        message: `Precio ${product.showPrice ? 'visible' : 'oculto'} para ${product.name}`,
-        data: product
+        message: result.newState ? `✅ Precios visibles para ${result.updated} productos` : `🔒 Precios ocultos para ${result.updated} productos`,
+        data: {
+          updated: result.updated,
+          newState: result.newState
+        }
       });
     } catch (error) {
-      console.error('Error toggling product price:', error);
-      res.status(500).json({ message: "Error toggling product price" });
+      console.error('Error toggling product prices:', error);
+      res.status(500).json({ message: "Error toggling product prices" });
     }
   });
 

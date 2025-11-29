@@ -660,7 +660,7 @@ const SimpleBrandProductManager: React.FC = () => {
     <div className="space-y-6">
       {/* Header con botón de regreso */}
       <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <Button
             variant="outline"
             onClick={() => setSelectedBrand(null)}
@@ -670,14 +670,39 @@ const SimpleBrandProductManager: React.FC = () => {
             Volver a Marcas
           </Button>
           
-          <div className="text-center">
+          <div className="text-center flex-1">
             <h1 className="text-3xl font-bold text-blue-900">🏷️ {selectedBrand.name}</h1>
             <p className="text-blue-700">
               {productsQuery.data?.length || 0} productos disponibles
             </p>
           </div>
           
-          <div className="w-32"></div>
+          <Button
+            onClick={async () => {
+              try {
+                const response = await apiRequest("PATCH", "/api/admin/products/toggle-prices-global");
+                const data = await response.json();
+                if (data.success) {
+                  toast({
+                    title: data.message,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/brands"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+                }
+              } catch (error: any) {
+                toast({
+                  title: "Error",
+                  description: error.message,
+                  variant: "destructive"
+                });
+              }
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white"
+            data-testid="button-toggle-all-prices"
+          >
+            <DollarSign className="h-4 w-4 mr-2" />
+            Alternar Precios
+          </Button>
         </div>
       </div>
 
@@ -743,41 +768,13 @@ const SimpleBrandProductManager: React.FC = () => {
                       <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
                     )}
                     
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleEditProduct(product)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            const response = await apiRequest("PATCH", `/api/products/${product.id}/toggle-price`);
-                            const data = await response.json();
-                            if (data.success) {
-                              toast({
-                                title: data.message,
-                                description: `Precio ahora ${data.data.showPrice ? 'visible' : 'oculto'}`
-                              });
-                              queryClient.invalidateQueries({ queryKey: ["/api/products", "brands", selectedBrand?.id] });
-                            }
-                          } catch (error: any) {
-                            toast({
-                              title: "Error",
-                              description: error.message,
-                              variant: "destructive"
-                            });
-                          }
-                        }}
-                        variant={product.showPrice ? "default" : "outline"}
-                        className={product.showPrice ? "bg-green-600 hover:bg-green-700" : ""}
-                        data-testid={`button-toggle-price-${product.id}`}
-                      >
-                        <DollarSign className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={() => handleEditProduct(product)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar Producto
+                    </Button>
                   </div>
                 </div>
               </CardContent>

@@ -627,20 +627,25 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async toggleProductPrice(id: string): Promise<Product | undefined> {
+  async toggleAllProductPrices(): Promise<{ updated: number; newState: boolean }> {
     try {
-      const product = await this.getProduct(id);
-      if (!product) return undefined;
+      const allProducts = await db.select().from(products);
+      if (allProducts.length === 0) {
+        return { updated: 0, newState: true };
+      }
       
-      const newShowPrice = !product.showPrice;
-      const updatedProduct = await db.update(products)
-        .set({ showPrice: newShowPrice })
-        .where(eq(products.id, id))
+      // Count how many products have showPrice = true
+      const visibleCount = allProducts.filter(p => p.showPrice).length;
+      const shouldShow = visibleCount <= allProducts.length / 2; // If less than 50% visible, show all
+      
+      const result = await db.update(products)
+        .set({ showPrice: shouldShow })
         .returning();
-      return updatedProduct[0];
+      
+      return { updated: result.length, newState: shouldShow };
     } catch (error) {
-      console.error('Error toggling product price visibility:', error);
-      return undefined;
+      console.error('Error toggling all product prices:', error);
+      return { updated: 0, newState: true };
     }
   }
 
