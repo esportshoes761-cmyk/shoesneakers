@@ -1,0 +1,207 @@
+{
+  "generatedAt": "2025-11-29T05:00:00.020Z",
+  "reportDate": "29/11/2025",
+  "inventory": {
+    "totalProducts": 569,
+    "totalBrands": 23,
+    "totalImages": 746,
+    "productsByBrand": {
+      "CATÁLOGO COMPLETO": 104,
+      "NIKE": 134,
+      "ADIDAS ": 154,
+      "Asics": 24,
+      "GUALLOS": 39,
+      "REEBOK": 6,
+      "Jordan": 10,
+      "NEW BALANCE ": 45,
+      "UNDER ARMOUR": 8,
+      "SKETCHER": 37,
+      "EUROPEO": 8
+    },
+    "duplicatesDetected": {
+      "groups": 160,
+      "totalDuplicateImages": 253,
+      "savingsOpportunity": "253 imágenes duplicadas detectadas"
+    }
+  },
+  "activity": {
+    "today": {
+      "totalEvents": 211,
+      "activeUsers": 4
+    },
+    "yesterday": {
+      "totalEvents": 0
+    },
+    "lastWeek": {
+      "totalEvents": 235
+    },
+    "actionBreakdown": [
+      {
+        "actionCode": 101,
+        "count": 5,
+        "description": "Inicios de sesión"
+      },
+      {
+        "actionCode": 304,
+        "count": 99,
+        "description": "Productos visualizados"
+      },
+      {
+        "actionCode": 404,
+        "count": 38,
+        "description": "Marcas consultadas"
+      },
+      {
+        "actionCode": 703,
+        "count": 93,
+        "description": "Acción 703"
+      }
+    ]
+  },
+  "brandAnalytics": [
+    {
+      "name": "ADIDAS ",
+      "productCount": 154,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "NIKE",
+      "productCount": 134,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO COMPLETO",
+      "productCount": 104,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "NEW BALANCE ",
+      "productCount": 45,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "GUALLOS",
+      "productCount": 39,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "SKETCHER",
+      "productCount": 37,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Asics",
+      "productCount": 24,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Jordan",
+      "productCount": 10,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "UNDER ARMOUR",
+      "productCount": 8,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "EUROPEO",
+      "productCount": 8,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REEBOK",
+      "productCount": 6,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Puma",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "COLUMBIA ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "TIMBERLAND ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "CATÁLOGO GENERAL",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Nike",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "DC",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REEBOK ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "FILA",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "LACOSTE ",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "Adidas",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    },
+    {
+      "name": "REVISIÓN PENDIENTE",
+      "productCount": 0,
+      "isActive": true,
+      "displayLocation": "admin"
+    }
+  ],
+  "systemHealth": {
+    "status": "operational",
+    "lastReportGenerated": "2025-11-29T05:00:00.020Z",
+    "dataIntegrity": "253 duplicados detectados",
+    "performance": "optimal"
+  }
+}

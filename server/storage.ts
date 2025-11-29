@@ -2,7 +2,7 @@ import { type User, type InsertUser, type Product, type InsertProduct, type Cate
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images, themeSettings, auditEvents, auditActionCodes } from "@shared/schema";
-import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql, count } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -629,20 +629,25 @@ export class DatabaseStorage implements IStorage {
 
   async toggleAllProductPrices(): Promise<{ updated: number; newState: boolean }> {
     try {
-      // Get all products to determine current state
-      const allProducts = await db.select().from(products);
-      if (allProducts.length === 0) {
+      // Get total count
+      const result = await db.select({ count: count() }).from(products);
+      const totalProducts = result[0]?.count || 0;
+      
+      if (totalProducts === 0) {
         return { updated: 0, newState: true };
       }
       
+      // Get visible count
+      const visibleResult = await db.select({ count: count() }).from(products).where(eq(products.showPrice, true));
+      const visibleCount = visibleResult[0]?.count || 0;
+      
       // If any product has showPrice=true, hide all. Otherwise show all.
-      const visibleCount = allProducts.filter(p => p.showPrice).length;
       const newShowPrice = visibleCount === 0; // Show all if none are visible
       
       // Update all products with the new state
       await db.update(products).set({ showPrice: newShowPrice });
       
-      return { updated: allProducts.length, newState: newShowPrice };
+      return { updated: totalProducts, newState: newShowPrice };
     } catch (error) {
       console.error('Error toggling all product prices:', error);
       throw error;
