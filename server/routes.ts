@@ -1965,6 +1965,25 @@ ${brandDetails}
     }
   });
 
+  // 💰 Toggle product price visibility
+  app.patch("/api/products/:id/toggle-price", requireAdminAuth, async (req, res) => {
+    try {
+      const product = await storage.toggleProductPrice(req.params.id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      
+      res.json({
+        success: true,
+        message: `Precio ${product.showPrice ? 'visible' : 'oculto'} para ${product.name}`,
+        data: product
+      });
+    } catch (error) {
+      console.error('Error toggling product price:', error);
+      res.status(500).json({ message: "Error toggling product price" });
+    }
+  });
+
   // 🔒 SECURE: Get products by brand for admin (with pagination)
   app.get("/api/admin/brands/:brandId/products", requireAdminAuth, async (req, res) => {
     try {

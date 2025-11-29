@@ -627,6 +627,23 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async toggleProductPrice(id: string): Promise<Product | undefined> {
+    try {
+      const product = await this.getProduct(id);
+      if (!product) return undefined;
+      
+      const newShowPrice = !product.showPrice;
+      const updatedProduct = await db.update(products)
+        .set({ showPrice: newShowPrice })
+        .where(eq(products.id, id))
+        .returning();
+      return updatedProduct[0];
+    } catch (error) {
+      console.error('Error toggling product price visibility:', error);
+      return undefined;
+    }
+  }
+
   async updateProductsBulk(productIds: string[], updates: Partial<InsertProduct>): Promise<{ updated: number; errors: Array<{ id: string; error: string }> }> {
     try {
       // Use a transaction to update all products atomically

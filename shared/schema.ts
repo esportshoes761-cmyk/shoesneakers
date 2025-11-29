@@ -112,6 +112,7 @@ export const products = sqliteTable("products", {
   reviewCount: integer("review_count").default(0),
   isFlashSale: integer("is_flash_sale", { mode: "boolean" }).default(false),
   isFeatured: integer("is_featured", { mode: "boolean" }).default(false),
+  showPrice: integer("show_price", { mode: "boolean" }).default(true), // Toggle para mostrar/ocultar precios
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
