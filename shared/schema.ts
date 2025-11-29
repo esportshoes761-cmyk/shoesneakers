@@ -203,6 +203,18 @@ export const themeSettings = sqliteTable("theme_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
+// Tabla para rastrear interacciones de usuarios (vistas de productos)
+export const userInteractions = sqliteTable("user_interactions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  customerId: text("customer_id").notNull(), // UUID único para cliente anónimo o registrado
+  productId: text("product_id").references(() => products.id).notNull(),
+  interactionType: text("interaction_type").notNull(), // 'view', 'click', 'add_to_cart', 'purchase'
+  categoryId: text("category_id"),
+  brandId: text("brand_id"),
+  priceViewed: text("price_viewed"), // Precio visto para análisis de rango
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -230,6 +242,15 @@ export const insertCustomerSavingsSchema = createInsertSchema(customerSavings).o
 export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
+
+export const insertUserInteractionSchema = createInsertSchema(userInteractions).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for recommendations
+export type UserInteraction = typeof userInteractions.$inferSelect;
+export type InsertUserInteraction = z.infer<typeof insertUserInteractionSchema>;
 
 export const insertBrandSchema = createInsertSchema(brands).omit({
   id: true,

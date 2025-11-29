@@ -1,8 +1,8 @@
 import { type User, type InsertUser, type Product, type InsertProduct, type Category, type InsertCategory, type CartItem, type InsertCartItem, type ProductWithCategory, type CartItemWithProduct, type Brand, type InsertBrand, type BrandWithProducts, type Promotion, type InsertPromotion, type Event, type InsertEvent, type CustomerSavings, type InsertCustomerSavings, type Review, type InsertReview, type Order, type InsertOrder, type ProductWithReviews, type Image, type InsertImage, type SelectThemeSettings, type InsertThemeSettings, type AuditEvent, type InsertAuditEvent } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images, themeSettings, auditEvents, auditActionCodes } from "@shared/schema";
-import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql, count } from "drizzle-orm";
+import { users, categories, brands, products, promotions, events, cartItems, customerSavings, reviews, orders, images, themeSettings, auditEvents, auditActionCodes, userInteractions } from "@shared/schema";
+import { eq, and, gte, lte, ilike, inArray, desc, or, like, sql, count, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -118,6 +118,10 @@ export interface IStorage {
   getAuditEvents(limit?: number): Promise<AuditEvent[]>;
   getAuditEventsByAction(actionCode: number, limit?: number): Promise<AuditEvent[]>;
   getAuditEventsByActor(actorId: string, limit?: number): Promise<AuditEvent[]>;
+
+  // 🎯 Recommendation methods
+  trackUserInteraction(interaction: any): Promise<void>;
+  getPersonalizedRecommendations(customerId: string, limit?: number): Promise<ProductWithCategory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -651,6 +655,66 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error toggling all product prices:', error);
       throw error;
+    }
+  }
+
+  // 🎯 Track user product interactions
+  async trackUserInteraction(interaction: any): Promise<void> {
+    try {
+      await db.insert(userInteractions).values({
+        id: randomUUID(),
+        ...interaction
+      });
+    } catch (error) {
+      console.error('Error tracking user interaction:', error);
+    }
+  }
+
+  // 🎯 Get personalized recommendations
+  async getPersonalizedRecommendations(customerId: string, limit: number = 8): Promise<ProductWithCategory[]> {
+    try {
+      // Get user's recent interactions
+      const recentInteractions = await db.select()
+        .from(userInteractions)
+        .where(eq(userInteractions.customerId, customerId))
+        .orderBy(desc(userInteractions.createdAt))
+        .limit(50);
+
+      if (recentInteractions.length === 0) {
+        // No history - return featured/flash sale products
+        const featured = await db.select()
+          .from(products)
+          .where(eq(products.isFeatured, true))
+          .limit(limit);
+        return featured;
+      }
+
+      // Extract categories and brands from interactions
+      const categoryIds = [...new Set(recentInteractions.filter(i => i.categoryId).map(i => i.categoryId))];
+      const brandIds = [...new Set(recentInteractions.filter(i => i.brandId).map(i => i.brandId))];
+
+      // Get products from similar categories and brands (excluding already viewed)
+      const viewedProductIds = new Set(recentInteractions.map(i => i.productId));
+      
+      const recommendations = await db.select()
+        .from(products)
+        .where(and(
+          categoryIds.length > 0 || brandIds.length > 0 ? 
+            or(
+              categoryIds.length > 0 ? inArray(products.categoryId, categoryIds) : undefined,
+              brandIds.length > 0 ? inArray(products.brandId, brandIds) : undefined
+            ) : undefined
+        ))
+        .orderBy(desc(products.reviewCount))
+        .limit(limit * 2);
+
+      // Filter out already viewed products
+      const filtered = recommendations.filter(p => !viewedProductIds.has(p.id)).slice(0, limit);
+
+      return filtered.length > 0 ? filtered : await db.select().from(products).orderBy(desc(products.isFeatured)).limit(limit);
+    } catch (error) {
+      console.error('Error getting personalized recommendations:', error);
+      return [];
     }
   }
 

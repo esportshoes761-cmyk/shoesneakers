@@ -4,6 +4,7 @@ import PromotionalBanners from "@/components/promotional-banners";
 import FlashSaleSection from "@/components/flash-sale-section";
 import ProductCard from "@/components/product-card";
 import { SavingsDashboard } from "@/components/savings-dashboard";
+import { RecommendationsSection } from "@/components/recommendations-section";
 import { type ProductWithCategory, type Category, type BrandWithProducts } from "@shared/schema";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { getBrandLogoType } from "@/lib/brand-utils";
 import AdvancedSearch, { type SearchFilters } from "@/components/advanced-search";
 import { useCartStore } from "@/lib/cart-store";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Home() {
   const [selectedBrand, setSelectedBrand] = useState<BrandWithProducts | null>(null);
@@ -29,9 +31,20 @@ export default function Home() {
     onSale: false,
     inStock: false,
   });
+  const [customerId, setCustomerId] = useState<string>("");
   
   const { addItem } = useCartStore();
   const { toast } = useToast();
+
+  // Initialize or get customer ID from localStorage
+  useEffect(() => {
+    let cid = localStorage.getItem("customer_id");
+    if (!cid) {
+      cid = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem("customer_id", cid);
+    }
+    setCustomerId(cid);
+  }, []);
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -99,6 +112,23 @@ export default function Home() {
   // Función para aplicar filtros desde el componente de búsqueda
   const handleSearch = (filters: SearchFilters) => {
     setSearchFilters(filters);
+  };
+
+  // Track product interaction when user views home
+  const trackProductView = async (productId: string, categoryId?: string, brandId?: string, price?: string) => {
+    if (!customerId) return;
+    try {
+      await apiRequest("POST", "/api/recommendations/track", {
+        customerId,
+        productId,
+        interactionType: "view",
+        categoryId,
+        brandId,
+        priceViewed: price
+      });
+    } catch (error) {
+      console.error("Error tracking product view:", error);
+    }
   };
 
   // Función para limpiar filtros
@@ -500,6 +530,13 @@ export default function Home() {
             )}
           </section>
         ) : null}
+
+        {/* Personalized Recommendations Section */}
+        {customerId && !(searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 
+          searchFilters.sizes.length > 0 || searchFilters.colors.length > 0 || searchFilters.onSale || 
+          searchFilters.inStock || searchFilters.priceMin > 0 || searchFilters.priceMax < 1000000) && (
+          <RecommendationsSection customerId={customerId} />
+        )}
 
         {/* Todos los Productos - Solo se muestra cuando no hay filtros activos */}
         {!(searchFilters.query || searchFilters.brands.length > 0 || searchFilters.categories.length > 0 || 

@@ -4011,6 +4011,61 @@ ${brandDetails}
     'America/Bogota' // Timezone Colombia
   );
 
+  // 🎯 PERSONALIZED RECOMMENDATIONS ENDPOINTS
+  // Track user product interaction
+  app.post("/api/recommendations/track", async (req, res) => {
+    try {
+      const { customerId, productId, interactionType, categoryId, brandId, priceViewed } = req.body;
+
+      if (!customerId || !productId || !interactionType) {
+        return res.status(400).json({
+          success: false,
+          message: "customerId, productId, and interactionType are required"
+        });
+      }
+
+      await storage.trackUserInteraction({
+        customerId,
+        productId,
+        interactionType,
+        categoryId,
+        brandId,
+        priceViewed
+      });
+
+      res.json({ success: true, message: "Interaction tracked" });
+    } catch (error) {
+      console.error("Error tracking interaction:", error);
+      res.status(500).json({ success: false, message: "Error tracking interaction" });
+    }
+  });
+
+  // Get personalized recommendations
+  app.get("/api/recommendations/:customerId", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
+
+      if (!customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "customerId is required"
+        });
+      }
+
+      const recommendations = await storage.getPersonalizedRecommendations(customerId, limit);
+
+      res.json({
+        success: true,
+        data: recommendations,
+        count: recommendations.length
+      });
+    } catch (error) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).json({ success: false, message: "Error getting recommendations" });
+    }
+  });
+
   const httpServer = createServer(app);
   
   console.log('🕛 Sistema de reportes automáticos activado');
@@ -4024,6 +4079,11 @@ ${brandDetails}
       console.log(`  ⚪ ${method.name} (deshabilitado)`);
     }
   });
+  
+  console.log('🎯 Sistema de recomendaciones personalizadas activado');
+  console.log('📍 Endpoints:');
+  console.log('  POST /api/recommendations/track - Rastrear interacción de usuario');
+  console.log('  GET /api/recommendations/:customerId - Obtener recomendaciones');
   
   return httpServer;
 }
