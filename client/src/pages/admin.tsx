@@ -609,6 +609,38 @@ const SimpleBrandProductManager: React.FC = () => {
           <p className="text-muted-foreground">Selecciona una marca para editar sus productos</p>
         </div>
 
+        {/* 💰 Global Price Toggle Button */}
+        <div className="flex justify-center">
+          <Button
+            onClick={async () => {
+              try {
+                const response = await apiRequest("PATCH", "/api/admin/products/toggle-prices-global");
+                const data = await response.json();
+                if (data.success) {
+                  toast({
+                    title: data.message,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/admin/brands"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+                }
+              } catch (error: any) {
+                console.error('Error:', error);
+                toast({
+                  title: "❌ Error",
+                  description: error.message || "No se pudo alternar los precios",
+                  variant: "destructive"
+                });
+              }
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg"
+            size="lg"
+            data-testid="button-toggle-all-prices"
+          >
+            <DollarSign className="h-5 w-5 mr-2" />
+            Alternar Precios Globales (Todos los Productos)
+          </Button>
+        </div>
+
         {brandsQuery.isLoading ? (
           <div className="flex justify-center p-12">
             <div className="text-center">
@@ -677,32 +709,6 @@ const SimpleBrandProductManager: React.FC = () => {
             </p>
           </div>
           
-          <Button
-            onClick={async () => {
-              try {
-                const response = await apiRequest("PATCH", "/api/admin/products/toggle-prices-global");
-                const data = await response.json();
-                if (data.success) {
-                  toast({
-                    title: data.message,
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["/api/admin/brands"] });
-                  queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-                }
-              } catch (error: any) {
-                toast({
-                  title: "Error",
-                  description: error.message,
-                  variant: "destructive"
-                });
-              }
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white"
-            data-testid="button-toggle-all-prices"
-          >
-            <DollarSign className="h-4 w-4 mr-2" />
-            Alternar Precios
-          </Button>
         </div>
       </div>
 

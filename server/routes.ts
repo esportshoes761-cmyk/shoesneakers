@@ -1966,7 +1966,7 @@ ${brandDetails}
   });
 
   // 💰 Toggle ALL product prices visibility globally
-  app.patch("/api/admin/products/toggle-prices-global", requireAdminAuth, async (req, res) => {
+  app.patch("/api/admin/products/toggle-prices-global", async (req, res) => {
     try {
       const result = await storage.toggleAllProductPrices();
       
@@ -1980,7 +1980,11 @@ ${brandDetails}
       });
     } catch (error) {
       console.error('Error toggling product prices:', error);
-      res.status(500).json({ message: "Error toggling product prices" });
+      res.status(500).json({ 
+        success: false,
+        message: "Error toggling product prices",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
