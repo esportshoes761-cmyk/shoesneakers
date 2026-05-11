@@ -17,6 +17,15 @@ export interface ProductDuplicateAlert {
   duplicateCount: number; // Total uses of this image
 }
 
+// Alert button interface for emulator alerts
+export interface AlertButton {
+  label: string;
+  action: 'link' | 'download' | 'navigate' | 'custom';
+  value: string; // URL, path, or custom value
+  color?: 'primary' | 'secondary' | 'danger'; // Button style
+  openInNewTab?: boolean;
+}
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull().unique(),
@@ -27,6 +36,11 @@ export const users = sqliteTable("users", {
   phone: text("phone"),
   isSeller: integer("is_seller", { mode: "boolean" }).default(false),
   isAdmin: integer("is_admin", { mode: "boolean" }).default(false),
+  adminType: text("admin_type"), // 'marketing', 'emulator', null para usuarios normales
+  isBanned: integer("is_banned", { mode: "boolean" }).default(false),
+  banReason: text("ban_reason"),
+  bannedAt: integer("banned_at", { mode: "timestamp" }),
+  lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
   credits: text("credits").default("0"),
   totalPurchases: text("total_purchases").default("0"),
   loyaltyLevel: text("loyalty_level").default("bronze"), // bronze, silver, gold, platinum
@@ -78,6 +92,44 @@ export const events = sqliteTable("events", {
   eventType: text("event_type").notNull(), // 'flash_sale', 'promotion', 'new_arrival', 'seasonal'
   priority: integer("priority").default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+// 🚨 EMULATOR ALERTS: Alertas del sistema para notificaciones críticas
+export const alerts = sqliteTable("alerts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  alertType: text("alert_type").notNull(), // 'info', 'warning', 'critical', 'update'
+  priority: integer("priority").default(0), // 0=low, 1=medium, 2=high, 3=critical
+  buttons: text("buttons", { mode: "json" }).$type<AlertButton[]>().default(sql`'[]'`), // Hasta 3 botones
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  createdBy: text("created_by").references(() => users.id), // Admin emulator que crea la alerta
+  viewedBy: text("viewed_by", { mode: "json" }).$type<string[]>().default(sql`'[]'`), // Array de user IDs que vieron
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  expiresAt: integer("expires_at", { mode: "timestamp" }), // Fecha de expiración
+});
+
+// 📊 USER TRACKING: Rastreo de actividades de usuario en tiempo real
+export const userTracking = sqliteTable("user_tracking", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text("session_id").notNull(), // Session ID único
+  userId: text("user_id").references(() => users.id), // Null si aún no está autenticado
+  ipAddress: text("ip_address"), // IP real del usuario
+  userAgent: text("user_agent"),
+  country: text("country"),
+  city: text("city"),
+  lastActivity: text("last_activity"), // Última acción realizada
+  currentPage: text("current_page"), // Página actual
+  screenResolution: text("screen_resolution"),
+  deviceType: text("device_type"), // 'mobile', 'tablet', 'desktop'
+  isLoggedIn: integer("is_logged_in", { mode: "boolean" }).default(false),
+  totalTimeOnSite: integer("total_time_on_site"), // En segundos
+  pageViewCount: integer("page_view_count").default(0),
+  clickCount: integer("click_count").default(0),
+  firstVisit: integer("first_visit", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  lastVisit: integer("last_visit", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  isBot: integer("is_bot", { mode: "boolean" }).default(false),
+  status: text("status").default("active"), // 'active', 'idle', 'offline'
 });
 
 // Tabla para imágenes con hash único
@@ -215,6 +267,27 @@ export const userInteractions = sqliteTable("user_interactions", {
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
+// 🚨 Insert schemas for new tables
+export const insertAlertSchema = createInsertSchema(alerts).omit({
+  id: true,
+  createdAt: true,
+  viewedBy: true,
+}).extend({
+  buttons: z.array(z.object({
+    label: z.string(),
+    action: z.enum(['link', 'download', 'navigate', 'custom']),
+    value: z.string(),
+    color: z.enum(['primary', 'secondary', 'danger']).optional(),
+    openInNewTab: z.boolean().optional(),
+  })).optional(),
+});
+
+export const insertUserTrackingSchema = createInsertSchema(userTracking).omit({
+  id: true,
+  firstVisit: true,
+  lastVisit: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -308,6 +381,12 @@ export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit(
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export type InsertAlert = z.infer<typeof insertAlertSchema>;
+export type Alert = typeof alerts.$inferSelect;
+
+export type InsertUserTracking = z.infer<typeof insertUserTrackingSchema>;
+export type UserTracking = typeof userTracking.$inferSelect;
 
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

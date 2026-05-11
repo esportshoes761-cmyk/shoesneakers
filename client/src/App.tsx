@@ -1,40 +1,60 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import Home from "@/pages/home";
-import SellerDashboard from "@/pages/seller-dashboard";
-import AdminPanel from "@/pages/admin";
-import LoginPage from "@/pages/login";
-import CheckoutPage from "@/pages/checkout";
-import ProductDetails from "@/pages/product-details";
-import OrderTracking from "@/pages/order-tracking";
-import NotFound from "@/pages/not-found";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import Login from '@/pages/Login';
+import MarketingPanel from '@/pages/MarketingPanel';
+import EmulatorPanel from '@/pages/EmulatorPanel';
+import Layout from '@/components/Layout';
 
-function Router() {
+const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: string }> = ({ children, role }) => {
+  const { user, hasPermission } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  if (role && !hasPermission(role as any)) {
+    return <Navigate to="/" />;
+  }
+
+  return <>{children}</>;
+};
+
+const AppRoutes = () => {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/seller" component={SellerDashboard} />
-      <Route path="/admin" component={AdminPanel} />
-      <Route path="/checkout" component={CheckoutPage} />
-      <Route path="/product/:id" component={ProductDetails} />
-      <Route path="/seguimiento" component={OrderTracking} />
-      <Route path="/admin-login" component={() => <LoginPage isAdmin={true} />} />
-      <Route component={NotFound} />
-    </Switch>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/marketing/*"
+        element={
+          <ProtectedRoute role="marketing">
+            <Layout>
+              <MarketingPanel />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/emulator/*"
+        element={
+          <ProtectedRoute role="emulator">
+            <Layout>
+              <EmulatorPanel />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/" element={<Navigate to="/marketing" />} />
+    </Routes>
   );
-}
+};
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
   );
 }
 
